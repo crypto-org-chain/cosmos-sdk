@@ -47,7 +47,10 @@ type ObjStore struct {
 }
 
 func NewObjStore() *ObjStore {
-	return &ObjStore{*NewGStore(func(v any) bool { return v == nil }, nil)}
+	return &ObjStore{*NewGStore(
+		func(v any) bool { return v == nil },
+		func(v any) int { return 1 }, // for value length validation
+	)}
 }
 
 func (*ObjStore) GetStoreType() types.StoreType {
