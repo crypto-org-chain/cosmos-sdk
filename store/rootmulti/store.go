@@ -174,7 +174,6 @@ func (rs *Store) GetCommitKVStore(key types.StoreKey) types.CommitKVStore {
 	store, ok := rs.GetCommitStore(key).(types.CommitKVStore)
 	if !ok {
 		panic(fmt.Sprintf("store with key %v is not CommitKVStore", key))
-
 	}
 
 	return store
