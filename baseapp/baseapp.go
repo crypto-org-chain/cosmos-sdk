@@ -344,7 +344,7 @@ func (app *BaseApp) MountMemoryStores(keys map[string]*storetypes.MemoryStoreKey
 	}
 }
 
-// MountObjectStores mounts all in-memory KVStores with the BaseApp's internal
+// MountObjectStores mounts all transient object stores with the BaseApp's internal
 // commit multi-store.
 func (app *BaseApp) MountObjectStores(keys map[string]*storetypes.ObjectStoreKey) {
 	skeys := maps.Keys(keys)
