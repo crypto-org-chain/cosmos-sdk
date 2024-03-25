@@ -132,11 +132,6 @@ func (cms Store) CacheWrap() types.CacheWrap {
 	return cms.CacheMultiStore().(types.CacheWrap)
 }
 
-// CacheWrapWithTrace implements the CacheWrapper interface.
-func (cms Store) CacheWrapWithTrace(_ io.Writer, _ types.TraceContext) types.CacheWrap {
-	return cms.CacheWrap()
-}
-
 // Implements MultiStore.
 func (cms Store) CacheMultiStore() types.CacheMultiStore {
 	return newCacheMultiStoreFromCMS(cms)

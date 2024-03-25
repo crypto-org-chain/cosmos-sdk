@@ -3,7 +3,6 @@ package iavl
 import (
 	"errors"
 	"fmt"
-	"io"
 
 	cmtprotocrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	dbm "github.com/cosmos/cosmos-db"
@@ -16,7 +15,6 @@ import (
 	"cosmossdk.io/store/internal/kv"
 	"cosmossdk.io/store/metrics"
 	pruningtypes "cosmossdk.io/store/pruning/types"
-	"cosmossdk.io/store/tracekv"
 	"cosmossdk.io/store/types"
 	"cosmossdk.io/store/wrapper"
 )
@@ -177,11 +175,6 @@ func (st *Store) GetStoreType() types.StoreType {
 // Implements Store.
 func (st *Store) CacheWrap() types.CacheWrap {
 	return cachekv.NewStore(st)
-}
-
-// CacheWrapWithTrace implements the Store interface.
-func (st *Store) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
-	return cachekv.NewStore(tracekv.NewStore(st, w, tc))
 }
 
 // Implements types.KVStore.

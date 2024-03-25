@@ -297,17 +297,11 @@ type CacheWrap interface {
 
 	// CacheWrap recursively wraps again.
 	CacheWrap() CacheWrap
-
-	// CacheWrapWithTrace recursively wraps again with tracing enabled.
-	CacheWrapWithTrace(w io.Writer, tc TraceContext) CacheWrap
 }
 
 type CacheWrapper interface {
 	// CacheWrap branches a store.
 	CacheWrap() CacheWrap
-
-	// CacheWrapWithTrace branches a store with tracing enabled.
-	CacheWrapWithTrace(w io.Writer, tc TraceContext) CacheWrap
 }
 
 func (cid CommitID) IsZero() bool {
