@@ -41,6 +41,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
+* (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Support mount object store in baseapp, add `ObjectStore` api in context..
 
 ## [Unreleased-Upstream]
 

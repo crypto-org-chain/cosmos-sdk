@@ -344,6 +344,17 @@ func (app *BaseApp) MountMemoryStores(keys map[string]*storetypes.MemoryStoreKey
 	}
 }
 
+// MountObjectStores mounts all in-memory KVStores with the BaseApp's internal
+// commit multi-store.
+func (app *BaseApp) MountObjectStores(keys map[string]*storetypes.ObjectStoreKey) {
+	skeys := maps.Keys(keys)
+	sort.Strings(skeys)
+	for _, key := range skeys {
+		memKey := keys[key]
+		app.MountStore(memKey, storetypes.StoreTypeObject)
+	}
+}
+
 // MountStore mounts a store to the provided key in the BaseApp multistore,
 // using the default DB.
 func (app *BaseApp) MountStore(key storetypes.StoreKey, typ storetypes.StoreType) {

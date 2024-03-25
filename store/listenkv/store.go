@@ -1,6 +1,7 @@
 package listenkv
 
 import (
+	"cosmossdk.io/store/cachekv"
 	"cosmossdk.io/store/types"
 )
 
@@ -130,5 +131,5 @@ func (s *Store) GetStoreType() types.StoreType {
 // CacheWrap implements the KVStore interface. It panics as a Store
 // cannot be cache wrapped.
 func (s *Store) CacheWrap() types.CacheWrap {
-	panic("cannot CacheWrap a ListenKVStore")
+	return cachekv.NewStore(s)
 }

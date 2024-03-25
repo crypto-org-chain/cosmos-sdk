@@ -178,10 +178,6 @@ func (kv kvStore) CacheWrap() storetypes.CacheWrap {
 	panic("not implemented")
 }
 
-func (kv kvStore) CacheWrapWithTrace(w io.Writer, tc storetypes.TraceContext) storetypes.CacheWrap {
-	panic("not implemented")
-}
-
 func (kv kvStore) CacheWrapWithListeners(_ storetypes.StoreKey, _ []storetypes.MemoryListener) storetypes.CacheWrap {
 	panic("not implemented")
 }
