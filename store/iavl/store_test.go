@@ -17,7 +17,6 @@ import (
 	"cosmossdk.io/store/internal/kv"
 	"cosmossdk.io/store/metrics"
 	"cosmossdk.io/store/types"
-	"cosmossdk.io/store/wrapper"
 )
 
 var (
@@ -38,7 +37,7 @@ func randBytes(numBytes int) []byte {
 // make a tree with data from above and save it
 func newAlohaTree(t *testing.T, db dbm.DB) (*iavl.MutableTree, types.CommitID) {
 	t.Helper()
-	tree := iavl.NewMutableTree(wrapper.NewDBWrapper(db), cacheSize, false, log.NewNopLogger())
+	tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 
 	for k, v := range treeData {
 		_, err := tree.Set([]byte(k), []byte(v))
@@ -286,7 +285,7 @@ func TestIAVLIterator(t *testing.T) {
 }
 
 func TestIAVLReverseIterator(t *testing.T) {
-	db := wrapper.NewDBWrapper(dbm.NewMemDB())
+	db := dbm.NewMemDB()
 
 	tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 
@@ -320,7 +319,7 @@ func TestIAVLReverseIterator(t *testing.T) {
 }
 
 func TestIAVLPrefixIterator(t *testing.T) {
-	db := wrapper.NewDBWrapper(dbm.NewMemDB())
+	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 
 	iavlStore := UnsafeNewStore(tree)
@@ -383,7 +382,7 @@ func TestIAVLPrefixIterator(t *testing.T) {
 }
 
 func TestIAVLReversePrefixIterator(t *testing.T) {
-	db := wrapper.NewDBWrapper(dbm.NewMemDB())
+	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 
 	iavlStore := UnsafeNewStore(tree)
@@ -450,7 +449,7 @@ func nextVersion(iavl *Store) {
 }
 
 func TestIAVLNoPrune(t *testing.T) {
-	db := wrapper.NewDBWrapper(dbm.NewMemDB())
+	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 
 	iavlStore := UnsafeNewStore(tree)
@@ -468,7 +467,7 @@ func TestIAVLNoPrune(t *testing.T) {
 }
 
 func TestIAVLStoreQuery(t *testing.T) {
-	db := wrapper.NewDBWrapper(dbm.NewMemDB())
+	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 
 	iavlStore := UnsafeNewStore(tree)
@@ -580,7 +579,7 @@ func TestIAVLStoreQuery(t *testing.T) {
 
 func BenchmarkIAVLIteratorNext(b *testing.B) {
 	b.ReportAllocs()
-	db := wrapper.NewDBWrapper(dbm.NewMemDB())
+	db := dbm.NewMemDB()
 	treeSize := 1000
 	tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 
@@ -616,7 +615,7 @@ func TestSetInitialVersion(t *testing.T) {
 		{
 			"works with a mutable tree",
 			func(db *dbm.MemDB) *Store {
-				tree := iavl.NewMutableTree(wrapper.NewDBWrapper(db), cacheSize, false, log.NewNopLogger())
+				tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 				store := UnsafeNewStore(tree)
 
 				return store
@@ -625,7 +624,7 @@ func TestSetInitialVersion(t *testing.T) {
 		{
 			"throws error on immutable tree",
 			func(db *dbm.MemDB) *Store {
-				tree := iavl.NewMutableTree(wrapper.NewDBWrapper(db), cacheSize, false, log.NewNopLogger())
+				tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger())
 				store := UnsafeNewStore(tree)
 				_, version, err := store.tree.SaveVersion()
 				require.NoError(t, err)
@@ -670,7 +669,7 @@ func TestChangeSets(t *testing.T) {
 	treeSize := 1000
 	treeVersion := int64(10)
 	targetVersion := int64(6)
-	tree := iavl.NewMutableTree(wrapper.NewDBWrapper(db), cacheSize, false, log.NewNopLogger(), iavl.FlushThresholdOption(math.MaxInt))
+	tree := iavl.NewMutableTree(db, cacheSize, false, log.NewNopLogger(), iavl.FlushThresholdOption(math.MaxInt))
 
 	for j := int64(0); j < treeVersion; j++ {
 		keys := [][]byte{}
