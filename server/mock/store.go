@@ -114,6 +114,10 @@ func (ms multiStore) GetKVStore(key storetypes.StoreKey) storetypes.KVStore {
 	return ms.kv[key]
 }
 
+func (ms multiStore) GetObjKVStore(storetypes.StoreKey) storetypes.ObjKVStore {
+	panic("not implemented")
+}
+
 func (ms multiStore) GetStore(key storetypes.StoreKey) storetypes.Store {
 	panic("not implemented")
 }
