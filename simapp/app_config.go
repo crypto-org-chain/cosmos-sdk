@@ -122,6 +122,7 @@ var (
 						authz.ModuleName,
 					},
 					EndBlockers: []string{
+						banktypes.ModuleName,
 						crisistypes.ModuleName,
 						govtypes.ModuleName,
 						stakingtypes.ModuleName,

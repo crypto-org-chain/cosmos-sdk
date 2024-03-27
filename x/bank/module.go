@@ -15,6 +15,7 @@ import (
 	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -43,7 +44,8 @@ var (
 	_ module.HasServices         = AppModule{}
 	_ module.HasInvariants       = AppModule{}
 
-	_ appmodule.AppModule = AppModule{}
+	_ appmodule.AppModule     = AppModule{}
+	_ appmodule.HasEndBlocker = AppModule{}
 )
 
 // AppModuleBasic defines the basic application module used by the bank module.
@@ -195,6 +197,10 @@ func (am AppModule) WeightedOperations(simState module.SimulationState) []simtyp
 	)
 }
 
+func (am AppModule) EndBlock(ctx context.Context) error {
+	return am.keeper.CreditVirtualAccounts(ctx)
+}
+
 // App Wiring Setup
 
 func init() {
@@ -210,6 +216,7 @@ type ModuleInputs struct {
 	Cdc          codec.Codec
 	StoreService corestore.KVStoreService
 	Logger       log.Logger
+	ObjStoreKey  *storetypes.ObjectStoreKey
 
 	AccountKeeper types.AccountKeeper
 
@@ -249,6 +256,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 	bankKeeper := keeper.NewBaseKeeper(
 		in.Cdc,
 		in.StoreService,
+		in.ObjStoreKey,
 		in.AccountKeeper,
 		blockedAddresses,
 		authority.String(),
