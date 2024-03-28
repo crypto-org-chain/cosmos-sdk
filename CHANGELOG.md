@@ -41,8 +41,9 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
-* (baseapp) [#206](https://github.com/crypto-org-chain/cosmos-sdk/pull/206) Support mount object store in baseapp, add `ObjectStore` api in context..
+* (baseapp) [#206](https://github.com/crypto-org-chain/cosmos-sdk/pull/206) Support mount object store in baseapp, add `ObjectStore` api in context.
 * (bank) [#237](https://github.com/crypto-org-chain/cosmos-sdk/pull/237) Support virtual accounts in sending coins.
+* (x/bank) [#239](https://github.com/crypto-org-chain/cosmos-sdk/pull/239) Add low level `AddBalance`,`SubBalance` APIs to bank keeper.
 
 ## [Unreleased-Upstream]
 
