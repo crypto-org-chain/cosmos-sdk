@@ -21,7 +21,6 @@ linters:
     - ineffassign
     - misspell
     - nakedret
-    - nolintlint
     - revive
     - staticcheck
     - thelper

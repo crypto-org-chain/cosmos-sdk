@@ -62,10 +62,13 @@ func initFixture(tb testing.TB) *fixture {
 	keys := storetypes.NewKVStoreKeys(
 		authtypes.StoreKey, banktypes.StoreKey, distrtypes.StoreKey, stakingtypes.StoreKey,
 	)
+	okeys := storetypes.NewObjectStoreKeys(
+		banktypes.ObjectStoreKey,
+	)
 	cdc := moduletestutil.MakeTestEncodingConfig(auth.AppModuleBasic{}, distribution.AppModuleBasic{}).Codec
 
 	logger := log.NewTestLogger(tb)
-	cms := integration.CreateMultiStore(keys, logger)
+	cms := integration.CreateMultiStore(keys, okeys, logger)
 
 	newCtx := sdk.NewContext(cms, types.Header{}, true, logger)
 
@@ -93,6 +96,7 @@ func initFixture(tb testing.TB) *fixture {
 	bankKeeper := bankkeeper.NewBaseKeeper(
 		cdc,
 		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
+		okeys[banktypes.ObjectStoreKey],
 		accountKeeper,
 		blockedAddresses,
 		authority.String(),
