@@ -12,7 +12,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 )
 
-var _ storetypes.MultiStore = multiStore{}
+var _ storetypes.CommitMultiStore = multiStore{}
 
 type multiStore struct {
 	kv map[storetypes.StoreKey]kvStore

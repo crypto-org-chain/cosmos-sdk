@@ -29,6 +29,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * [#207](https://github.com/crypto-org-chain/cosmos-sdk/pull/207) Remove api CacheWrapWithTrace.
 * [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Support object store.
+* [#240](https://github.com/crypto-org-chain/cosmos-sdk/pull/240) Split methods from `MultiStore` into specialized `RootMultiStore`, keep `MultiStore` generic.
 
 ## v1.1.0 (March 20, 2024)
 
