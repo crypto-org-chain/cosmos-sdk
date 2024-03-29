@@ -36,6 +36,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+* (x/bank) [#239](https://github.com/crypto-org-chain/cosmos-sdk/pull/239) Add low level `AddBalance`,`SubBalance` APIs to bank keeper.
+
 ## [v0.53.0](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.0) - 2025-04-29 
 
 ### Features
@@ -63,6 +69,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (x/mint) [#24436](https://github.com/cosmos/cosmos-sdk/pull/24436) Allow users to set a custom minting function used in the `x/mint` begin blocker.
   * The `InflationCalculationFn` argument to `mint.NewAppModule()` is now ignored and must be nil.  To set a custom `InflationCalculationFn` on the default minter, use `mintkeeper.WithMintFn(mintkeeper.DefaultMintFn(customInflationFn))`.
 * (api) [#24428](https://github.com/cosmos/cosmos-sdk/pull/24428) Add block height to response headers
+
 
 ### Improvements
 

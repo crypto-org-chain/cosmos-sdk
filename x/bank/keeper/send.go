@@ -8,7 +8,6 @@ import (
 	"cosmossdk.io/core/store"
 	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/log"
-	"cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -279,32 +278,7 @@ func (k BaseSendKeeper) subUnlockedCoins(ctx context.Context, addr sdk.AccAddres
 	lockedCoins := k.LockedCoins(ctx, addr)
 
 	for _, coin := range amt {
-		balance := k.GetBalance(ctx, addr, coin.Denom)
-		ok, locked := lockedCoins.Find(coin.Denom)
-		if !ok {
-			locked = sdk.Coin{Denom: coin.Denom, Amount: math.ZeroInt()}
-		}
-
-		spendable, hasNeg := sdk.Coins{balance}.SafeSub(locked)
-		if hasNeg {
-			return errorsmod.Wrapf(sdkerrors.ErrInsufficientFunds,
-				"locked amount exceeds account balance funds: %s > %s", locked, balance)
-		}
-
-		if _, hasNeg := spendable.SafeSub(coin); hasNeg {
-			if len(spendable) == 0 {
-				spendable = sdk.Coins{sdk.Coin{Denom: coin.Denom, Amount: math.ZeroInt()}}
-			}
-			return errorsmod.Wrapf(
-				sdkerrors.ErrInsufficientFunds,
-				"spendable balance %s is smaller than %s",
-				spendable, coin,
-			)
-		}
-
-		newBalance := balance.Sub(coin)
-
-		if err := k.setBalance(ctx, addr, newBalance); err != nil {
+		if err := k.subCoin(ctx, addr, coin, lockedCoins); err != nil {
 			return err
 		}
 	}
@@ -317,6 +291,32 @@ func (k BaseSendKeeper) subUnlockedCoins(ctx context.Context, addr sdk.AccAddres
 	return nil
 }
 
+func (k BaseSendKeeper) subCoin(ctx context.Context, addr sdk.AccAddress, coin sdk.Coin, lockedCoins sdk.Coins) error {
+	var (
+		spendable sdk.Coin
+		err       error
+	)
+	balance := k.GetBalance(ctx, addr, coin.Denom)
+	locked := sdk.NewCoin(coin.Denom, lockedCoins.AmountOf(coin.Denom))
+	if locked.IsZero() {
+		spendable = balance
+	} else {
+		spendable, err = balance.SafeSub(locked)
+		if err != nil {
+			return errorsmod.Wrapf(sdkerrors.ErrInsufficientFunds,
+				"locked amount exceeds account balance funds: %s > %s", locked, balance)
+		}
+	}
+	if spendable.Amount.LT(coin.Amount) {
+		return errorsmod.Wrapf(
+			sdkerrors.ErrInsufficientFunds,
+			"spendable balance %s is smaller than %s",
+			spendable, coin,
+		)
+	}
+	return k.setBalance(ctx, addr, balance.Sub(coin))
+}
+
 // addCoins increases the balance of the given address by the specified amount.
 //
 // CONTRACT: The provided amount (amt) must be valid, non-negative coins.
@@ -324,11 +324,7 @@ func (k BaseSendKeeper) subUnlockedCoins(ctx context.Context, addr sdk.AccAddres
 // It emits a coin_received event after the operation.
 func (k BaseSendKeeper) addCoins(ctx context.Context, addr sdk.AccAddress, amt sdk.Coins) error {
 	for _, coin := range amt {
-		balance := k.GetBalance(ctx, addr, coin.Denom)
-		newBalance := balance.Add(coin)
-
-		err := k.setBalance(ctx, addr, newBalance)
-		if err != nil {
+		if err := k.addCoin(ctx, addr, coin); err != nil {
 			return err
 		}
 	}
@@ -340,6 +336,12 @@ func (k BaseSendKeeper) addCoins(ctx context.Context, addr sdk.AccAddress, amt s
 	)
 
 	return nil
+}
+
+func (k BaseSendKeeper) addCoin(ctx context.Context, addr sdk.AccAddress, coin sdk.Coin) error {
+	balance := k.GetBalance(ctx, addr, coin.Denom)
+	newBalance := balance.Add(coin)
+	return k.setBalance(ctx, addr, newBalance)
 }
 
 // setBalance sets the coin balance for an account by address.
