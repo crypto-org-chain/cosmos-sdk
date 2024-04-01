@@ -43,6 +43,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
 * (baseapp) [#206](https://github.com/crypto-org-chain/cosmos-sdk/pull/206) Support mount object store in baseapp, add `ObjectStore` api in context..
 * (bank) [#237](https://github.com/crypto-org-chain/cosmos-sdk/pull/237) Support virtual accounts in sending coins.
+* (x/bank) [#239](https://github.com/crypto-org-chain/cosmos-sdk/pull/239) Add low level `AddBalance`,`SubBalance` APIs to bank keeper.
+* [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API in `Context` to use new CoW branched cache store.
 
 ## [v0.53.0](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.0) - 2025-04-29 
 
@@ -174,12 +176,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (baseapp) [#21413](https://github.com/cosmos/cosmos-sdk/pull/21413) Fix data race in sdk mempool.
 
 ## [v0.50.9](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.9) - 2024-08-07
-
-### Features
-
-* (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
-
-## [Unreleased-Upstream]
 
 ### Bug Fixes
 

@@ -155,6 +155,8 @@ type RootMultiStore interface {
 type CacheMultiStore interface {
 	MultiStore
 	Write() // Writes operations to underlying KVStore
+
+	RunAtomic(func(CacheMultiStore) error) error
 }
 
 // CommitMultiStore is an interface for a MultiStore without cache capabilities.
