@@ -44,6 +44,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (baseapp) [#206](https://github.com/crypto-org-chain/cosmos-sdk/pull/206) Support mount object store in baseapp, add `ObjectStore` api in context.
 * (bank) [#237](https://github.com/crypto-org-chain/cosmos-sdk/pull/237) Support virtual accounts in sending coins.
 * (x/bank) [#239](https://github.com/crypto-org-chain/cosmos-sdk/pull/239) Add low level `AddBalance`,`SubBalance` APIs to bank keeper.
+* [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API in `Context` to use new CoW branched cache store.
 
 ## [Unreleased-Upstream]
 
