@@ -33,6 +33,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#241](https://github.com/crypto-org-chain/cosmos-sdk/pull/241) Refactor the cache store to be btree backed, prepare to support copy-on-write atomic branching.
 * [#242](https://github.com/crypto-org-chain/cosmos-sdk/pull/242) Init cache on cache lazily, save memory allocations.
 * [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API to use new CoW cache store.
+* [#244](https://github.com/crypto-org-chain/cosmos-sdk/pull/244) Add `Discard` method to CacheWrap to discard the write buffer.
 
 ## v1.1.0 (March 20, 2024)
 
