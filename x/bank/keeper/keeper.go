@@ -419,41 +419,6 @@ func (k BaseKeeper) BurnCoins(ctx context.Context, moduleName string, amounts sd
 	return nil
 }
 
-// AddBalance is low level api to update balance directly, mainly used by evm integration,
-// caller should make sure the total supply of the denom not changed and the account exists.
-// it's for evm integration, call at your own risk.
-// it emits mint event.
-func (k BaseKeeper) AddBalance(ctx context.Context, addr sdk.AccAddress, coin sdk.Coin) error {
-	if err := k.addCoin(ctx, addr, coin); err != nil {
-		return err
-	}
-
-	// emit mint event
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	sdkCtx.EventManager().EmitEvent(
-		types.NewCoinMintEvent(addr, sdk.NewCoins(coin)),
-	)
-	return nil
-}
-
-// SubBalance is low level api to update balance directly, mainly used by evm integration,
-// caller should make sure the total supply of the denom not changed.
-// it's for evm integration, call at your own risk.
-// it emits burn event.
-func (k BaseKeeper) SubBalance(ctx context.Context, addr sdk.AccAddress, coin sdk.Coin) error {
-	lockedCoins := k.LockedCoins(ctx, addr)
-	if err := k.subCoin(ctx, addr, coin, lockedCoins); err != nil {
-		return err
-	}
-
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	// emit burn event
-	sdkCtx.EventManager().EmitEvent(
-		types.NewCoinBurnEvent(addr, sdk.NewCoins(coin)),
-	)
-	return nil
-}
-
 // setSupply sets the supply for the given coin
 func (k BaseKeeper) setSupply(ctx context.Context, coin sdk.Coin) {
 	// Bank invariants and IBC requires to remove zero coins.
