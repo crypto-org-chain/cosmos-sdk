@@ -11,6 +11,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/query"
@@ -426,6 +427,16 @@ func (k BaseKeeper) BurnCoins(ctx context.Context, moduleName string, amounts sd
 func (k BaseKeeper) AddBalance(ctx context.Context, addr sdk.AccAddress, coin sdk.Coin) error {
 	if err := k.addCoin(ctx, addr, coin); err != nil {
 		return err
+	}
+
+	// Create account if recipient does not exist.
+	//
+	// NOTE: This should ultimately be removed in favor a more flexible approach
+	// such as delegated fee messages.
+	accExists := k.ak.HasAccount(ctx, addr)
+	if !accExists {
+		defer telemetry.IncrCounter(1, "new", "account")
+		k.ak.SetAccount(ctx, k.ak.NewAccountWithAddress(ctx, addr))
 	}
 
 	// emit mint event
