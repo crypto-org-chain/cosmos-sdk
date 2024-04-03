@@ -41,7 +41,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
-* (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Support mount object store in baseapp, add `ObjectStore` api in context..
+* (baseapp) [#206](https://github.com/crypto-org-chain/cosmos-sdk/pull/206) Support mount object store in baseapp, add `ObjectStore` api in context.
+* (bank) [#237](https://github.com/crypto-org-chain/cosmos-sdk/pull/237) Support virtual accounts in sending coins.
+* [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API in `Context` to use new CoW branched cache store.
+* [#248](https://github.com/crypto-org-chain/cosmos-sdk/pull/248) Init btree store lazily to save allocations when no content insert into it.
 
 ## [v0.53.0](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.0) - 2025-04-29 
 
