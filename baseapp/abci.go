@@ -796,13 +796,21 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 		app.finalizeBlockState.ms = app.finalizeBlockState.ms.SetTracingContext(nil).(storetypes.CacheMultiStore)
 	}
 
-	var blockGasUsed uint64
+	var (
+		blockGasUsed   uint64
+		blockGasWanted uint64
+	)
 	for _, res := range txResults {
 		blockGasUsed += uint64(res.GasUsed)
+		blockGasWanted += uint64(res.GasWanted)
 	}
-	sdkCtx := app.finalizeBlockState.Context().WithBlockGasUsed(blockGasUsed)
+	app.finalizeBlockState.SetContext(
+		app.finalizeBlockState.Context().
+			WithBlockGasUsed(blockGasUsed).
+			WithBlockGasWanted(blockGasWanted),
+	)
 
-	endBlock, err := app.endBlock(sdkCtx)
+	endBlock, err := app.endBlock(ctx)
 	if err != nil {
 		return nil, err
 	}
