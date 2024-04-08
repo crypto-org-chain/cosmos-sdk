@@ -7,7 +7,6 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	"github.com/cosmos/gogoproto/proto"
 
 	"cosmossdk.io/core/comet"
 	"cosmossdk.io/core/header"
@@ -111,8 +110,7 @@ func (c Context) BlockGasWanted() uint64                        { return c.block
 
 // clone the header before returning
 func (c Context) BlockHeader() cmtproto.Header {
-	msg := proto.Clone(&c.header).(*cmtproto.Header)
-	return *msg
+	return c.header
 }
 
 // HeaderHash returns a copy of the header hash obtained during abci.RequestBeginBlock

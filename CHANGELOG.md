@@ -47,6 +47,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#248](https://github.com/crypto-org-chain/cosmos-sdk/pull/248) Init btree store lazily to save allocations when no content insert into it.
 * [#252](https://github.com/crypto-org-chain/cosmos-sdk/pull/252) Add `BlockGasWanted` to `Context` to support feemarket module.
 
+### Improvements
+
+* [#]() `ctx.BlockHeader` don't do protobuf deep copy, shallow copy seems enough, reduce scope of mutex in `PriorityNonceMempool.Remove`.
+
 ## [Unreleased-Upstream]
 
 ### Bug Fixes
