@@ -46,6 +46,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API in `Context` to use new CoW branched cache store.
 * [#248](https://github.com/crypto-org-chain/cosmos-sdk/pull/248) Init btree store lazily to save allocations when no content insert into it.
 * [#252](https://github.com/crypto-org-chain/cosmos-sdk/pull/252) Add `BlockGasWanted` to `Context` to support feemarket module.
+* [#269](https://github.com/crypto-org-chain/cosmos-sdk/pull/269) Add `StreamingManager` to baseapp to extend the abci listeners.
 
 ### Improvements
 
