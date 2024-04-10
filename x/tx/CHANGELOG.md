@@ -31,6 +31,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## [Unreleased]
 
+### Improvements
+
+* [#276](https://github.com/crypto-org-chain/cosmos-sdk/pull/276) Support bytes in automatic signer getters.
+
 ## v0.13.1
 
 ### Features
