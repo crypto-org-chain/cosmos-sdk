@@ -42,10 +42,10 @@ issues:
       text: "SA1019:"
       linters:
         - staticcheck
-    - text: "SA1019: sdkerrors.Wrap is deprecated: functionality of this package has been moved to it's own module: (staticcheck)"
+    - text: "SA1019: sdkerrors.Wrap is deprecated: functionality of this package has been moved to it's own module:"
       linters:
         - staticcheck
-    - text: "SA1019: sdkerrors.Wrapf is deprecated: functionality of this package has been moved to it's own module: (staticcheck)"
+    - text: "SA1019: sdkerrors.Wrapf is deprecated: functionality of this package has been moved to it's own module:"
       linters:
         - staticcheck
 
