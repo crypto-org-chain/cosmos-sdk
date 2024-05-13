@@ -42,6 +42,12 @@ issues:
       text: "SA1019:"
       linters:
         - staticcheck
+    - text: "SA1019: sdkerrors.Wrap is deprecated: functionality of this package has been moved to it's own module: (staticcheck)"
+      linters:
+        - staticcheck
+    - text: "SA1019: sdkerrors.Wrapf is deprecated: functionality of this package has been moved to it's own module: (staticcheck)"
+      linters:
+        - staticcheck
 
   max-issues-per-linter: 10000
   max-same-issues: 10000
