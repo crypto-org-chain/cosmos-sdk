@@ -782,7 +782,7 @@ func newRealPrompt(dir string, buf io.Reader) func(string) (string, error) {
 				continue
 			}
 
-			if err := os.WriteFile(dir+"/keyhash", passwordHash, 0o555); err != nil { //nolint: G306
+			if err := os.WriteFile(dir+"/keyhash", passwordHash, 0o555); err != nil { //nolint: gosec
 				return "", err
 			}
 
