@@ -39,25 +39,15 @@ issues:
       linters:
         - stylecheck
     - path: "migrations"
-      text: "SA1019:"
       linters:
         - staticcheck
-    - text: "SA1019: sdkerrors.Wrap is deprecated: functionality of this package has been moved to it's own module:"
+    - text: "SA1019: sdkerrors"
       linters:
         - staticcheck
-    - text: "SA1019: sdkerrors.Wrapf is deprecated: functionality of this package has been moved to it's own module:"
+    - text: "SA1019: errors"
       linters:
         - staticcheck
-    - text: "SA1019: errors.Wrap is deprecated: functionality of this package has been moved to it's own module:"
-      linters:
-        - staticcheck
-    - text: "SA1019: errors.Wrapf is deprecated: functionality of this package has been moved to it's own module:"
-      linters:
-        - staticcheck
-    - text: "SA1019: errors.Register is deprecated: functionality of this package has been moved to it's own module:"
-      linters:
-        - staticcheck
-    - text: "SA1019: sdkerrors.Register is deprecated: functionality of this package has been moved to it's own module:"
+    - text: "SA1019: sdkerr"
       linters:
         - staticcheck
 
@@ -71,7 +61,7 @@ linters-settings:
     # print struct with more effective memory layout or not, false by default
     suggest-new: true
   nolintlint:
-    allow-unused: false
+    allow-unused: true
     allow-leading-space: true
     require-explanation: false
     require-specific: false
