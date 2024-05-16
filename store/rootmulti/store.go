@@ -539,6 +539,11 @@ func (rs *Store) CacheMultiStoreWithVersion(version int64) (types.CacheMultiStor
 				}
 			}
 
+			if cacheStore == nil {
+				// when loading a historical version, the store might not exists yet.
+				cacheStore = dbadapter.Store{DB: dbm.NewMemDB()}
+			}
+
 		default:
 			cacheStore = store
 		}
