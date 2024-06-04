@@ -3,8 +3,8 @@ package iavl
 import (
 	"fmt"
 
-	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/iavl"
+	idb "github.com/cosmos/iavl/db"
 )
 
 var (
@@ -31,7 +31,7 @@ type (
 		GetVersioned(key []byte, version int64) ([]byte, error)
 		GetImmutable(version int64) (*iavl.ImmutableTree, error)
 		SetInitialVersion(version uint64)
-		Iterator(start, end []byte, ascending bool) (dbm.Iterator, error)
+		Iterator(start, end []byte, ascending bool) (idb.Iterator, error)
 		AvailableVersions() []int
 		LoadVersionForOverwriting(targetVersion int64) error
 		TraverseStateChanges(startVersion, endVersion int64, fn func(version int64, changeSet *iavl.ChangeSet) error) error

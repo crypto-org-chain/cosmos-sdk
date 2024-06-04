@@ -382,3 +382,13 @@ func (app *BaseApp) SetDisableBlockGasMeter(disableBlockGasMeter bool) {
 func (app *BaseApp) SetTxExecutor(executor TxExecutor) {
 	app.txExecutor = executor
 }
+
+// SetMsgServiceRouter sets the MsgServiceRouter of a BaseApp.
+func (app *BaseApp) SetMsgServiceRouter(msgServiceRouter *MsgServiceRouter) {
+	app.msgServiceRouter = msgServiceRouter
+}
+
+// SetGRPCQueryRouter sets the GRPCQueryRouter of the BaseApp.
+func (app *BaseApp) SetGRPCQueryRouter(grpcQueryRouter *GRPCQueryRouter) {
+	app.grpcQueryRouter = grpcQueryRouter
+}
