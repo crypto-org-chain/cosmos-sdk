@@ -7,7 +7,7 @@ require (
 	github.com/creachadair/atomicfile v0.3.3
 	github.com/creachadair/tomledit v0.0.26
 	github.com/pelletier/go-toml/v2 v2.2.0
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.18.2
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	gotest.tools/v3 v3.5.1
