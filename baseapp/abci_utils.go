@@ -200,7 +200,7 @@ type (
 	// to verify a transaction.
 	ProposalTxVerifier interface {
 		PrepareProposalVerifyTx(tx sdk.Tx) ([]byte, error)
-		ProcessProposalVerifyTx(txBz []byte) (sdk.Tx, error)
+		ProcessProposalVerifyTx(txBz []byte) (sdk.Tx, uint64, error)
 		TxDecode(txBz []byte) (sdk.Tx, error)
 		TxEncode(tx sdk.Tx) ([]byte, error)
 	}
@@ -390,17 +390,13 @@ func (h *DefaultProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHan
 		}
 
 		for _, txBytes := range req.Txs {
-			tx, err := h.txVerifier.ProcessProposalVerifyTx(txBytes)
+			_, gasWanted, err := h.txVerifier.ProcessProposalVerifyTx(txBytes)
 			if err != nil {
 				return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, nil
 			}
 
 			if maxBlockGas > 0 {
-				gasTx, ok := tx.(GasTx)
-				if ok {
-					totalTxGas += gasTx.GetGas()
-				}
-
+				totalTxGas += gasWanted
 				if totalTxGas > uint64(maxBlockGas) {
 					return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, nil
 				}
