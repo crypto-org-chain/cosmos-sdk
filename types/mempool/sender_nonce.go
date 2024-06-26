@@ -155,13 +155,13 @@ func (snm *SenderNonceMempool) InsertWithGasWanted(_ context.Context, tx sdk.Tx,
 	return nil
 }
 
-func (mp *SenderNonceMempool) Insert(ctx context.Context, tx sdk.Tx) error {
+func (snm *SenderNonceMempool) Insert(ctx context.Context, tx sdk.Tx) error {
 	var gasLimit uint64
 	if gasTx, ok := tx.(GasTx); ok {
 		gasLimit = gasTx.GetGas()
 	}
 
-	return mp.InsertWithGasWanted(ctx, tx, gasLimit)
+	return snm.InsertWithGasWanted(ctx, tx, gasLimit)
 }
 
 // Select returns an iterator ordering transactions the mempool with the lowest
