@@ -19,6 +19,10 @@ func NewMempoolTx(tx sdk.Tx, gasWanted uint64) MempoolTx {
 	}
 }
 
+type GasTx interface {
+	GetGas() uint64
+}
+
 type Mempool interface {
 	// Insert attempts to insert a Tx into the app-side mempool returning
 	// an error upon failure.
