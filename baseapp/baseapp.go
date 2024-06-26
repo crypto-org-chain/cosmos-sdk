@@ -957,7 +957,7 @@ func (app *BaseApp) runTxWithMultiStore(mode execMode, txBytes []byte, txIndex i
 	}
 
 	if mode == execModeCheck {
-		err = app.mempool.Insert(ctx, tx)
+		err = app.mempool.InsertWithGasWanted(ctx, tx, gasWanted)
 		if err != nil {
 			return gInfo, nil, anteEvents, err
 		}

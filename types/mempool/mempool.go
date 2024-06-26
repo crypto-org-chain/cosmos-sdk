@@ -7,10 +7,35 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+type MempoolTx struct {
+	Tx        sdk.Tx
+	GasWanted uint64
+}
+
+func NewMempoolTx(tx sdk.Tx) MempoolTx {
+	var txGasLimit uint64
+	if gasTx, ok := tx.(interface {
+		GetGas() uint64
+	}); ok {
+		txGasLimit = gasTx.GetGas()
+	}
+	return NewMempoolTxWithGasWanted(tx, txGasLimit)
+}
+
+func NewMempoolTxWithGasWanted(tx sdk.Tx, gasWanted uint64) MempoolTx {
+	return MempoolTx{
+		Tx:        tx,
+		GasWanted: gasWanted,
+	}
+}
+
 type Mempool interface {
 	// Insert attempts to insert a Tx into the app-side mempool returning
 	// an error upon failure.
 	Insert(context.Context, sdk.Tx) error
+
+	// Insert with a custom gas wanted value
+	InsertWithGasWanted(context.Context, sdk.Tx, uint64) error
 
 	// Select returns an Iterator over the app-side mempool. If txs are specified,
 	// then they shall be incorporated into the Iterator. The Iterator must
@@ -34,7 +59,7 @@ type Iterator interface {
 	Next() Iterator
 
 	// Tx returns the transaction at the current position of the iterator.
-	Tx() sdk.Tx
+	Tx() MempoolTx
 }
 
 var (
