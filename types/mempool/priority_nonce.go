@@ -271,7 +271,7 @@ func (mp *PriorityNonceMempool[C]) InsertWithGasWanted(ctx context.Context, tx s
 	key.senderElement = senderIndex.Set(key, memTx)
 
 	mp.scores[sk] = txMeta[C]{priority: priority}
-	mp.priorityIndex.Set(key, memTx)
+	mp.priorityIndex.Set(key, tx)
 
 	return nil
 }
@@ -393,7 +393,7 @@ func (mp *PriorityNonceMempool[C]) reorderPriorityTies() {
 		if mp.priorityCounts[key.priority] > 1 {
 			newKey := key
 			newKey.weight = senderWeight(mp.cfg.TxPriority, key.senderElement)
-			reordering = append(reordering, reorderKey[C]{deleteKey: key, insertKey: newKey, tx: node.Value.(MempoolTx).Tx})
+			reordering = append(reordering, reorderKey[C]{deleteKey: key, insertKey: newKey, tx: node.Value.(sdk.Tx)})
 		}
 
 		node = node.Next()
