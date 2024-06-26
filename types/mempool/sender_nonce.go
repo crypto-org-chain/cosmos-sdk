@@ -127,7 +127,7 @@ func (snm *SenderNonceMempool) InsertWithGasWanted(_ context.Context, tx sdk.Tx,
 		return nil
 	}
 
-	memTx := NewMempoolTxWithGasWanted(tx, gasLimit)
+	memTx := NewMempoolTx(tx, gasLimit)
 
 	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
 	if err != nil {

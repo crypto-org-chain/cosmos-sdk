@@ -270,7 +270,14 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 					return nil, err
 				}
 
-				stop := h.txSelector.SelectTxForProposal(ctx, uint64(req.MaxTxBytes), maxBlockGas, mempool.NewMempoolTx(tx), txBz)
+				var txGasLimit uint64
+				if gasTx, ok := tx.(interface {
+					GetGas() uint64
+				}); ok {
+					txGasLimit = gasTx.GetGas()
+				}
+
+				stop := h.txSelector.SelectTxForProposal(ctx, uint64(req.MaxTxBytes), maxBlockGas, tx, txBz, txGasLimit)
 				if stop {
 					break
 				}
@@ -325,7 +332,7 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 					return nil, err
 				}
 			} else {
-				stop := h.txSelector.SelectTxForProposal(ctx, uint64(req.MaxTxBytes), maxBlockGas, memTx, txBz)
+				stop := h.txSelector.SelectTxForProposal(ctx, uint64(req.MaxTxBytes), maxBlockGas, memTx.Tx, txBz, memTx.GasWanted)
 				if stop {
 					break
 				}
@@ -451,7 +458,7 @@ type TxSelector interface {
 	// a proposal based on inclusion criteria defined by the TxSelector. It must
 	// return <true> if the caller should halt the transaction selection loop
 	// (typically over a mempool) or <false> otherwise.
-	SelectTxForProposal(ctx context.Context, maxTxBytes, maxBlockGas uint64, memTx mempool.MempoolTx, txBz []byte) bool
+	SelectTxForProposal(ctx context.Context, maxTxBytes, maxBlockGas uint64, memTx sdk.Tx, txBz []byte, gasWanted uint64) bool
 }
 
 type defaultTxSelector struct {
@@ -476,7 +483,7 @@ func (ts *defaultTxSelector) Clear() {
 	ts.selectedTxs = nil
 }
 
-func (ts *defaultTxSelector) SelectTxForProposal(_ context.Context, maxTxBytes, maxBlockGas uint64, memTx mempool.MempoolTx, txBz []byte) bool {
+func (ts *defaultTxSelector) SelectTxForProposal(_ context.Context, maxTxBytes, maxBlockGas uint64, memTx sdk.Tx, txBz []byte, gasWanted uint64) bool {
 	txSize := uint64(len(txBz))
 
 	// only add the transaction to the proposal if we have enough capacity
@@ -484,8 +491,8 @@ func (ts *defaultTxSelector) SelectTxForProposal(_ context.Context, maxTxBytes, 
 		// If there is a max block gas limit, add the tx only if the limit has
 		// not been met.
 		if maxBlockGas > 0 {
-			if (memTx.GasWanted + ts.totalTxGas) <= maxBlockGas {
-				ts.totalTxGas += memTx.GasWanted
+			if (gasWanted + ts.totalTxGas) <= maxBlockGas {
+				ts.totalTxGas += gasWanted
 				ts.totalTxBytes += txSize
 				ts.selectedTxs = append(ts.selectedTxs, txBz)
 			}

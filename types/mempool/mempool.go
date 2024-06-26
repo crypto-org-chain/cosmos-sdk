@@ -12,17 +12,7 @@ type MempoolTx struct {
 	GasWanted uint64
 }
 
-func NewMempoolTx(tx sdk.Tx) MempoolTx {
-	var txGasLimit uint64
-	if gasTx, ok := tx.(interface {
-		GetGas() uint64
-	}); ok {
-		txGasLimit = gasTx.GetGas()
-	}
-	return NewMempoolTxWithGasWanted(tx, txGasLimit)
-}
-
-func NewMempoolTxWithGasWanted(tx sdk.Tx, gasWanted uint64) MempoolTx {
+func NewMempoolTx(tx sdk.Tx, gasWanted uint64) MempoolTx {
 	return MempoolTx{
 		Tx:        tx,
 		GasWanted: gasWanted,

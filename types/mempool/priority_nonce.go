@@ -210,7 +210,7 @@ func (mp *PriorityNonceMempool[C]) InsertWithGasWanted(ctx context.Context, tx s
 		return nil
 	}
 
-	memTx := NewMempoolTxWithGasWanted(tx, gasWanted)
+	memTx := NewMempoolTx(tx, gasWanted)
 
 	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
 	if err != nil {
