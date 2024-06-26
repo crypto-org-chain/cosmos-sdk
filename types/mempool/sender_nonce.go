@@ -112,7 +112,7 @@ func (snm *SenderNonceMempool) NextSenderTx(sender string) sdk.Tx {
 	}
 
 	cursor := senderIndex.Front()
-	return cursor.Value.(MempoolTx).Tx
+	return cursor.Value.(Tx).Tx
 }
 
 // Insert adds a tx to the mempool. It returns an error if the tx does not have
@@ -279,8 +279,8 @@ func (i *senderNonceMempoolIterator) Next() Iterator {
 	return nil
 }
 
-func (i *senderNonceMempoolIterator) Tx() MempoolTx {
-	return i.currentTx.Value.(MempoolTx)
+func (i *senderNonceMempoolIterator) Tx() Tx {
+	return i.currentTx.Value.(Tx)
 }
 
 func removeAtIndex[T any](slice []T, index int) []T {

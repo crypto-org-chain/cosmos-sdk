@@ -189,7 +189,7 @@ func (mp *PriorityNonceMempool[C]) NextSenderTx(sender string) sdk.Tx {
 	}
 
 	cursor := senderIndex.Front()
-	return cursor.Value.(MempoolTx).Tx
+	return cursor.Value.(Tx).Tx
 }
 
 // Insert attempts to insert a Tx into the app-side mempool in O(log n) time,
@@ -245,12 +245,12 @@ func (mp *PriorityNonceMempool[C]) InsertWithGasWanted(ctx context.Context, tx s
 	// changes.
 	sk := txMeta[C]{nonce: nonce, sender: sender}
 	if oldScore, txExists := mp.scores[sk]; txExists {
-		if mp.cfg.TxReplacement != nil && !mp.cfg.TxReplacement(oldScore.priority, priority, senderIndex.Get(key).Value.(MempoolTx).Tx, tx) {
+		if mp.cfg.TxReplacement != nil && !mp.cfg.TxReplacement(oldScore.priority, priority, senderIndex.Get(key).Value.(Tx).Tx, tx) {
 			return fmt.Errorf(
 				"tx doesn't fit the replacement rule, oldPriority: %v, newPriority: %v, oldTx: %v, newTx: %v",
 				oldScore.priority,
 				priority,
-				senderIndex.Get(key).Value.(MempoolTx).Tx,
+				senderIndex.Get(key).Value.(Tx).Tx,
 				tx,
 			)
 		}
@@ -348,8 +348,8 @@ func (i *PriorityNonceIterator[C]) Next() Iterator {
 	return i
 }
 
-func (i *PriorityNonceIterator[C]) Tx() MempoolTx {
-	return i.senderCursors[i.sender].Value.(MempoolTx)
+func (i *PriorityNonceIterator[C]) Tx() Tx {
+	return i.senderCursors[i.sender].Value.(Tx)
 }
 
 // Select returns a set of transactions from the mempool, ordered by priority

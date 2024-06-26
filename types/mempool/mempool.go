@@ -7,13 +7,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-type MempoolTx struct {
+type Tx struct {
 	Tx        sdk.Tx
 	GasWanted uint64
 }
 
-func NewMempoolTx(tx sdk.Tx, gasWanted uint64) MempoolTx {
-	return MempoolTx{
+func NewMempoolTx(tx sdk.Tx, gasWanted uint64) Tx {
+	return Tx{
 		Tx:        tx,
 		GasWanted: gasWanted,
 	}
@@ -53,7 +53,7 @@ type Iterator interface {
 	Next() Iterator
 
 	// Tx returns the transaction at the current position of the iterator.
-	Tx() MempoolTx
+	Tx() Tx
 }
 
 var (
