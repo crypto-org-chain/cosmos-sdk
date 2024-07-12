@@ -77,7 +77,7 @@ type Context struct {
 	blockGasWanted uint64
 
 	// incarnationCache is shared between multiple incarnations of the same transaction,
-	// it must only cache stateless computation results, like the result of tx signature verification.
+	// it must only cache stateless computation results that only depends on tx body and block level information that don't change during block execution, like the result of tx signature verification.
 	incarnationCache map[string]any
 }
 
