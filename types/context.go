@@ -76,7 +76,8 @@ type Context struct {
 	// sum the gas wanted by all the transactions in the current block, only accessible by end blocker
 	blockGasWanted uint64
 
-	// incarnationCache is shared between multiple incranations of the same transaction.
+	// incarnationCache is shared between multiple incarnations of the same transaction,
+	// it must only cache stateless computation results, like the result of tx signature verification.
 	incarnationCache map[string]any
 }
 
