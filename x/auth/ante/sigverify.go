@@ -342,7 +342,10 @@ func (svd SigVerificationDecorator) anteHandle(ctx sdk.Context, tx sdk.Tx, simul
 
 func (svd SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
 	if v, ok := ctx.GetIncarnationCache(SigVerificationResultCacheKey); ok {
-		err = v.(error)
+		// can't convert `nil` to interface
+		if v != nil {
+			err = v.(error)
+		}
 	} else {
 		err = svd.anteHandle(ctx, tx, simulate)
 		ctx.SetIncarnationCache(SigVerificationResultCacheKey, err)
