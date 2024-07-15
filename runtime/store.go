@@ -21,6 +21,18 @@ func (k kvStoreService) OpenKVStore(ctx context.Context) store.KVStore {
 	return newKVStore(sdk.UnwrapSDKContext(ctx).KVStore(k.key))
 }
 
+func NewObjectStoreService(storeKey *storetypes.ObjectStoreKey) store.ObjectStoreService {
+	return &objKVStoreService{key: storeKey}
+}
+
+type objKVStoreService struct {
+	key *storetypes.ObjectStoreKey
+}
+
+func (k objKVStoreService) OpenObjKVStore(ctx context.Context) store.ObjKVStore {
+	return sdk.UnwrapSDKContext(ctx).ObjectStore(k.key)
+}
+
 type memStoreService struct {
 	key *storetypes.MemoryStoreKey
 }

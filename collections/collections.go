@@ -16,6 +16,8 @@ var (
 	ErrEncoding = codec.ErrEncoding
 	// ErrConflict is returned when there are conflicts, for example in UniqueIndex.
 	ErrConflict = errors.New("collections: conflict")
+	// ErrTypeMismatch is returned when there is a type mismatch.
+	ErrTypeMismatch = errors.New("collections: type mismatch")
 )
 
 // KEYS

@@ -34,3 +34,18 @@ type KVStore interface {
 
 // Iterator is an alias db's Iterator for convenience.
 type Iterator = dbm.Iterator
+
+// ObjKVStore don't support iteration yet to keep it simple.
+type ObjKVStore interface {
+	// Get returns nil iff key doesn't exist. Errors on nil key.
+	Get(key []byte) any
+
+	// Has checks if a key exists. Errors on nil key.
+	Has(key []byte) bool
+
+	// Set sets the key. Errors on nil key or value.
+	Set(key []byte, value any)
+
+	// Delete deletes the key. Errors on nil key.
+	Delete(key []byte)
+}

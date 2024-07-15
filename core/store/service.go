@@ -25,3 +25,7 @@ type TransientStoreService interface {
 	// OpenTransientStore retrieves the transient store from the context.
 	OpenTransientStore(context.Context) KVStore
 }
+type ObjectStoreService interface {
+	// OpenObjKVStore retrieves the ObjKVStore from the context.
+	OpenObjKVStore(context.Context) ObjKVStore
+}

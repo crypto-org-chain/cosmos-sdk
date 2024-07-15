@@ -12,6 +12,9 @@ import (
 // the store which emitted a given trace.
 const storeNameCtxKey = "store_name"
 
+// storesPreAllocation is the pre-allocate size for the stores map
+const storesPreAllocation = 8
+
 //----------------------------------------
 // Store
 
@@ -67,7 +70,7 @@ func NewFromParent(
 	traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
 	return Store{
-		stores:       make(map[types.StoreKey]types.CacheWrap),
+		stores:       make(map[types.StoreKey]types.CacheWrap, storesPreAllocation),
 		traceWriter:  traceWriter,
 		traceContext: traceContext,
 		parentStore:  parentStore,

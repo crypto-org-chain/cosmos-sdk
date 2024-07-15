@@ -116,12 +116,19 @@ func NewAccountKeeper(
 	cdc codec.BinaryCodec, storeService store.KVStoreService, proto func() sdk.AccountI,
 	maccPerms map[string][]string, ac address.Codec, bech32Prefix, authority string,
 ) AccountKeeper {
+	return NewAccountKeeperWithCache(cdc, storeService, nil, proto, maccPerms, ac, bech32Prefix, authority)
+}
+
+func NewAccountKeeperWithCache(
+	cdc codec.BinaryCodec, storeService store.KVStoreService, cacheService store.ObjectStoreService, proto func() sdk.AccountI,
+	maccPerms map[string][]string, ac address.Codec, bech32Prefix, authority string,
+) AccountKeeper {
 	permAddrs := make(map[string]types.PermissionsForAddress)
 	for name, perms := range maccPerms {
 		permAddrs[name] = types.NewPermissionsForAddress(name, perms)
 	}
 
-	sb := collections.NewSchemaBuilder(storeService)
+	sb := collections.NewSchemaBuilderWithCache(storeService, cacheService)
 
 	ak := AccountKeeper{
 		addressCodec:  ac,

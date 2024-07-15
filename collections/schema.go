@@ -21,9 +21,17 @@ type SchemaBuilder struct {
 
 // NewSchemaBuilderFromAccessor creates a new schema builder from the provided store accessor function.
 func NewSchemaBuilderFromAccessor(accessorFunc func(ctx context.Context) store.KVStore) *SchemaBuilder {
+	return NewSchemaBuilderFromAccessorWithCache(accessorFunc, nil)
+}
+
+func NewSchemaBuilderFromAccessorWithCache(
+	accessorFunc func(ctx context.Context) store.KVStore,
+	cacheFunc func(ctx context.Context) store.ObjKVStore,
+) *SchemaBuilder {
 	return &SchemaBuilder{
 		schema: &Schema{
 			storeAccessor:       accessorFunc,
+			cacheAccessor:       cacheFunc,
 			collectionsByName:   map[string]Collection{},
 			collectionsByPrefix: map[string]Collection{},
 		},
@@ -35,6 +43,14 @@ func NewSchemaBuilderFromAccessor(accessorFunc func(ctx context.Context) store.K
 // done adding collections to the schema.
 func NewSchemaBuilder(service store.KVStoreService) *SchemaBuilder {
 	return NewSchemaBuilderFromAccessor(service.OpenKVStore)
+}
+
+func NewSchemaBuilderWithCache(service store.KVStoreService, cacheService store.ObjectStoreService) *SchemaBuilder {
+	var cacheAccessor func(context.Context) store.ObjKVStore
+	if cacheService != nil {
+		cacheAccessor = cacheService.OpenObjKVStore
+	}
+	return NewSchemaBuilderFromAccessorWithCache(service.OpenKVStore, cacheAccessor)
 }
 
 // Build should be called after all collections that are part of the schema
@@ -126,6 +142,7 @@ var nameRegex = regexp.MustCompile("^" + NameRegex + "$")
 // clients.
 type Schema struct {
 	storeAccessor       func(context.Context) store.KVStore
+	cacheAccessor       func(context.Context) store.ObjKVStore
 	collectionsOrdered  []string
 	collectionsByPrefix map[string]Collection
 	collectionsByName   map[string]Collection
@@ -154,8 +171,16 @@ func NewMemoryStoreSchema(service store.MemoryStoreService) Schema {
 //			return sdk.UnwrapSDKContext(ctx).KVStore(kvStoreKey)
 //	}
 func NewSchemaFromAccessor(accessor func(context.Context) store.KVStore) Schema {
+	return NewSchemaFromAccessorWithCache(accessor, nil)
+}
+
+func NewSchemaFromAccessorWithCache(
+	accessor func(context.Context) store.KVStore,
+	cacheAccessor func(context.Context) store.ObjKVStore,
+) Schema {
 	return Schema{
 		storeAccessor:       accessor,
+		cacheAccessor:       cacheAccessor,
 		collectionsByName:   map[string]Collection{},
 		collectionsByPrefix: map[string]Collection{},
 	}

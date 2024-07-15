@@ -17,7 +17,9 @@ type Map[K, V any] struct {
 	vc codec.ValueCodec[V]
 
 	// store accessor
-	sa     func(context.Context) store.KVStore
+	sa func(context.Context) store.KVStore
+	// cache accessor
+	ca     func(context.Context) store.ObjKVStore
 	prefix []byte
 	name   string
 }
@@ -36,6 +38,7 @@ func NewMap[K, V any](
 		kc:     keyCodec,
 		vc:     valueCodec,
 		sa:     schemaBuilder.schema.storeAccessor,
+		ca:     schemaBuilder.schema.cacheAccessor,
 		prefix: prefix.Bytes(),
 		name:   name,
 	}
@@ -65,7 +68,14 @@ func (m Map[K, V]) Set(ctx context.Context, key K, value V) error {
 	}
 
 	kvStore := m.sa(ctx)
-	return kvStore.Set(bytesKey, valueBytes)
+	if err := kvStore.Set(bytesKey, valueBytes); err != nil {
+		return err
+	}
+
+	if m.ca != nil {
+		m.ca(ctx).Set(bytesKey, value)
+	}
+	return nil
 }
 
 // Get returns the value associated with the provided key,
@@ -75,6 +85,15 @@ func (m Map[K, V]) Get(ctx context.Context, key K) (v V, err error) {
 	bytesKey, err := EncodeKeyWithPrefix(m.prefix, m.kc, key)
 	if err != nil {
 		return v, err
+	}
+
+	if m.ca != nil {
+		genericValue := m.ca(ctx).Get(bytesKey)
+		v, ok := genericValue.(V)
+		if !ok {
+			return v, fmt.Errorf("%w: key '%s' has type %T, expect %s", ErrTypeMismatch, m.kc.Stringify(key), genericValue, m.vc.ValueType())
+		}
+		return v, nil
 	}
 
 	kvStore := m.sa(ctx)
@@ -90,6 +109,11 @@ func (m Map[K, V]) Get(ctx context.Context, key K) (v V, err error) {
 	if err != nil {
 		return v, fmt.Errorf("%w: value decode: %s", ErrEncoding, err) // TODO: use multi err wrapping in go1.20: https://github.com/golang/go/issues/53435
 	}
+
+	if m.ca != nil {
+		m.ca(ctx).Set(bytesKey, v)
+	}
+
 	return v, nil
 }
 
@@ -100,6 +124,13 @@ func (m Map[K, V]) Has(ctx context.Context, key K) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
+	if m.ca != nil {
+		if m.ca(ctx).Has(bytesKey) {
+			return true, nil
+		}
+	}
+
 	kvStore := m.sa(ctx)
 	return kvStore.Has(bytesKey)
 }
@@ -112,6 +143,11 @@ func (m Map[K, V]) Remove(ctx context.Context, key K) error {
 	if err != nil {
 		return err
 	}
+
+	if m.ca != nil {
+		m.ca(ctx).Delete(bytesKey)
+	}
+
 	kvStore := m.sa(ctx)
 	return kvStore.Delete(bytesKey)
 }
