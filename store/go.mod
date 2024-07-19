@@ -8,7 +8,7 @@ require (
 	cosmossdk.io/log v1.3.1
 	github.com/cockroachdb/errors v1.11.1
 	github.com/cockroachdb/pebble v1.1.0
-	github.com/cometbft/cometbft v0.38.6
+	github.com/cometbft/cometbft v0.38.10
 	github.com/cosmos/gogoproto v1.4.12
 	github.com/cosmos/iavl v1.1.1
 	github.com/cosmos/ics23/go v0.10.0
@@ -60,7 +60,7 @@ require (
 	github.com/rs/zerolog v1.32.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.1 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240221002015-b0ce06bbee7c // indirect
