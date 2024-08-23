@@ -17,7 +17,7 @@ require (
 	cosmossdk.io/x/tx v0.13.1
 	github.com/99designs/keyring v1.2.2
 	github.com/bgentry/speakeasy v0.1.1-0.20220910012023-760eaf8b6816
-	github.com/cockroachdb/errors v1.11.1
+	github.com/cockroachdb/errors v1.11.3
 	github.com/cometbft/cometbft v0.38.6
 	github.com/cosmos/btcutil v1.0.5
 	github.com/cosmos/cosmos-db v1.0.2
@@ -160,7 +160,7 @@ require (
 	go.etcd.io/bbolt v1.3.7 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/mod v0.15.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
