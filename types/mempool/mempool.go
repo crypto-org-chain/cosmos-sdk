@@ -36,6 +36,9 @@ type Mempool interface {
 	// closed by the caller.
 	Select(context.Context, [][]byte) Iterator
 
+	// SelectBy use callback to iterate over the mempool.
+	SelectBy(context.Context, [][]byte, func(Tx) bool)
+
 	// CountTx returns the number of transactions currently in the mempool.
 	CountTx() int
 

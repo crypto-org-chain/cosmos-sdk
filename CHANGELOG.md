@@ -66,6 +66,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Bug Fixes
 
 * (x/bank) [#20028](https://github.com/cosmos/cosmos-sdk/pull/20028) Align query with multi denoms for send-enabled.
+* (baseapp) [#]() Fix data race in mempool iteration.
 
 ## [Unreleased-Upstream]
 

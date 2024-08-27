@@ -378,6 +378,30 @@ func (mp *PriorityNonceMempool[C]) Select(_ context.Context, _ [][]byte) Iterato
 	return iterator.iteratePriority()
 }
 
+func (mp *PriorityNonceMempool[C]) SelectBy(_ context.Context, _ [][]byte, callback func(Tx) bool) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+
+	if mp.priorityIndex.Len() == 0 {
+		return
+	}
+
+	mp.reorderPriorityTies()
+
+	iterator := &PriorityNonceIterator[C]{
+		mempool:       mp,
+		senderCursors: make(map[string]*skiplist.Element),
+	}
+
+	iter := iterator.iteratePriority()
+	for iter != nil {
+		if !callback(iter.Tx()) {
+			break
+		}
+		iter = iter.Next()
+	}
+}
+
 type reorderKey[C comparable] struct {
 	deleteKey txMeta[C]
 	insertKey txMeta[C]
