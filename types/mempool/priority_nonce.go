@@ -394,10 +394,7 @@ func (mp *PriorityNonceMempool[C]) SelectBy(_ context.Context, _ [][]byte, callb
 	}
 
 	iter := iterator.iteratePriority()
-	for iter != nil {
-		if !callback(iter.Tx()) {
-			break
-		}
+	for iter != nil && callback(iter.Tx()) {
 		iter = iter.Next()
 	}
 }

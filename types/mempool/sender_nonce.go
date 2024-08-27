@@ -227,10 +227,7 @@ func (snm *SenderNonceMempool) SelectBy(_ context.Context, _ [][]byte, callback 
 	}
 
 	iter := iterator.Next()
-	for iter != nil {
-		if !callback(iter.Tx()) {
-			break
-		}
+	for iter != nil && callback(iter.Tx()) {
 		iter = iter.Next()
 	}
 }

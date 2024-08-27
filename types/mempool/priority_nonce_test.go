@@ -474,6 +474,7 @@ func (s *MempoolTestSuite) TestIteratorConcurrency() {
 				}
 				return i < len(tt.txs)
 			})
+			require.Equal(t, i, len(tt.txs))
 			cancel()
 			wg.Wait()
 		})
