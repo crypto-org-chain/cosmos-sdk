@@ -1,6 +1,7 @@
 module cosmossdk.io/tools/hubl
 
 go 1.21
+toolchain go1.22.5
 
 require (
 	cosmossdk.io/api v0.7.3
@@ -10,7 +11,7 @@ require (
 	github.com/cockroachdb/errors v1.11.1
 	github.com/cosmos/cosmos-sdk v0.50.5
 	github.com/manifoldco/promptui v0.9.0
-	github.com/pelletier/go-toml/v2 v2.2.0
+	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/spf13/cobra v1.8.0
 	google.golang.org/grpc v1.62.1
 	google.golang.org/protobuf v1.33.0
