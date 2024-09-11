@@ -62,6 +62,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (baseapp) [#20107](https://github.com/cosmos/cosmos-sdk/pull/20107) Avoid header height overwrite block height.
 * (cli) [#20020](https://github.com/cosmos/cosmos-sdk/pull/20020) Make bootstrap-state command support both new and legacy genesis format.
 * [#507](https://github.com/crypto-org-chain/cosmos-sdk/pull/507) mempool respect gas wanted returned by ante handler
+* [#744](https://github.com/crypto-org-chain/cosmos-sdk/pull/744) Decode tx before calling tx executor, tx executor might do pre-estimation based on tx body.
 
 ### Bug Fixes
 
