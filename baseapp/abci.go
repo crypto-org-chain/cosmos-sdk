@@ -865,7 +865,7 @@ func (app *BaseApp) executeTxs(ctx context.Context, txs [][]byte) ([]*abci.ExecT
 
 	if app.txExecutor != nil {
 		validTxResults, err := app.txExecutor(ctx, memTxs, app.finalizeBlockState.ms, func(i int, ms storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
-			return app.deliverTxWithMultiStore(txs[i], memTxs[i], i, ms, incarnationCache)
+			return app.deliverTxWithMultiStore(txs[validTxs[i]], memTxs[i], i, ms, incarnationCache)
 		})
 		if err != nil {
 			return nil, err
@@ -874,18 +874,18 @@ func (app *BaseApp) executeTxs(ctx context.Context, txs [][]byte) ([]*abci.ExecT
 		for i, res := range validTxResults {
 			txResults[validTxs[i]] = res
 		}
-	}
+	} else {
+		for i := range memTxs {
+			txIndex := validTxs[i]
+			txResults[txIndex] = app.deliverTx(txs[txIndex], i)
 
-	for i := range memTxs {
-		txIndex := validTxs[i]
-		txResults[txIndex] = app.deliverTx(txs[txIndex], i)
-
-		// check after every tx if we should abort
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			// continue
+			// check after every tx if we should abort
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+				// continue
+			}
 		}
 	}
 	return txResults, nil
