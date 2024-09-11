@@ -11,7 +11,7 @@ import (
 
 type TxExecutor func(
 	ctx context.Context,
-	block []sdk.Tx,
+	block [][]byte,
 	cms types.MultiStore,
-	deliverTxWithMultiStore func(int, types.MultiStore, map[string]any) *abci.ExecTxResult,
+	deliverTxWithMultiStore func(int, sdk.Tx, types.MultiStore, map[string]any) *abci.ExecTxResult,
 ) ([]*abci.ExecTxResult, error)
