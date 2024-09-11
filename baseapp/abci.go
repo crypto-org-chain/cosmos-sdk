@@ -841,30 +841,44 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 }
 
 func (app *BaseApp) executeTxs(ctx context.Context, txs [][]byte) ([]*abci.ExecTxResult, error) {
-	if app.txExecutor != nil {
-		return app.txExecutor(ctx, len(txs), app.finalizeBlockState.ms, func(i int, ms storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
-			return app.deliverTxWithMultiStore(txs[i], i, ms, incarnationCache)
-		})
-	}
-
-	txResults := make([]*abci.ExecTxResult, 0, len(txs))
+	txResults := make([]*abci.ExecTxResult, len(txs))
+	memTxs := make([]sdk.Tx, 0, len(txs))
+	validTxs := make([]int, 0, len(txs))
 	for i, rawTx := range txs {
-		var response *abci.ExecTxResult
-
-		if _, err := app.txDecoder(rawTx); err == nil {
-			response = app.deliverTx(rawTx, i)
-		} else {
+		memTx, err := app.txDecoder(rawTx)
+		if err != nil {
 			// In the case where a transaction included in a block proposal is malformed,
 			// we still want to return a default response to comet. This is because comet
 			// expects a response for each transaction included in a block proposal.
-			response = sdkerrors.ResponseExecTxResultWithEvents(
+			txResults[i] = sdkerrors.ResponseExecTxResultWithEvents(
 				sdkerrors.ErrTxDecode,
 				0,
 				0,
 				nil,
 				false,
 			)
+			continue
 		}
+		memTxs = append(memTxs, memTx)
+		validTxs = append(validTxs, i)
+	}
+
+	if app.txExecutor != nil {
+		validTxResults, err := app.txExecutor(ctx, memTxs, app.finalizeBlockState.ms, func(i int, ms storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
+			return app.deliverTxWithMultiStore(txs[i], memTxs[i], i, ms, incarnationCache)
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for i, res := range validTxResults {
+			txResults[validTxs[i]] = res
+		}
+	}
+
+	for i := range memTxs {
+		txIndex := validTxs[i]
+		txResults[txIndex] = app.deliverTx(txs[txIndex], i)
 
 		// check after every tx if we should abort
 		select {
@@ -873,8 +887,6 @@ func (app *BaseApp) executeTxs(ctx context.Context, txs [][]byte) ([]*abci.ExecT
 		default:
 			// continue
 		}
-
-		txResults = append(txResults, response)
 	}
 	return txResults, nil
 }
