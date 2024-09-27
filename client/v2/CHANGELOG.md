@@ -36,10 +36,41 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## [Unreleased]
 
-## [v2.0.0-beta.2] - 2024-XX-XX
+### Improvements
+
+* [#21936](https://github.com/cosmos/cosmos-sdk/pull/21936) Print possible enum values in error message after an invalid input was provided.
+
+### Bug Fixes
+
+* [#21809](https://github.com/cosmos/cosmos-sdk/pull/21809) Correctly handle enhanced sub commands.
+
+## [v2.0.0-beta.5] - 2024-09-18
 
 ### Improvements
 
+* [#21712](https://github.com/cosmos/cosmos-sdk/pull/21712) Marshal `type` field as proto message url in queries instead of amino name.
+
+## [v2.0.0-beta.4] - 2024-07-16
+
+### Bug Fixes
+
+* [#20964](https://github.com/cosmos/cosmos-sdk/pull/20964) Fix `GetNodeHomeDirectory` helper in `client/v2/helpers` to respect the `(PREFIX)_HOME` environment variable.
+
+## [v2.0.0-beta.3] - 2024-07-15
+
+### Features
+
+* [#20771](https://github.com/cosmos/cosmos-sdk/pull/20771) Add `GetNodeHomeDirectory` helper in `client/v2/helpers`.
+
+## [v2.0.0-beta.2] - 2024-06-19
+
+### Features
+
+* [#19039](https://github.com/cosmos/cosmos-sdk/pull/19039) Add support for pubkey in autocli.
+
+### Improvements
+
+* [#19646](https://github.com/cosmos/cosmos-sdk/pull/19646) Use keyring from command context.
 * (deps) [#19810](https://github.com/cosmos/cosmos-sdk/pull/19810) Upgrade SDK version due to prometheus breaking change.
 * (deps) [#19810](https://github.com/cosmos/cosmos-sdk/pull/19810) Bump `cosmossdk.io/store` to v1.1.0.
 * [#20083](https://github.com/cosmos/cosmos-sdk/pull/20083) Integrate latest version of cosmos-proto and improve version filtering.
@@ -55,6 +86,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#19377](https://github.com/cosmos/cosmos-sdk/pull/19377) Partly fix comment parsing in autocli.
 * [#19060](https://github.com/cosmos/cosmos-sdk/pull/19060) Simplify key flag parsing logic in flag handler.
 * [#20033](https://github.com/cosmos/cosmos-sdk/pull/20033) Respect output format from client ctx.
+
+### API Breaking Changes
+
+* [#19646](https://github.com/cosmos/cosmos-sdk/pull/19646) Remove keyring from `autocli.AppOptions` and `flag.Builder` options.
 
 ## [v2.0.0-beta.1] - 2023-11-07
 

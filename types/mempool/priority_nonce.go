@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	_ Mempool  = (*PriorityNonceMempool[int64])(nil)
-	_ Iterator = (*PriorityNonceIterator[int64])(nil)
+	_ ExtMempool = (*PriorityNonceMempool[int64])(nil)
+	_ Iterator   = (*PriorityNonceIterator[int64])(nil)
 )
 
 type (
@@ -382,6 +382,7 @@ func (mp *PriorityNonceMempool[C]) doSelect(_ context.Context, _ [][]byte) Itera
 	return iterator.iteratePriority()
 }
 
+// SelectBy will hold the mutex during the iteration, callback returns if continue.
 func (mp *PriorityNonceMempool[C]) SelectBy(ctx context.Context, txs [][]byte, callback func(Tx) bool) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()

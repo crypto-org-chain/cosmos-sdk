@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	_ Mempool  = (*SenderNonceMempool)(nil)
-	_ Iterator = (*senderNonceMempoolIterator)(nil)
+	_ ExtMempool = (*SenderNonceMempool)(nil)
+	_ Iterator   = (*senderNonceMempoolIterator)(nil)
 )
 
 var DefaultMaxTx = -1
@@ -203,6 +203,7 @@ func (snm *SenderNonceMempool) doSelect(_ context.Context, _ [][]byte) Iterator 
 	return iter.Next()
 }
 
+// SelectBy will hold the mutex during the iteration, callback returns if continue.
 func (snm *SenderNonceMempool) SelectBy(ctx context.Context, txs [][]byte, callback func(Tx) bool) {
 	snm.mtx.Lock()
 	defer snm.mtx.Unlock()

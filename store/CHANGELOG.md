@@ -23,7 +23,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## [Unreleased]
+## [Unreleased-Upstream]
 
 ### Improvements
 
@@ -35,6 +35,14 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API to use new CoW cache store.
 * [#244](https://github.com/crypto-org-chain/cosmos-sdk/pull/244) Add `Discard` method to CacheWrap to discard the write buffer.
 * [#258](https://github.com/crypto-org-chain/cosmos-sdk/pull/258) Add `NewFromParent` API to cachemulti store to create a new store from block-stm multiversion data structure.
+
+## [Unreleased]
+
+## v1.1.1 (September 06, 2024)
+
+### Improvements
+
+* [#21574](https://github.com/cosmos/cosmos-sdk/pull/21574) Upgrade IVL to IAVL 1.2.0.
 
 ## v1.1.0 (March 20, 2024)
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 
+	gogoproto "github.com/cosmos/gogoproto/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -31,6 +32,10 @@ type EncoderOptions struct {
 	// EnumAsString when set will encode enums as strings instead of integers.
 	// Caution: Enabling this option produce different sign bytes.
 	EnumAsString bool
+	// AminoNameAsTypeURL when set will use the amino name as the type URL in the JSON output.
+	// It is useful when using the Amino JSON encoder for non Amino purposes,
+	// such as JSON RPC.
+	AminoNameAsTypeURL bool
 	// TypeResolver is used to resolve protobuf message types by TypeURL when marshaling any packed messages.
 	TypeResolver signing.TypeResolver
 	// FileResolver is used to resolve protobuf file descriptors TypeURL when TypeResolver fails.
@@ -49,13 +54,14 @@ type Encoder struct {
 	doNotSortFields           bool
 	indent                    string
 	enumsAsString             bool
+	aminoNameAsTypeURL        bool
 }
 
 // NewEncoder returns a new Encoder capable of serializing protobuf messages to JSON using the Amino JSON encoding
 // rules.
 func NewEncoder(options EncoderOptions) Encoder {
 	if options.FileResolver == nil {
-		options.FileResolver = protoregistry.GlobalFiles
+		options.FileResolver = gogoproto.HybridResolver
 	}
 	if options.TypeResolver == nil {
 		options.TypeResolver = protoregistry.GlobalTypes
@@ -72,17 +78,19 @@ func NewEncoder(options EncoderOptions) Encoder {
 		},
 		aminoFieldEncoders: map[string]FieldEncoder{
 			"legacy_coins": nullSliceAsEmptyEncoder,
+			"inline_json":  cosmosInlineJSON,
 		},
 		protoTypeEncoders: map[string]MessageEncoder{
 			"google.protobuf.Timestamp": marshalTimestamp,
 			"google.protobuf.Duration":  marshalDuration,
 			"google.protobuf.Any":       marshalAny,
 		},
-		fileResolver:    options.FileResolver,
-		typeResolver:    options.TypeResolver,
-		doNotSortFields: options.DoNotSortFields,
-		indent:          options.Indent,
-		enumsAsString:   options.EnumAsString,
+		fileResolver:       options.FileResolver,
+		typeResolver:       options.TypeResolver,
+		doNotSortFields:    options.DoNotSortFields,
+		indent:             options.Indent,
+		enumsAsString:      options.EnumAsString,
+		aminoNameAsTypeURL: options.AminoNameAsTypeURL,
 	}
 	return enc
 }
@@ -185,9 +193,17 @@ func (enc Encoder) beginMarshal(msg protoreflect.Message, writer io.Writer, isAn
 	)
 
 	if isAny {
-		name, named = getMessageAminoNameAny(msg), true
+		if enc.aminoNameAsTypeURL {
+			name, named = getMessageTypeURL(msg), true
+		} else {
+			name, named = getMessageAminoNameAny(msg), true
+		}
 	} else {
 		name, named = getMessageAminoName(msg)
+		if enc.aminoNameAsTypeURL {
+			// do not override named
+			name = getMessageTypeURL(msg)
+		}
 	}
 
 	if named {

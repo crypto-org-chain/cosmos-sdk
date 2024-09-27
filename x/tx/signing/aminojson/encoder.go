@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	authapi "cosmossdk.io/api/cosmos/auth/v1beta1"
+	"cosmossdk.io/api/cosmos/crypto/multisig"
 	"cosmossdk.io/math"
 )
 
@@ -80,6 +82,28 @@ func nullSliceAsEmptyEncoder(enc *Encoder, v protoreflect.Value, w io.Writer) er
 	}
 }
 
+// cosmosInlineJSON takes bytes and inlines them into a JSON document.
+//
+// This requires the bytes contain valid JSON since otherwise the resulting document would be invalid.
+// Invalid JSON will result in an error.
+//
+// This replicates the behavior of JSON messages embedded in protobuf bytes
+// required for CosmWasm, e.g.:
+// https://github.com/CosmWasm/wasmd/blob/08567ff20e372e4f4204a91ca64a371538742bed/x/wasm/types/tx.go#L20-L22
+func cosmosInlineJSON(_ *Encoder, v protoreflect.Value, w io.Writer) error {
+	switch bz := v.Interface().(type) {
+	case []byte:
+		json, err := sortedJSONStringify(bz)
+		if err != nil {
+			return errors.Wrap(err, "could not normalize JSON")
+		}
+		_, err = w.Write(json)
+		return err
+	default:
+		return fmt.Errorf("unsupported type %T", bz)
+	}
+}
+
 // keyFieldEncoder replicates the behavior at described at:
 // https://github.com/cosmos/cosmos-sdk/blob/b49f948b36bc991db5be431607b475633aed697e/proto/cosmos/crypto/secp256k1/keys.proto#L16
 // The message is treated if it were bytes directly without the key field specified.
@@ -142,19 +166,67 @@ func moduleAccountEncoder(_ *Encoder, msg protoreflect.Message, w io.Writer) err
 // also see:
 // https://github.com/cosmos/cosmos-sdk/blob/b49f948b36bc991db5be431607b475633aed697e/proto/cosmos/crypto/multisig/keys.proto#L15/
 func thresholdStringEncoder(enc *Encoder, msg protoreflect.Message, w io.Writer) error {
-	fields := msg.Descriptor().Fields()
-	thresholdField := fields.ByName("threshold")
-	threshold := msg.Get(thresholdField).Uint()
-	_, err := fmt.Fprintf(w, `{"threshold":"%d","pubkeys":`, threshold)
+	pk, ok := msg.Interface().(*multisig.LegacyAminoPubKey)
+	if !ok {
+		return errors.New("thresholdStringEncoder: msg not a multisig.LegacyAminoPubKey")
+	}
+	_, err := fmt.Fprintf(w, `{"threshold":"%d","pubkeys":`, pk.Threshold)
 	if err != nil {
 		return err
 	}
+
+	if len(pk.PublicKeys) == 0 {
+		_, err = io.WriteString(w, `[]}`)
+		return err
+	}
+
+	fields := msg.Descriptor().Fields()
 	pubkeysField := fields.ByName("public_keys")
 	pubkeys := msg.Get(pubkeysField).List()
+
 	err = enc.marshalList(pubkeys, pubkeysField, w)
 	if err != nil {
 		return err
 	}
 	_, err = io.WriteString(w, `}`)
 	return err
+}
+
+// sortedObject returns a new object that mirrors the structure of the original
+// but with all maps having their keys sorted.
+func sortedObject(obj interface{}) interface{} {
+	switch v := obj.(type) {
+	case map[string]interface{}:
+		sortedKeys := make([]string, 0, len(v))
+		for key := range v {
+			sortedKeys = append(sortedKeys, key)
+		}
+		sort.Strings(sortedKeys)
+		result := make(map[string]interface{})
+		for _, key := range sortedKeys {
+			result[key] = sortedObject(v[key])
+		}
+		return result
+	case []interface{}:
+		for i, val := range v {
+			v[i] = sortedObject(val)
+		}
+		return v
+	default:
+		return obj
+	}
+}
+
+// sortedJSONStringify returns a JSON with objects sorted by key.
+func sortedJSONStringify(jsonBytes []byte) ([]byte, error) {
+	var obj interface{}
+	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
+		return nil, errors.New("invalid JSON bytes")
+	}
+	sorted := sortedObject(obj)
+	jsonData, err := json.Marshal(sorted)
+	if err != nil {
+		return nil, err
+	}
+	return jsonData, nil
 }
