@@ -21,7 +21,6 @@ func GenesisCoreCommand(txConfig client.TxConfig, moduleBasics module.BasicManag
 		RunE:                       client.ValidateCmd,
 	}
 	gentxModule := moduleBasics[genutiltypes.ModuleName].(genutil.AppModuleBasic)
-
 	cmd.AddCommand(
 		GenTxCmd(moduleBasics, txConfig,
 			banktypes.GenesisBalancesIterator{}, defaultNodeHome),
@@ -30,6 +29,7 @@ func GenesisCoreCommand(txConfig client.TxConfig, moduleBasics module.BasicManag
 			gentxModule.GenTxValidator),
 		ValidateGenesisCmd(moduleBasics),
 		AddGenesisAccountCmd(defaultNodeHome),
+		AddBulkGenesisAccountCmd(defaultNodeHome),
 	)
 
 	return cmd

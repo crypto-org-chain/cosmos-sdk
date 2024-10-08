@@ -40,6 +40,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (x/staking) Fix a possible bypass of delagator slashing: [GHSA-86h5-xcpx-cfqc](https://github.com/cosmos/cosmos-sdk/security/advisories/GHSA-86h5-xcpx-cfqc)
 * (store) [#435](https://github.com/crypto-org-chain/cosmos-sdk/pull/435) Fix a nil pointer panic when query historical state where a new store don't exist.
 
+### Features
+
+* (cli) [#21372](https://github.com/cosmos/cosmos-sdk/pull/21372) Added a `bulk-add-genesis-account` genesis command to add many genesis accounts at once.
+
 ## [v0.47.11](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.47.11) - 2024-04-22
 
 ### Bug Fixes
