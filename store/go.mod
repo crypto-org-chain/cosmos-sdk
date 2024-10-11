@@ -15,7 +15,7 @@ require (
 	github.com/google/btree v1.1.2
 	github.com/hashicorp/go-metrics v0.5.3
 	github.com/linxGnu/grocksdb v1.8.14
-	github.com/mattn/go-sqlite3 v1.14.22
+	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/spf13/cast v1.6.0
 	github.com/stretchr/testify v1.9.0
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d
