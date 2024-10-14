@@ -31,13 +31,11 @@ Since v0.13.0, x/tx follows Cosmos SDK semver: https://github.com/cosmos/cosmos-
 
 # Changelog
 
-## [Unreleased-Upstream]
-
-### Improvements
-
-* [#276](https://github.com/crypto-org-chain/cosmos-sdk/pull/276) Support bytes in automatic signer getters.
-
 ## [Unreleased]
+
+### Bug Fixes
+
+* [#21782](https://github.com/cosmos/cosmos-sdk/pull/21782) Fix JSON attribute sort order on messages with oneof fields.
 
 ## [v0.13.5](https://github.com/cosmos/cosmos-sdk/releases/tag/x/tx/v0.13.5) - 2024-09-18
 

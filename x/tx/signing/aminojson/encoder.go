@@ -166,34 +166,29 @@ func moduleAccountEncoder(_ *Encoder, msg protoreflect.Message, w io.Writer) err
 // also see:
 // https://github.com/cosmos/cosmos-sdk/blob/b49f948b36bc991db5be431607b475633aed697e/proto/cosmos/crypto/multisig/keys.proto#L15/
 func thresholdStringEncoder(enc *Encoder, msg protoreflect.Message, w io.Writer) error {
-	pk := &multisig.LegacyAminoPubKey{}
-	msgDesc := msg.Descriptor()
-	fields := msgDesc.Fields()
-	if msgDesc.FullName() != pk.ProtoReflect().Descriptor().FullName() {
+	pk, ok := msg.Interface().(*multisig.LegacyAminoPubKey)
+	if !ok {
 		return errors.New("thresholdStringEncoder: msg not a multisig.LegacyAminoPubKey")
 	}
-
-	pubkeysField := fields.ByName("public_keys")
-	pubkeys := msg.Get(pubkeysField).List()
-
-	_, err := io.WriteString(w, `{"pubkeys":`)
+	_, err := fmt.Fprintf(w, `{"threshold":"%d","pubkeys":`, pk.Threshold)
 	if err != nil {
 		return err
 	}
-	if pubkeys.Len() == 0 {
-		_, err := io.WriteString(w, `[]`)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := enc.marshalList(pubkeys, pubkeysField, w)
-		if err != nil {
-			return err
-		}
+
+	if len(pk.PublicKeys) == 0 {
+		_, err = io.WriteString(w, `[]}`)
+		return err
 	}
 
-	threshold := fields.ByName("threshold")
-	_, err = fmt.Fprintf(w, `,"threshold":"%d"}`, msg.Get(threshold).Uint())
+	fields := msg.Descriptor().Fields()
+	pubkeysField := fields.ByName("public_keys")
+	pubkeys := msg.Get(pubkeysField).List()
+
+	err = enc.marshalList(pubkeys, pubkeysField, w)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, `}`)
 	return err
 }
 
