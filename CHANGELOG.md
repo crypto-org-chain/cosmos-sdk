@@ -54,7 +54,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#261](https://github.com/crypto-org-chain/cosmos-sdk/pull/261) `ctx.BlockHeader` don't do protobuf deep copy, shallow copy seems enough, reduce scope of mutex in `PriorityNonceMempool.Remove`.
 * [#507](https://github.com/crypto-org-chain/cosmos-sdk/pull/507) mempool respect gas wanted returned by ante handler
 * [#744](https://github.com/crypto-org-chain/cosmos-sdk/pull/744) Pass raw transactions to tx executor so it can do pre-estimations.
-* [#]() Avoid decoding tx for in PrepareProposal if it's NopMempool.
+* [#884](https://github.com/crypto-org-chain/cosmos-sdk/pull/884) Avoid decoding tx for in PrepareProposal if it's NopMempool.
 
 ## [Unreleased]
 
