@@ -264,24 +264,8 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 		// Note, we still need to ensure the transactions returned respect req.MaxTxBytes.
 		_, isNoOp := h.mempool.(mempool.NoOpMempool)
 		if h.mempool == nil || isNoOp {
-			for _, txBz := range req.Txs {
-				tx, err := h.txVerifier.TxDecode(txBz)
-				if err != nil {
-					return nil, err
-				}
-
-				var txGasLimit uint64
-				if gasTx, ok := tx.(mempool.GasTx); ok {
-					txGasLimit = gasTx.GetGas()
-				}
-
-				stop := h.txSelector.SelectTxForProposal(ctx, uint64(req.MaxTxBytes), maxBlockGas, tx, txBz, txGasLimit)
-				if stop {
-					break
-				}
-			}
-
-			return &abci.ResponsePrepareProposal{Txs: h.txSelector.SelectedTxs(ctx)}, nil
+			txs := h.txSelector.SelectTxForProposalFast(ctx, req.Txs)
+			return &abci.ResponsePrepareProposal{Txs: txs}, nil
 		}
 
 		selectedTxsSignersSeqs := make(map[string]uint64)
@@ -464,6 +448,12 @@ type TxSelector interface {
 	// return <true> if the caller should halt the transaction selection loop
 	// (typically over a mempool) or <false> otherwise.
 	SelectTxForProposal(ctx context.Context, maxTxBytes, maxBlockGas uint64, memTx sdk.Tx, txBz []byte, gasWanted uint64) bool
+
+	// SelectTxForProposalFast is called in the case of NoOpMempool,
+	// where cometbft already checked the block gas/size limit,
+	// so the tx selector should simply accept them all to the proposal.
+	// But extra validations on the tx are still possible though.
+	SelectTxForProposalFast(ctx context.Context, txs [][]byte) [][]byte
 }
 
 type defaultTxSelector struct {
@@ -485,7 +475,7 @@ func (ts *defaultTxSelector) SelectedTxs(_ context.Context) [][]byte {
 func (ts *defaultTxSelector) Clear() {
 	ts.totalTxBytes = 0
 	ts.totalTxGas = 0
-	ts.selectedTxs = nil
+	ts.selectedTxs = ts.selectedTxs[:0] // keep the allocated memory
 }
 
 func (ts *defaultTxSelector) SelectTxForProposal(_ context.Context, maxTxBytes, maxBlockGas uint64, memTx sdk.Tx, txBz []byte, gasWanted uint64) bool {
@@ -509,4 +499,8 @@ func (ts *defaultTxSelector) SelectTxForProposal(_ context.Context, maxTxBytes, 
 
 	// check if we've reached capacity; if so, we cannot select any more transactions
 	return ts.totalTxBytes >= maxTxBytes || (maxBlockGas > 0 && (ts.totalTxGas >= maxBlockGas))
+}
+
+func (ts *defaultTxSelector) SelectTxForProposalFast(ctx context.Context, txs [][]byte) [][]byte {
+	return txs
 }
