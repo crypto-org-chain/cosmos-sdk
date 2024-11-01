@@ -212,6 +212,9 @@ type (
 		txVerifier       ProposalTxVerifier
 		txSelector       TxSelector
 		signerExtAdapter mempool.SignerExtractionAdapter
+
+		// fastPrepareProposal together with NoOpMempool will bypass tx selector
+		fastPrepareProposal bool
 	}
 )
 
@@ -222,6 +225,12 @@ func NewDefaultProposalHandler(mp mempool.Mempool, txVerifier ProposalTxVerifier
 		txSelector:       NewDefaultTxSelector(),
 		signerExtAdapter: mempool.NewDefaultSignerExtractionAdapter(),
 	}
+}
+
+func NewDefaultProposalHandlerFast(mp mempool.Mempool, txVerifier ProposalTxVerifier) *DefaultProposalHandler {
+	h := NewDefaultProposalHandler(mp, txVerifier)
+	h.fastPrepareProposal = true
+	return h
 }
 
 // SetTxSelector sets the TxSelector function on the DefaultProposalHandler.
@@ -264,8 +273,29 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 		// Note, we still need to ensure the transactions returned respect req.MaxTxBytes.
 		_, isNoOp := h.mempool.(mempool.NoOpMempool)
 		if h.mempool == nil || isNoOp {
-			txs := h.txSelector.SelectTxForProposalFast(ctx, req.Txs)
-			return &abci.ResponsePrepareProposal{Txs: txs}, nil
+			if h.fastPrepareProposal {
+				txs := h.txSelector.SelectTxForProposalFast(ctx, req.Txs)
+				return &abci.ResponsePrepareProposal{Txs: txs}, nil
+			}
+
+			for _, txBz := range req.Txs {
+				tx, err := h.txVerifier.TxDecode(txBz)
+				if err != nil {
+					return nil, err
+				}
+
+				var txGasLimit uint64
+				if gasTx, ok := tx.(mempool.GasTx); ok {
+					txGasLimit = gasTx.GetGas()
+				}
+
+				stop := h.txSelector.SelectTxForProposal(ctx, uint64(req.MaxTxBytes), maxBlockGas, tx, txBz, txGasLimit)
+				if stop {
+					break
+				}
+			}
+
+			return &abci.ResponsePrepareProposal{Txs: h.txSelector.SelectedTxs(ctx)}, nil
 		}
 
 		selectedTxsSignersSeqs := make(map[string]uint64)
