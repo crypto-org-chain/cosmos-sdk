@@ -379,6 +379,14 @@ func (app *BaseApp) PrepareProposal(req *abci.RequestPrepareProposal) (resp *abc
 		return nil, errors.New("PrepareProposal handler not set")
 	}
 
+	// Abort any running OE so it cannot overlap with `PrepareProposal`. This could happen if optimistic
+	// `internalFinalizeBlock` from previous round takes a long time, but consensus has moved on to next round.
+	// Overlap is undesirable, since `internalFinalizeBlock` and `PrepareProoposal` could share access to
+	// in-memory structs depending on application implementation.
+	// No-op if OE is not enabled.
+	// Similar call to Abort() is done in `ProcessProposal`.
+	app.optimisticExec.Abort()
+
 	// Always reset state given that PrepareProposal can timeout and be called
 	// again in a subsequent round.
 	header := cmtproto.Header{
@@ -753,9 +761,12 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 			WithHeaderHash(req.Hash))
 	}
 
-	if err := app.preBlock(req); err != nil {
+	preblockEvents, err := app.preBlock(req)
+	if err != nil {
 		return nil, err
 	}
+
+	events = append(events, preblockEvents...)
 
 	beginBlock, err := app.beginBlock(req)
 	if err != nil {
@@ -842,8 +853,8 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 
 func (app *BaseApp) executeTxs(ctx context.Context, txs [][]byte) ([]*abci.ExecTxResult, error) {
 	if app.txExecutor != nil {
-		return app.txExecutor(ctx, len(txs), app.finalizeBlockState.ms, func(i int, ms storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
-			return app.deliverTxWithMultiStore(txs[i], i, ms, incarnationCache)
+		return app.txExecutor(ctx, txs, app.finalizeBlockState.ms, func(i int, memTx sdk.Tx, ms storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
+			return app.deliverTxWithMultiStore(txs[i], memTx, i, ms, incarnationCache)
 		})
 	}
 
@@ -851,8 +862,8 @@ func (app *BaseApp) executeTxs(ctx context.Context, txs [][]byte) ([]*abci.ExecT
 	for i, rawTx := range txs {
 		var response *abci.ExecTxResult
 
-		if _, err := app.txDecoder(rawTx); err == nil {
-			response = app.deliverTx(rawTx, i)
+		if memTx, err := app.txDecoder(rawTx); err == nil {
+			response = app.deliverTx(rawTx, memTx, i)
 		} else {
 			// In the case where a transaction included in a block proposal is malformed,
 			// we still want to return a default response to comet. This is because comet
@@ -901,7 +912,7 @@ func (app *BaseApp) FinalizeBlock(req *abci.RequestFinalizeBlock) (res *abci.Res
 
 	if app.optimisticExec.Initialized() {
 		// check if the hash we got is the same as the one we are executing
-		aborted := app.optimisticExec.AbortIfNeeded(req.Hash)
+		aborted := app.optimisticExec.AbortIfNeeded(req)
 		// Wait for the OE to finish, regardless of whether it was aborted or not
 		res, err = app.optimisticExec.WaitResult()
 
@@ -932,10 +943,10 @@ func (app *BaseApp) FinalizeBlock(req *abci.RequestFinalizeBlock) (res *abci.Res
 func (app *BaseApp) checkHalt(height int64, time time.Time) error {
 	var halt bool
 	switch {
-	case app.haltHeight > 0 && uint64(height) > app.haltHeight:
+	case app.haltHeight > 0 && uint64(height) >= app.haltHeight:
 		halt = true
 
-	case app.haltTime > 0 && time.Unix() > int64(app.haltTime):
+	case app.haltTime > 0 && time.Unix() >= int64(app.haltTime):
 		halt = true
 	}
 

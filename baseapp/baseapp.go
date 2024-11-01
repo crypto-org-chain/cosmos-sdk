@@ -91,6 +91,7 @@ type BaseApp struct {
 	addrPeerFilter sdk.PeerFilter // filter peers by address and port
 	idPeerFilter   sdk.PeerFilter // filter peers by node ID
 	fauxMerkleMode bool           // if true, IAVL MountStores uses MountStoresDB for simulation speed.
+	sigverifyTx    bool           // in the simulation test, since the account does not have a private key, we have to ignore the tx sigverify.
 
 	// manages snapshots, i.e. dumps of app state at certain intervals
 	snapshotManager *snapshots.Manager
@@ -214,6 +215,7 @@ func NewBaseApp(
 		msgServiceRouter: NewMsgServiceRouter(),
 		txDecoder:        txDecoder,
 		fauxMerkleMode:   false,
+		sigverifyTx:      true,
 		queryGasLimit:    math.MaxUint64,
 	}
 
@@ -685,6 +687,8 @@ func (app *BaseApp) getContextForTx(mode execMode, txBytes []byte, txIndex int) 
 		WithGasMeter(storetypes.NewInfiniteGasMeter())
 	// WithVoteInfos(app.voteInfos) // TODO: identify if this is needed
 
+	ctx = ctx.WithIsSigverifyTx(app.sigverifyTx)
+
 	ctx = ctx.WithConsensusParams(app.GetConsensusParams(ctx))
 
 	if mode == execModeReCheck {
@@ -718,12 +722,13 @@ func (app *BaseApp) cacheTxContext(ctx sdk.Context, txBytes []byte) (sdk.Context
 	return ctx.WithMultiStore(msCache), msCache
 }
 
-func (app *BaseApp) preBlock(req *abci.RequestFinalizeBlock) error {
+func (app *BaseApp) preBlock(req *abci.RequestFinalizeBlock) ([]abci.Event, error) {
+	var events []abci.Event
 	if app.preBlocker != nil {
-		ctx := app.finalizeBlockState.Context()
+		ctx := app.finalizeBlockState.Context().WithEventManager(sdk.NewEventManager())
 		rsp, err := app.preBlocker(ctx, req)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// rsp.ConsensusParamsChanged is true from preBlocker means ConsensusParams in store get changed
 		// write the consensus parameters in store to context
@@ -734,8 +739,9 @@ func (app *BaseApp) preBlock(req *abci.RequestFinalizeBlock) error {
 			ctx = ctx.WithBlockGasMeter(gasMeter)
 			app.finalizeBlockState.SetContext(ctx)
 		}
+		events = ctx.EventManager().ABCIEvents()
 	}
-	return nil
+	return events, nil
 }
 
 func (app *BaseApp) beginBlock(_ *abci.RequestFinalizeBlock) (sdk.BeginBlock, error) {
@@ -764,11 +770,11 @@ func (app *BaseApp) beginBlock(_ *abci.RequestFinalizeBlock) (sdk.BeginBlock, er
 	return resp, nil
 }
 
-func (app *BaseApp) deliverTx(tx []byte, txIndex int) *abci.ExecTxResult {
-	return app.deliverTxWithMultiStore(tx, txIndex, nil, nil)
+func (app *BaseApp) deliverTx(tx []byte, memTx sdk.Tx, txIndex int) *abci.ExecTxResult {
+	return app.deliverTxWithMultiStore(tx, memTx, txIndex, nil, nil)
 }
 
-func (app *BaseApp) deliverTxWithMultiStore(tx []byte, txIndex int, txMultiStore storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
+func (app *BaseApp) deliverTxWithMultiStore(tx []byte, memTx sdk.Tx, txIndex int, txMultiStore storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
 	gInfo := sdk.GasInfo{}
 	resultStr := "successful"
 
@@ -781,7 +787,7 @@ func (app *BaseApp) deliverTxWithMultiStore(tx []byte, txIndex int, txMultiStore
 		telemetry.SetGauge(float32(gInfo.GasWanted), "tx", "gas", "wanted")
 	}()
 
-	gInfo, result, anteEvents, err := app.runTxWithMultiStore(execModeFinalize, tx, txIndex, txMultiStore, incarnationCache)
+	gInfo, result, anteEvents, err := app.runTxWithMultiStore(execModeFinalize, tx, memTx, txIndex, txMultiStore, incarnationCache)
 	if err != nil {
 		resultStr = "failed"
 		resp = sdkerrors.ResponseExecTxResultWithEvents(
@@ -839,10 +845,17 @@ func (app *BaseApp) endBlock(_ context.Context) (sdk.EndBlock, error) {
 // returned if the tx does not run out of gas and if all the messages are valid
 // and execute successfully. An error is returned otherwise.
 func (app *BaseApp) runTx(mode execMode, txBytes []byte) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
-	return app.runTxWithMultiStore(mode, txBytes, -1, nil, nil)
+	return app.runTxWithMultiStore(mode, txBytes, nil, -1, nil, nil)
 }
 
-func (app *BaseApp) runTxWithMultiStore(mode execMode, txBytes []byte, txIndex int, txMultiStore storetypes.MultiStore, incarnationCache map[string]any) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
+func (app *BaseApp) runTxWithMultiStore(
+	mode execMode,
+	txBytes []byte,
+	tx sdk.Tx,
+	txIndex int,
+	txMultiStore storetypes.MultiStore,
+	incarnationCache map[string]any,
+) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
 	// NOTE: GasWanted should be returned by the AnteHandler. GasUsed is
 	// determined by the GasMeter. We need access to the context to get the gas
 	// meter, so we initialize upfront.
@@ -894,9 +907,11 @@ func (app *BaseApp) runTxWithMultiStore(mode execMode, txBytes []byte, txIndex i
 		defer consumeBlockGas()
 	}
 
-	tx, err := app.txDecoder(txBytes)
-	if err != nil {
-		return sdk.GasInfo{}, nil, nil, err
+	if tx == nil {
+		tx, err = app.txDecoder(txBytes)
+		if err != nil {
+			return sdk.GasInfo{}, nil, nil, err
+		}
 	}
 
 	msgs := tx.GetMsgs()

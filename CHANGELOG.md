@@ -36,7 +36,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## [Unreleased]
+## [Unreleased-Upstream]
 
 ### Features
 
@@ -47,34 +47,104 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#248](https://github.com/crypto-org-chain/cosmos-sdk/pull/248) Init btree store lazily to save allocations when no content insert into it.
 * [#252](https://github.com/crypto-org-chain/cosmos-sdk/pull/252) Add `BlockGasWanted` to `Context` to support feemarket module.
 * [#269](https://github.com/crypto-org-chain/cosmos-sdk/pull/269) Add `StreamingManager` to baseapp to extend the abci listeners.
-* (crypto/keyring) [#20212](https://github.com/cosmos/cosmos-sdk/pull/20212) Expose the db keyring used in the keystore.
 * (baseapp) [#565](https://github.com/crypto-org-chain/cosmos-sdk/pull/565) Support incarnation cache when executed in block-stm.
 
 ### Improvements
 
 * [#261](https://github.com/crypto-org-chain/cosmos-sdk/pull/261) `ctx.BlockHeader` don't do protobuf deep copy, shallow copy seems enough, reduce scope of mutex in `PriorityNonceMempool.Remove`.
+* [#507](https://github.com/crypto-org-chain/cosmos-sdk/pull/507) mempool respect gas wanted returned by ante handler
+* [#744](https://github.com/crypto-org-chain/cosmos-sdk/pull/744) Pass raw transactions to tx executor so it can do pre-estimations.
+
+## [Unreleased]
+
+### Features
+
+* (crypto/keyring) [#21653](https://github.com/cosmos/cosmos-sdk/pull/21653) New Linux-only backend that adds Linux kernel's `keyctl` support.
+* (crypto/keyring) [#20212](https://github.com/cosmos/cosmos-sdk/pull/20212) Expose the db keyring used in the keystore.
+
+### Improvements
+
+* (server) [#21941](https://github.com/cosmos/cosmos-sdk/pull/21941) Regenerate addrbook.json for in place testnet.
+
+### Bug Fixes
+
+* (sims) [21906](https://github.com/cosmos/cosmos-sdk/pull/21906) Skip sims test when running dry on validators
+* (cli) [#21919](https://github.com/cosmos/cosmos-sdk/pull/21919) Query address-by-acc-num by account_id instead of id.
+
+## [v0.50.10](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.10) - 2024-09-20
+
+### Features
+
+* (cli) [#20779](https://github.com/cosmos/cosmos-sdk/pull/20779) Added `module-hash-by-height` command to query and retrieve module hashes at a specified blockchain height, enhancing debugging capabilities.
+* (cli) [#21372](https://github.com/cosmos/cosmos-sdk/pull/21372) Added a `bulk-add-genesis-account` genesis command to add many genesis accounts at once.
+* (types/collections) [#21724](https://github.com/cosmos/cosmos-sdk/pull/21724) Added `LegacyDec` collection value.
+
+### Improvements
+
+* (x/bank) [#21460](https://github.com/cosmos/cosmos-sdk/pull/21460) Added `Sender` attribute in `MsgMultiSend` event.
+* (genutil) [#21701](https://github.com/cosmos/cosmos-sdk/pull/21701) Improved error messages for genesis validation.
+* (testutil/integration) [#21816](https://github.com/cosmos/cosmos-sdk/pull/21816) Allow to pass baseapp options in `NewIntegrationApp`.
+
+### Bug Fixes
+
+* (runtime) [#21769](https://github.com/cosmos/cosmos-sdk/pull/21769) Fix baseapp options ordering to avoid overwriting options set by modules.
+* (x/consensus) [#21493](https://github.com/cosmos/cosmos-sdk/pull/21493) Fix regression that prevented to upgrade to > v0.50.7 without consensus version params.
+* (baseapp) [#21256](https://github.com/cosmos/cosmos-sdk/pull/21256) Halt height will not commit the block indicated, meaning that if halt-height is set to 10, only blocks until 9 (included) will be committed. This is to go back to the original behavior before a change was introduced in v0.50.0.
+* (baseapp) [#21444](https://github.com/cosmos/cosmos-sdk/pull/21444) Follow-up, Return PreBlocker events in FinalizeBlockResponse.
+* (baseapp) [#21413](https://github.com/cosmos/cosmos-sdk/pull/21413) Fix data race in sdk mempool.
+
+## [v0.50.9](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.9) - 2024-08-07
+
+## Bug Fixes
+
+* (baseapp) [#21159](https://github.com/cosmos/cosmos-sdk/pull/21159) Return PreBlocker events in FinalizeBlockResponse.
+* [#20939](https://github.com/cosmos/cosmos-sdk/pull/20939) Fix collection reverse iterator to include `pagination.key` in the result.
+* (client/grpc) [#20969](https://github.com/cosmos/cosmos-sdk/pull/20969) Fix `node.NewQueryServer` method not setting `cfg`.
+* (testutil/integration) [#21006](https://github.com/cosmos/cosmos-sdk/pull/21006) Fix `NewIntegrationApp` method not writing default genesis to state.
+* (runtime) [#21080](https://github.com/cosmos/cosmos-sdk/pull/21080) Fix `app.yaml` / `app.json` incompatibility with `depinject v1.0.0`.
+
+## [v0.50.8](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.8) - 2024-07-15
+
+## Features
+
+* (client) [#20690](https://github.com/cosmos/cosmos-sdk/pull/20690) Import mnemonic from file
+
+## Improvements
+
+* (x/authz,x/feegrant) [#20590](https://github.com/cosmos/cosmos-sdk/pull/20590) Provide updated keeper in depinject for authz and feegrant modules.
+* [#20631](https://github.com/cosmos/cosmos-sdk/pull/20631) Fix json parsing in the wait-tx command.
+* (x/auth) [#20438](https://github.com/cosmos/cosmos-sdk/pull/20438) Add `--skip-signature-verification` flag to multisign command to allow nested multisigs.
+
+## Bug Fixes
+
+* (simulation) [#17911](https://github.com/cosmos/cosmos-sdk/pull/17911) Fix all problems with executing command `make test-sim-custom-genesis-fast` for simulation test.
+* (simulation) [#18196](https://github.com/cosmos/cosmos-sdk/pull/18196) Fix the problem of `validator set is empty after InitGenesis` in simulation test.
+
+## [v0.50.7](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.7) - 2024-06-04
+
+### Improvements
+
 * (debug) [#20328](https://github.com/cosmos/cosmos-sdk/pull/20328) Add consensus address for debug cmd.
 * (runtime) [#20264](https://github.com/cosmos/cosmos-sdk/pull/20264) Expose grpc query router via depinject.
 * (x/consensus) [#20381](https://github.com/cosmos/cosmos-sdk/pull/20381) Use Comet utility for consensus module consensus param updates.
 * (client) [#20356](https://github.com/cosmos/cosmos-sdk/pull/20356) Overwrite client context when available in `SetCmdClientContext`.
-* (baseapp) [#20346](https://github.com/cosmos/cosmos-sdk/pull/20346) Correctly assign `execModeSimulate` to context for `simulateTx`.
-* (baseapp) [#20144](https://github.com/cosmos/cosmos-sdk/pull/20144) Remove txs from mempool when antehandler fails in recheck.
-* (baseapp) [#20107](https://github.com/cosmos/cosmos-sdk/pull/20107) Avoid header height overwrite block height.
-* (cli) [#20020](https://github.com/cosmos/cosmos-sdk/pull/20020) Make bootstrap-state command support both new and legacy genesis format.
-* [#507](https://github.com/crypto-org-chain/cosmos-sdk/pull/507) mempool respect gas wanted returned by ante handler
 
 ### Bug Fixes
 
-* (x/bank) [#20028](https://github.com/cosmos/cosmos-sdk/pull/20028) Align query with multi denoms for send-enabled.
+* (baseapp) [#20346](https://github.com/cosmos/cosmos-sdk/pull/20346) Correctly assign `execModeSimulate` to context for `simulateTx`.
+* (baseapp) [#20144](https://github.com/cosmos/cosmos-sdk/pull/20144) Remove txs from mempool when AnteHandler fails in recheck.
+* (baseapp) [#20107](https://github.com/cosmos/cosmos-sdk/pull/20107) Avoid header height overwrite block height.
+* (cli) [#20020](https://github.com/cosmos/cosmos-sdk/pull/20020) Make bootstrap-state command support both new and legacy genesis format.
+* (testutil/sims) [#20151](https://github.com/cosmos/cosmos-sdk/pull/20151) Set all signatures and don't overwrite the previous one in `GenSignedMockTx`.
 
-## [Unreleased-Upstream]
+## [v0.50.6](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.6) - 2024-04-22
 
 ### Features
 
 * (types) [#19759](https://github.com/cosmos/cosmos-sdk/pull/19759) Align SignerExtractionAdapter in PriorityNonceMempool Remove.
 * (client) [#19870](https://github.com/cosmos/cosmos-sdk/pull/19870) Add new query command `wait-tx`. Alias `event-query-tx-for` to `wait-tx` for backward compatibility.
 
-### Improvements 
+### Improvements
 
 * (telemetry) [#19903](https://github.com/cosmos/cosmos-sdk/pull/19903) Conditionally emit metrics based on enablement.
     * **Introduction of `Now` Function**: Added a new function called `Now` to the telemetry package. It returns the current system time if telemetry is enabled, or a zero time if telemetry is not enabled.

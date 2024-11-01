@@ -210,6 +210,34 @@ func TestMarshalDuration(t *testing.T) {
 	require.Equal(t, `{"duration":"1s"}`, string(bz))
 }
 
+func TestWithAJson(t *testing.T) {
+	encoder := aminojson.NewEncoder(aminojson.EncoderOptions{})
+
+	// list
+	msg := &testpb.WithAJson{
+		Field1: []byte(`[{"name":"child1"}]`),
+	}
+	bz, err := encoder.Marshal(msg)
+	require.NoError(t, err)
+	require.Equal(t, `{"field1":[{"name":"child1"}]}`, string(bz))
+
+	// string
+	msg = &testpb.WithAJson{
+		Field1: []byte(`"hello again"`),
+	}
+	bz, err = encoder.Marshal(msg)
+	require.NoError(t, err)
+	require.Equal(t, `{"field1":"hello again"}`, string(bz))
+
+	// object
+	msg = &testpb.WithAJson{
+		Field1: []byte(`{"deeper":{"nesting":1}}`),
+	}
+	bz, err = encoder.Marshal(msg)
+	require.NoError(t, err)
+	require.Equal(t, `{"field1":{"deeper":{"nesting":1}}}`, string(bz))
+}
+
 func TestIndent(t *testing.T) {
 	encoder := aminojson.NewEncoder(aminojson.EncoderOptions{Indent: "	"})
 
@@ -303,6 +331,65 @@ func TestEnumAsString(t *testing.T) {
 		"bool": true,
 		"bytes": "AAECAw==",
 		"enum": "ONE",
+		"f32": 1001,
+		"f64": "9572348124213523654",
+		"i32": -15,
+		"i64": "14578294827584932",
+		"message": {
+			"foo": "test"
+		},
+		"repeated": [
+			3,
+			-7,
+			2,
+			6,
+			4
+		],
+		"sf32": -1000,
+		"sf64": "-659101379604211154",
+		"si32": -376,
+		"si64": "-59268425823934",
+		"str": "abcxyz\"foo\"def",
+		"u32": 1200,
+		"u64": "4759492485"
+	}
+}`, string(bz))
+}
+
+func TestAminoNameAsTypeURL(t *testing.T) {
+	encoder := aminojson.NewEncoder(aminojson.EncoderOptions{Indent: "	", AminoNameAsTypeURL: true})
+
+	msg := &testpb.ABitOfEverything{
+		Message: &testpb.NestedMessage{
+			Foo: "test",
+			Bar: 0, // this is the default value and should be omitted from output
+		},
+		Enum:     testpb.AnEnum_ONE,
+		Repeated: []int32{3, -7, 2, 6, 4},
+		Str:      `abcxyz"foo"def`,
+		Bool:     true,
+		Bytes:    []byte{0, 1, 2, 3},
+		I32:      -15,
+		F32:      1001,
+		U32:      1200,
+		Si32:     -376,
+		Sf32:     -1000,
+		I64:      14578294827584932,
+		F64:      9572348124213523654,
+		U64:      4759492485,
+		Si64:     -59268425823934,
+		Sf64:     -659101379604211154,
+	}
+
+	bz, err := encoder.Marshal(msg)
+	require.NoError(t, err)
+	fmt.Println(string(bz))
+	require.Equal(t, `{
+	"type": "/testpb.ABitOfEverything",
+	"value": {
+		"bool": true,
+		"bytes": "AAECAw==",
+		"enum": 1,
 		"f32": 1001,
 		"f64": "9572348124213523654",
 		"i32": -15,
