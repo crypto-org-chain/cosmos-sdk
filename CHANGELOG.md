@@ -66,6 +66,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Improvements
 
 * (server) [#21941](https://github.com/cosmos/cosmos-sdk/pull/21941) Regenerate addrbook.json for in place testnet.
+* (store) [#]() Enable iavl async pruning.
 
 ### Bug Fixes
 
