@@ -87,8 +87,12 @@ Supported app-db-backend types include 'goleveldb', 'rocksdb', 'pebbledb'.`,
 			pruningHeight := latestHeight - int64(pruningOptions.KeepRecent)
 			cmd.Printf("pruning heights up to %v\n", pruningHeight)
 
-			err = rootMultiStore.PruneStores(pruningHeight)
-			if err != nil {
+			if err := rootMultiStore.PruneStores(pruningHeight); err != nil {
+				return err
+			}
+
+			// close will wait for async pruning process to finish
+			if err := rootMultiStore.Close(); err != nil {
 				return err
 			}
 

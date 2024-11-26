@@ -1188,6 +1188,16 @@ func (rs *Store) flushMetadata(db dbm.DB, version int64, cInfo *types.CommitInfo
 	rs.logger.Debug("flushing metadata finished", "height", version)
 }
 
+func (rs *Store) Close() error {
+	errs := make([]error, 0, len(rs.stores))
+	for _, store := range rs.stores {
+		if closer, ok := store.(io.Closer); ok {
+			errs = append(errs, closer.Close())
+		}
+	}
+	return errors.Join(errs...)
+}
+
 type storeParams struct {
 	key            types.StoreKey
 	db             dbm.DB
