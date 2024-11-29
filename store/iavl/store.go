@@ -16,6 +16,7 @@ import (
 	"cosmossdk.io/store/metrics"
 	pruningtypes "cosmossdk.io/store/pruning/types"
 	"cosmossdk.io/store/types"
+	"cosmossdk.io/store/wrapper"
 )
 
 const (
@@ -58,7 +59,7 @@ func LoadStoreWithOpts(db dbm.DB, logger log.Logger, key types.StoreKey, id type
 		initialVersion = 1
 	}
 	opts = append(opts, iavl.InitialVersionOption(initialVersion))
-	tree := iavl.NewMutableTree(db, cacheSize, disableFastNode, logger, opts...)
+	tree := iavl.NewMutableTree(wrapper.NewDBWrapper(db), cacheSize, disableFastNode, logger, opts...)
 
 	isUpgradeable, err := tree.IsUpgradeable()
 	if err != nil {
