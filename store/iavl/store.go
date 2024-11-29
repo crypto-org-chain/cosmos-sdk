@@ -54,10 +54,6 @@ func LoadStoreWithInitialVersion(db dbm.DB, logger log.Logger, key types.StoreKe
 }
 
 func LoadStoreWithOpts(db dbm.DB, logger log.Logger, key types.StoreKey, id types.CommitID, initialVersion uint64, cacheSize int, disableFastNode bool, metrics metrics.StoreMetrics, opts ...iavl.Option) (types.CommitKVStore, error) {
-	// store/v1 and app/v1 flows never require an initial version of 0
-	if initialVersion == 0 {
-		initialVersion = 1
-	}
 	opts = append(opts, iavl.InitialVersionOption(initialVersion))
 	tree := iavl.NewMutableTree(wrapper.NewDBWrapper(db), cacheSize, disableFastNode, logger, opts...)
 
