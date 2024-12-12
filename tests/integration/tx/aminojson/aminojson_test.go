@@ -131,11 +131,7 @@ func TestAminoJSON_Equivalence(t *testing.T) {
 
 				legacyAminoJSON, err := encCfg.Amino.MarshalJSON(gogo)
 				require.NoError(t, err)
-				legacyAminoJSON, err = types.SortJSON(legacyAminoJSON)
-				require.NoError(t, err)
 				aminoJSON, err := aj.Marshal(msg)
-				require.NoError(t, err)
-				aminoJSON, err = types.SortJSON(aminoJSON)
 				require.NoError(t, err)
 				require.Equal(t, string(legacyAminoJSON), string(aminoJSON))
 
@@ -228,15 +224,7 @@ func TestAminoJSON_LegacyParity(t *testing.T) {
 		protoUnmarshalFails bool
 	}{
 		"auth/params": {gogo: &authtypes.Params{TxSigLimit: 10}, pulsar: &authapi.Params{TxSigLimit: 10}},
-		"auth/module_account_nil_permissions": {
-			gogo: &authtypes.ModuleAccount{
-				BaseAccount: authtypes.NewBaseAccountWithAddress(addr1),
-			},
-			pulsar: &authapi.ModuleAccount{
-				BaseAccount: &authapi.BaseAccount{Address: addr1.String()},
-			},
-		},
-		"auth/module_account_empty_permissions": {
+		"auth/module_account": {
 			gogo: &authtypes.ModuleAccount{
 				BaseAccount: authtypes.NewBaseAccountWithAddress(addr1), Permissions: []string{},
 			},
@@ -419,22 +407,16 @@ func TestAminoJSON_LegacyParity(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gogoBytes, err := encCfg.Amino.MarshalJSON(tc.gogo)
 			require.NoError(t, err)
-			gogoBytes, err = types.SortJSON(gogoBytes)
-			require.NoError(t, err)
+
 			pulsarBytes, err := aj.Marshal(tc.pulsar)
 			if tc.pulsarMarshalFails {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			pulsarBytes, err = types.SortJSON(pulsarBytes)
-			require.NoError(t, err)
+
 			fmt.Printf("pulsar: %s\n", string(pulsarBytes))
 			fmt.Printf("  gogo: %s\n", string(gogoBytes))
-			if tc.roundTripUnequal {
-				require.NotEqual(t, string(gogoBytes), string(pulsarBytes))
-				return
-			}
 			require.Equal(t, string(gogoBytes), string(pulsarBytes))
 
 			pulsarProtoBytes, err := proto.Marshal(tc.pulsar)
@@ -452,8 +434,10 @@ func TestAminoJSON_LegacyParity(t *testing.T) {
 
 			newGogoBytes, err := encCfg.Amino.MarshalJSON(newGogo)
 			require.NoError(t, err)
-			newGogoBytes, err = types.SortJSON(newGogoBytes)
-			require.NoError(t, err)
+			if tc.roundTripUnequal {
+				require.NotEqual(t, string(gogoBytes), string(newGogoBytes))
+				return
+			}
 			require.Equal(t, string(gogoBytes), string(newGogoBytes))
 
 			// test amino json signer handler equivalence

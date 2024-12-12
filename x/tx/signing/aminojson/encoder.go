@@ -51,7 +51,12 @@ func cosmosDecEncoder(_ *Encoder, v protoreflect.Value, w io.Writer) error {
 		if val == "" {
 			return jsonMarshal(w, "0")
 		}
-		return jsonMarshal(w, val)
+		var dec math.LegacyDec
+		err := dec.Unmarshal([]byte(val))
+		if err != nil {
+			return err
+		}
+		return jsonMarshal(w, dec.String())
 	case []byte:
 		if len(val) == 0 {
 			return jsonMarshal(w, "0")
