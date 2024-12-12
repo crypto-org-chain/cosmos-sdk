@@ -58,6 +58,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## [Unreleased]
 
+## [v0.50.11](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.11) - 2024-12-04
+
 ### Features
 
 * (crypto/keyring) [#21653](https://github.com/cosmos/cosmos-sdk/pull/21653) New Linux-only backend that adds Linux kernel's `keyctl` support.
@@ -73,6 +75,11 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (sims) [21906](https://github.com/cosmos/cosmos-sdk/pull/21906) Skip sims test when running dry on validators
 * (cli) [#21919](https://github.com/cosmos/cosmos-sdk/pull/21919) Query address-by-acc-num by account_id instead of id.
+* (server) [#22564](https://github.com/cosmos/cosmos-sdk/pull/22564) Fix fallback genesis path in server
+* (x/group) [#22425](https://github.com/cosmos/cosmos-sdk/pull/22425) Proper address rendering in error
+* (sims) [#21906](https://github.com/cosmos/cosmos-sdk/pull/21906) Skip sims test when running dry on validators
+* (cli) [#21919](https://github.com/cosmos/cosmos-sdk/pull/21919) Query address-by-acc-num by account_id instead of id.
+* (x/group) [#22229](https://github.com/cosmos/cosmos-sdk/pull/22229) Accept `1` and `try` in CLI for group proposal exec.
 * (cli) [#22656](https://github.com/cosmos/cosmos-sdk/pull/22656) Prune cmd should disable async pruning.
 
 ## [v0.50.10](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.10) - 2024-09-20
