@@ -1,10 +1,11 @@
 module cosmossdk.io/orm
 
 go 1.21
+toolchain go1.23.4
 
 require (
 	cosmossdk.io/api v0.7.3
-	cosmossdk.io/core v0.11.0
+	cosmossdk.io/core v1.0.0
 	cosmossdk.io/depinject v1.0.0-alpha.4
 	cosmossdk.io/errors v1.0.1
 	github.com/cosmos/cosmos-db v1.0.2
@@ -22,6 +23,7 @@ require (
 )
 
 require (
+	cosmossdk.io/schema v1.0.0 // indirect
 	github.com/DataDog/zstd v1.5.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
