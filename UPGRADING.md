@@ -12,7 +12,7 @@ It is additional to the changes described here.
 
 In this section we describe the changes made in Cosmos SDK' SimApp.
 **These changes are directly applicable to your application wiring.**
-Please read this section first, but for an exhaustive list of changes, refer to the [CHANGELOG](./simapp/CHANGELOG.md).
+Please read this section first, but for an exhaustive list of changes, refer to the [CHANGELOG](https://github.com/cosmos/cosmos-sdk/blob/release/v0.52.x/simapp/CHANGELOG.md).
 
 #### Client (`root.go`)
 
@@ -51,7 +51,7 @@ It can be removed from your `app.go`.
 
 For depinject users, it isn't necessary anymore to supply a `map[string]module.AppModuleBasic` for customizing the app module basic instantiation.
 The custom parameters (such as genutil message validator or gov proposal handler, or evidence handler) can directly be supplied.
-When requiring a module manager in `root.go`, inject `*module.Manager` using `depinject.Inject`. 
+When requiring a module manager in `root.go`, inject `*module.Manager` using `depinject.Inject`.
 
 For non depinject users, simply call `RegisterLegacyAminoCodec` and `RegisterInterfaces` on the module manager:
 
@@ -333,7 +333,7 @@ Core API has been introduced for modules since v0.47. With the deprecation of `s
 
 Additionally, the `appmodule.Environment` struct is introduced to fetch different services from the application.
 This should be used as an alternative to using `sdk.UnwrapContext(ctx)` to fetch the services.
-It needs to be passed into a module at instantiation (or depinject will inject the correct environment). 
+It needs to be passed into a module at instantiation (or depinject will inject the correct environment).
 
 `x/circuit` is used as an example:
 
@@ -415,7 +415,7 @@ Use `x/accounts` lockup accounts or implement an `x/accounts` vesting account in
 Accounts's AccountNumber will be used as a global account number tracking replacing Auth legacy AccountNumber. Must set accounts's AccountNumber with auth's AccountNumber value in upgrade handler. This is done through auth keeper MigrateAccountNumber function.
 
 ```go
-import authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper" 
+import authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 ...
 err := authkeeper.MigrateAccountNumberUnsafe(ctx, &app.AuthKeeper)
 if err != nil {
@@ -442,7 +442,7 @@ import (
 
 #### `x/crisis`
 
-The `x/crisis` module was removed due to it not being supported or functional any longer. 
+The `x/crisis` module was removed due to it not being supported or functional any longer.
 
 #### `x/distribution`
 
@@ -454,6 +454,16 @@ Gov v1beta1 proposal handler has been changed to take in a `context.Context` ins
 This change was made to allow legacy proposals to be compatible with server/v2.
 If you wish to migrate to server/v2, you should update your proposal handler to take in a `context.Context` and use services.
 On the other hand, if you wish to keep using baseapp, simply unwrap the sdk context in your proposal handler.
+
+#### `x/mint`
+
+The `x/mint` module has been updated to work with a mint function [`MintFn`](https://docs.cosmos.network/v0.52/build/modules/mint#mintfn).
+
+When using the default inflation calculation function and runtime, no change is required. The depinject configuration of mint automatically sets it if none is provided. However, when not using runtime, the mint function must be set in on the mint keeper:
+
+```diff
++ mintKeeper.SetMintFn(keeper.DefaultMintFn(types.DefaultInflationCalculationFn, stakingKeeper, mintKeeper))
+```
 
 #### `x/protocolpool`
 
@@ -488,3 +498,7 @@ storetypes.StoreUpgrades{
 
 Introducing `x/validate` a module that is solely used for registering default ante/post handlers and global tx validators when using runtime and runtime/v2. If you wish to set your custom ante/post handlers, no need to use this module.
 You can however always extend them by adding extra tx validators (see `x/validate` documentation).
+
+#### `tools/benchmark`
+
+Introducing [`tools/benchmark`](https://github.com/cosmos/cosmos-sdk/tree/main/tools/benchmark) a Cosmos SDK module for benchmarking your chain. It is a standalone module that can be added to your chain to stress test it. This module should NOT be added in a production environment.

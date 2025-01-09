@@ -30,7 +30,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/rpc"
 	sdktelemetry "github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/types/module"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/version"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
@@ -115,8 +114,12 @@ func InitRootCmd[T transaction.Tx](
 			simApp.Name(),
 			simApp.Store(),
 			simApp.App.AppManager,
-			simApp.AppCodec(),
-			&client.DefaultTxDecoder[T]{TxConfig: deps.TxConfig},
+			cometbft.AppCodecs[T]{
+				AppCodec:              simApp.AppCodec(),
+				TxCodec:               &client.DefaultTxDecoder[T]{TxConfig: deps.TxConfig},
+				LegacyAmino:           deps.ClientContext.LegacyAmino,
+				ConsensusAddressCodec: deps.ClientContext.ConsensusAddressCodec,
+			},
 			simApp.App.QueryHandlers(),
 			simApp.App.SchemaDecoderResolver(),
 			initCometOptions[T](),
@@ -153,6 +156,7 @@ func InitRootCmd[T transaction.Tx](
 		logger,
 		deps.GlobalConfig,
 		simApp.InterfaceRegistry(),
+		simApp.App.AppManager,
 	)
 	if err != nil {
 		return nil, err
@@ -274,10 +278,4 @@ func registerGRPCGatewayRoutes[T transaction.Tx](
 	cmtservice.RegisterGRPCGatewayRoutes(deps.ClientContext, server.GRPCGatewayRouter)
 	_ = nodeservice.RegisterServiceHandlerClient(context.Background(), server.GRPCGatewayRouter, nodeservice.NewServiceClient(deps.ClientContext))
 	_ = txtypes.RegisterServiceHandlerClient(context.Background(), server.GRPCGatewayRouter, txtypes.NewServiceClient(deps.ClientContext))
-
-	for _, mod := range deps.ModuleManager.Modules() {
-		if gmod, ok := mod.(module.HasGRPCGateway); ok {
-			gmod.RegisterGRPCGatewayRoutes(deps.ClientContext, server.GRPCGatewayRouter)
-		}
-	}
 }

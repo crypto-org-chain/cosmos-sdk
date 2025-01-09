@@ -887,13 +887,15 @@ func setUpConsensus(t *testing.T, gasLimit uint64, mempool mempool.Mempool[mock.
 	}
 
 	return &consensus[mock.Tx]{
-		logger:           log.NewNopLogger(),
-		appName:          "testing-app",
-		app:              am,
-		mempool:          mempool,
-		store:            mockStore,
-		cfg:              Config{AppTomlConfig: DefaultAppTomlConfig()},
-		txCodec:          mock.TxCodec{},
+		logger:  log.NewNopLogger(),
+		appName: "testing-app",
+		app:     am,
+		mempool: mempool,
+		store:   mockStore,
+		cfg:     Config{AppTomlConfig: DefaultAppTomlConfig()},
+		appCodecs: AppCodecs[mock.Tx]{
+			TxCodec: mock.TxCodec{},
+		},
 		chainID:          "test",
 		getProtoRegistry: sync.OnceValues(proto.MergedRegistry),
 		queryHandlersMap: queryHandler,
@@ -958,10 +960,10 @@ func TestOptimisticExecution(t *testing.T) {
 	require.Equal(t, resp.Status, abciproto.PROCESS_PROPOSAL_STATUS_ACCEPT)
 
 	// Initialize FinalizeBlock with correct hash - should use optimistic result
-	theHash = sha256.Sum256([]byte("test"))
+	theHash2 := sha256.Sum256([]byte("test"))
 	fbReq := &abciproto.FinalizeBlockRequest{
 		Height: 2,
-		Hash:   theHash[:],
+		Hash:   theHash2[:],
 		Time:   ppReq.Time,
 		Txs:    ppReq.Txs,
 	}

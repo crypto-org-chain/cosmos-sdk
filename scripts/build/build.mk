@@ -13,8 +13,6 @@ HTTPS_GIT := https://github.com/cosmos/cosmos-sdk.git
 DOCKER := $(shell which docker)
 PROJECT_NAME = $(shell git remote get-url origin | xargs basename -s .git)
 
-rocksdb_version=v9.6.1
-
 ifeq ($(findstring .,$(VERSION)),)
 	VERSION := 0.0.0
 endif
@@ -72,6 +70,11 @@ endif
 ifeq (bls12381,$(findstring bls12381,$(COSMOS_BUILD_OPTIONS)))
   CGO_ENABLED=1
   build_tags += bls12381
+endif
+
+# benchmark module
+ifeq (benchmark,$(findstring benchmark,$(COSMOS_BUILD_OPTIONS)))
+  build_tags += benchmark
 endif
 
 whitespace :=
