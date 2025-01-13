@@ -855,7 +855,7 @@ func (app *BaseApp) executeTxs(ctx context.Context, txs [][]byte) ([]*abci.ExecT
 	if app.txExecutor != nil {
 		return app.txExecutor(ctx, txs, app.finalizeBlockState.ms, func(i int, memTx sdk.Tx, ms storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
 			return app.deliverTxWithMultiStore(txs[i], memTx, i, ms, incarnationCache)
-		})
+		}, app.txResponsePatcher)
 	}
 
 	txResults := make([]*abci.ExecTxResult, 0, len(txs))

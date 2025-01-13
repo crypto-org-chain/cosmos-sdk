@@ -197,6 +197,9 @@ type BaseApp struct {
 
 	// Optional alternative tx executor, used for block-stm parallel transaction execution.
 	txExecutor TxExecutor
+
+	// Optional alternative tx response patcher, used for block-stm parallel transaction execution.
+	txResponsePatcher TxResponsePatcher
 }
 
 // NewBaseApp returns a reference to an initialized BaseApp. It accepts a

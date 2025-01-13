@@ -132,6 +132,11 @@ func SetTxExecutor(executor TxExecutor) func(*BaseApp) {
 	return func(app *BaseApp) { app.txExecutor = executor }
 }
 
+// SetTxResponsePatcher sets a custom tx response patcher for the BaseApp, usually for parallel execution.
+func SetTxResponsePatcher(patcher TxResponsePatcher) func(*BaseApp) {
+	return func(app *BaseApp) { app.txResponsePatcher = patcher }
+}
+
 func (app *BaseApp) SetName(name string) {
 	if app.sealed {
 		panic("SetName() on sealed BaseApp")
@@ -391,6 +396,11 @@ func (app *BaseApp) SetDisableBlockGasMeter(disableBlockGasMeter bool) {
 // SetTxExecutor sets a custom tx executor for the BaseApp, usually for parallel execution.
 func (app *BaseApp) SetTxExecutor(executor TxExecutor) {
 	app.txExecutor = executor
+}
+
+// SetTxResponsePatcher sets a custom tx response patcher for the BaseApp, usually for parallel execution.
+func (app *BaseApp) SetTxResponsePatcher(patcher TxResponsePatcher) {
+	app.txResponsePatcher = patcher
 }
 
 // SetMsgServiceRouter sets the MsgServiceRouter of a BaseApp.

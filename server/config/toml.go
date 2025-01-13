@@ -246,6 +246,21 @@ stop-node-on-err = {{ .Streaming.ABCI.StopNodeOnErr }}
 # Note, this configuration only applies to SDK built-in app-side mempool
 # implementations.
 max-txs = {{ .Mempool.MaxTxs }}
+
+###############################################################################
+###                             Block STM                                   ###
+###############################################################################
+
+[block-stm]
+
+# Executor sets the executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
+executor = "{{ .BlockSTM.Executor }}"
+
+# STMWorkers is the number of workers for block-stm execution, 0 means using all available CPUs.
+workers = {{ .BlockSTM.Workers }}
+
+# PreEstimate is the flag to enable pre-estimation for block-stm execution.
+pre-estimate = {{ .BlockSTM.PreEstimate }}
 `
 
 var configTemplate *template.Template

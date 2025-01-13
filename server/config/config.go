@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/cometbft/cometbft/libs/strings"
 	"github.com/spf13/viper"
 
 	pruningtypes "cosmossdk.io/store/pruning/types"
@@ -29,6 +30,9 @@ const (
 	// DefaultGRPCMaxSendMsgSize defines the default gRPC max message size in
 	// bytes the server can send.
 	DefaultGRPCMaxSendMsgSize = math.MaxInt32
+
+	BlockExecutorSequential = "sequential"
+	BlockExecutorBlockSTM   = "block-stm"
 )
 
 // BaseConfig defines the server's basic configuration
@@ -182,6 +186,16 @@ type (
 	}
 )
 
+// BlockStmConfig defines the block stm configuration.
+type BlockSTMConfig struct {
+	// Executor sets the executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
+	Executor string `mapstructure:"executor"`
+	// Workers is the number of workers for block-stm execution, 0 means using all available CPUs.
+	Workers uint64 `mapstructure:"workers"`
+	// PreEstimate is the flag to enable pre-estimation for block-stm execution.
+	PreEstimate bool `mapstructure:"pre-estimate"`
+}
+
 // Config defines the server's top level configuration
 type Config struct {
 	BaseConfig `mapstructure:",squash"`
@@ -194,6 +208,7 @@ type Config struct {
 	StateSync StateSyncConfig  `mapstructure:"state-sync"`
 	Streaming StreamingConfig  `mapstructure:"streaming"`
 	Mempool   MempoolConfig    `mapstructure:"mempool"`
+	BlockSTM  BlockSTMConfig   `mapstructure:"block-stm"`
 }
 
 // SetMinGasPrices sets the validator's minimum gas prices.
@@ -265,6 +280,11 @@ func DefaultConfig() *Config {
 		Mempool: MempoolConfig{
 			MaxTxs: -1,
 		},
+		BlockSTM: BlockSTMConfig{
+			Executor:    BlockExecutorSequential,
+			Workers:     0,
+			PreEstimate: false,
+		},
 	}
 }
 
@@ -287,6 +307,9 @@ func (c Config) ValidateBasic() error {
 			"cannot enable state sync snapshots with '%s' pruning setting", pruningtypes.PruningOptionEverything,
 		)
 	}
-
+	blockExecutors := []string{BlockExecutorSequential, BlockExecutorBlockSTM}
+	if c.BlockSTM.Executor != "" && !strings.StringInSlice(c.BlockSTM.Executor, blockExecutors) {
+		return fmt.Errorf("invalid block executor type %s, available types: %v", c.BlockSTM.Executor, blockExecutors)
+	}
 	return nil
 }
