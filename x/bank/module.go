@@ -16,7 +16,6 @@ import (
 	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -212,11 +211,11 @@ func init() {
 type ModuleInputs struct {
 	depinject.In
 
-	Config       *modulev1.Module
-	Cdc          codec.Codec
-	StoreService corestore.KVStoreService
-	Logger       log.Logger
-	ObjStoreKey  *storetypes.ObjectStoreKey
+	Config          *modulev1.Module
+	Cdc             codec.Codec
+	StoreService    corestore.KVStoreService
+	ObjStoreService corestore.ObjKVStoreService
+	Logger          log.Logger
 
 	AccountKeeper types.AccountKeeper
 
@@ -256,7 +255,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 	bankKeeper := keeper.NewBaseKeeper(
 		in.Cdc,
 		in.StoreService,
-		in.ObjStoreKey,
+		in.ObjStoreService,
 		in.AccountKeeper,
 		blockedAddresses,
 		authority.String(),

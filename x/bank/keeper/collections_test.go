@@ -32,6 +32,7 @@ func TestBankStateCompatibility(t *testing.T) {
 	encCfg := moduletestutil.MakeTestEncodingConfig()
 
 	storeService := runtime.NewKVStoreService(key)
+	objStoreService := runtime.NewObjKVStoreService(okey)
 
 	// gomock initializations
 	ctrl := gomock.NewController(t)
@@ -41,7 +42,7 @@ func TestBankStateCompatibility(t *testing.T) {
 	k := keeper.NewBaseKeeper(
 		encCfg.Codec,
 		storeService,
-		okey,
+		objStoreService,
 		authKeeper,
 		map[string]bool{accAddrs[4].String(): true},
 		authtypes.NewModuleAddress("gov").String(),

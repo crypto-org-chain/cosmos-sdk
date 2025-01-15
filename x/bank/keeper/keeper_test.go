@@ -136,6 +136,7 @@ func (suite *KeeperTestSuite) SetupTest() {
 	encCfg := moduletestutil.MakeTestEncodingConfig()
 
 	storeService := runtime.NewKVStoreService(key)
+	objStoreService := runtime.NewObjKVStoreService(okey)
 
 	// gomock initializations
 	ctrl := gomock.NewController(suite.T())
@@ -146,7 +147,7 @@ func (suite *KeeperTestSuite) SetupTest() {
 	suite.bankKeeper = keeper.NewBaseKeeper(
 		encCfg.Codec,
 		storeService,
-		okey,
+		objStoreService,
 		suite.authKeeper,
 		map[string]bool{accAddrs[4].String(): true},
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -324,11 +325,12 @@ func (suite *KeeperTestSuite) TestPrependSendRestriction() {
 
 func (suite *KeeperTestSuite) TestGetAuthority() {
 	storeService := runtime.NewKVStoreService(storetypes.NewKVStoreKey(banktypes.StoreKey))
+	objStoreService := runtime.NewObjKVStoreService(storetypes.NewObjectStoreKey(banktypes.ObjectStoreKey))
 	NewKeeperWithAuthority := func(authority string) keeper.BaseKeeper {
 		return keeper.NewBaseKeeper(
 			moduletestutil.MakeTestEncodingConfig().Codec,
 			storeService,
-			nil,
+			objStoreService,
 			suite.authKeeper,
 			nil,
 			authority,

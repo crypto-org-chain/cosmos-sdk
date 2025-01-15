@@ -205,14 +205,15 @@ require (
 
 // Below are the long-lived replace for tests.
 replace (
+	cosmossdk.io/core => ../core
 	// We always want to test against the latest version of the simapp.
 	cosmossdk.io/simapp => ../simapp
 	cosmossdk.io/store => ../store
+	cosmossdk.io/x/tx => ../x/tx
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 	// We always want to test against the latest version of the SDK.
 	github.com/cosmos/cosmos-sdk => ../.
 	// Fix upstream GHSA-h395-qcrw-5vmq and GHSA-3vp4-m3rf-835h vulnerabilities.
 	// TODO Remove it: https://github.com/cosmos/cosmos-sdk/issues/10409
 	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.9.1
-	cosmossdk.io/x/tx => ../x/tx
 )
