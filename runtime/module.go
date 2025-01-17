@@ -72,6 +72,7 @@ func init() {
 			ProvideKVStoreService,
 			ProvideMemoryStoreService,
 			ProvideTransientStoreService,
+			ProvideObjKVStoreService,
 			ProvideEventService,
 			ProvideHeaderInfoService,
 			ProvideCometInfoService,
@@ -214,6 +215,12 @@ func ProvideKVStoreKey(config *runtimev1alpha1.Module, key depinject.ModuleKey, 
 	return storeKey
 }
 
+func ProvideObjectStoreKey(key depinject.ModuleKey, app *AppBuilder) *storetypes.ObjectStoreKey {
+	storeKey := storetypes.NewObjectStoreKey(fmt.Sprintf("object:%s", key.Name()))
+	registerStoreKey(app, storeKey)
+	return storeKey
+}
+
 func ProvideTransientStoreKey(key depinject.ModuleKey, app *AppBuilder) *storetypes.TransientStoreKey {
 	storeKey := storetypes.NewTransientStoreKey(fmt.Sprintf("transient:%s", key.Name()))
 	registerStoreKey(app, storeKey)
@@ -222,12 +229,6 @@ func ProvideTransientStoreKey(key depinject.ModuleKey, app *AppBuilder) *storety
 
 func ProvideMemoryStoreKey(key depinject.ModuleKey, app *AppBuilder) *storetypes.MemoryStoreKey {
 	storeKey := storetypes.NewMemoryStoreKey(fmt.Sprintf("memory:%s", key.Name()))
-	registerStoreKey(app, storeKey)
-	return storeKey
-}
-
-func ProvideObjectStoreKey(key depinject.ModuleKey, app *AppBuilder) *storetypes.ObjectStoreKey {
-	storeKey := storetypes.NewObjectStoreKey(fmt.Sprintf("object:%s", key.Name()))
 	registerStoreKey(app, storeKey)
 	return storeKey
 }
@@ -249,6 +250,11 @@ func ProvideMemoryStoreService(key depinject.ModuleKey, app *AppBuilder) store.M
 func ProvideTransientStoreService(key depinject.ModuleKey, app *AppBuilder) store.TransientStoreService {
 	storeKey := ProvideTransientStoreKey(key, app)
 	return transientStoreService{key: storeKey}
+}
+
+func ProvideObjKVStoreService(config *runtimev1alpha1.Module, key depinject.ModuleKey, app *AppBuilder) store.ObjKVStoreService {
+	storeKey := ProvideObjectStoreKey(key, app)
+	return objectStoreService{key: storeKey}
 }
 
 func ProvideEventService() event.Service {

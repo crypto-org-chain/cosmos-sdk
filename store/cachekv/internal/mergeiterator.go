@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 
+	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/store/types"
 )
 
@@ -15,8 +16,8 @@ import (
 //
 // TODO: Optimize by memoizing.
 type cacheMergeIterator[V any] struct {
-	parent    types.GIterator[V]
-	cache     types.GIterator[V]
+	parent    corestore.GIterator[V]
+	cache     corestore.GIterator[V]
 	ascending bool
 
 	valid bool
@@ -26,7 +27,7 @@ type cacheMergeIterator[V any] struct {
 
 var _ types.Iterator = (*cacheMergeIterator[[]byte])(nil)
 
-func NewCacheMergeIterator[V any](parent, cache types.GIterator[V], ascending bool, isZero func(V) bool) types.GIterator[V] {
+func NewCacheMergeIterator[V any](parent, cache corestore.GIterator[V], ascending bool, isZero func(V) bool) corestore.GIterator[V] {
 	iter := &cacheMergeIterator[V]{
 		parent:    parent,
 		cache:     cache,

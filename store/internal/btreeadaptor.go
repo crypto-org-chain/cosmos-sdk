@@ -3,6 +3,7 @@ package internal
 import (
 	"io"
 
+	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/store/cachekv"
 	"cosmossdk.io/store/internal/btree"
 	"cosmossdk.io/store/types"
@@ -36,7 +37,7 @@ func (ts *BTreeStore[V]) Has(key []byte) bool {
 	return found
 }
 
-func (ts *BTreeStore[V]) Iterator(start, end []byte) types.GIterator[V] {
+func (ts *BTreeStore[V]) Iterator(start, end []byte) corestore.GIterator[V] {
 	it, err := ts.BTree.Iterator(start, end)
 	if err != nil {
 		panic(err)
@@ -44,7 +45,7 @@ func (ts *BTreeStore[V]) Iterator(start, end []byte) types.GIterator[V] {
 	return it
 }
 
-func (ts *BTreeStore[V]) ReverseIterator(start, end []byte) types.GIterator[V] {
+func (ts *BTreeStore[V]) ReverseIterator(start, end []byte) corestore.GIterator[V] {
 	it, err := ts.BTree.ReverseIterator(start, end)
 	if err != nil {
 		panic(err)

@@ -6,7 +6,7 @@ import (
 
 	"github.com/tidwall/btree"
 
-	"cosmossdk.io/store/types"
+	corestore "cosmossdk.io/core/store"
 )
 
 const (
@@ -63,14 +63,14 @@ func (bt *BTree[V]) Delete(key []byte) {
 	bt.tree.Delete(newItemWithKey[V](key))
 }
 
-func (bt BTree[V]) Iterator(start, end []byte) (types.GIterator[V], error) {
+func (bt BTree[V]) Iterator(start, end []byte) (corestore.GIterator[V], error) {
 	if (start != nil && len(start) == 0) || (end != nil && len(end) == 0) {
 		return nil, errKeyEmpty
 	}
 	return newMemIterator(start, end, bt, true), nil
 }
 
-func (bt BTree[V]) ReverseIterator(start, end []byte) (types.GIterator[V], error) {
+func (bt BTree[V]) ReverseIterator(start, end []byte) (corestore.GIterator[V], error) {
 	if (start != nil && len(start) == 0) || (end != nil && len(end) == 0) {
 		return nil, errKeyEmpty
 	}

@@ -3,6 +3,7 @@ package gaskv
 import (
 	"io"
 
+	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/store/types"
 )
 
@@ -102,7 +103,7 @@ func (gs *GStore[V]) Delete(key []byte) {
 // Iterator implements the KVStore interface. It returns an iterator which
 // incurs a flat gas cost for seeking to the first key/value pair and a variable
 // gas cost based on the current value's length if the iterator is valid.
-func (gs *GStore[V]) Iterator(start, end []byte) types.GIterator[V] {
+func (gs *GStore[V]) Iterator(start, end []byte) corestore.GIterator[V] {
 	return gs.iterator(start, end, true)
 }
 
@@ -110,7 +111,7 @@ func (gs *GStore[V]) Iterator(start, end []byte) types.GIterator[V] {
 // iterator which incurs a flat gas cost for seeking to the first key/value pair
 // and a variable gas cost based on the current value's length if the iterator
 // is valid.
-func (gs *GStore[V]) ReverseIterator(start, end []byte) types.GIterator[V] {
+func (gs *GStore[V]) ReverseIterator(start, end []byte) corestore.GIterator[V] {
 	return gs.iterator(start, end, false)
 }
 
@@ -124,8 +125,8 @@ func (gs *GStore[V]) CacheWrapWithTrace(_ io.Writer, _ types.TraceContext) types
 	panic("cannot CacheWrapWithTrace a GasKVStore")
 }
 
-func (gs *GStore[V]) iterator(start, end []byte, ascending bool) types.GIterator[V] {
-	var parent types.GIterator[V]
+func (gs *GStore[V]) iterator(start, end []byte, ascending bool) corestore.GIterator[V] {
+	var parent corestore.GIterator[V]
 	if ascending {
 		parent = gs.parent.Iterator(start, end)
 	} else {
@@ -141,11 +142,11 @@ func (gs *GStore[V]) iterator(start, end []byte, ascending bool) types.GIterator
 type gasIterator[V any] struct {
 	gasMeter  types.GasMeter
 	gasConfig types.GasConfig
-	parent    types.GIterator[V]
+	parent    corestore.GIterator[V]
 	valueLen  func(V) int
 }
 
-func newGasIterator[V any](gasMeter types.GasMeter, gasConfig types.GasConfig, parent types.GIterator[V], valueLen func(V) int) *gasIterator[V] {
+func newGasIterator[V any](gasMeter types.GasMeter, gasConfig types.GasConfig, parent corestore.GIterator[V], valueLen func(V) int) *gasIterator[V] {
 	return &gasIterator[V]{
 		gasMeter:  gasMeter,
 		gasConfig: gasConfig,

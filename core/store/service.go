@@ -10,6 +10,11 @@ type KVStoreService interface {
 	OpenKVStore(context.Context) KVStore
 }
 
+type ObjKVStoreService interface {
+	// OpenObjKVStore retrieves the ObjKVStore from the context.
+	OpenObjKVStore(context.Context) ObjKVStore
+}
+
 // MemoryStoreService represents a unique, non-forgeable handle to a memory-backed
 // KVStore. It should be provided as a module-scoped dependency by the runtime
 // module being used to build the app.

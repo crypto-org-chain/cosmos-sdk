@@ -3,6 +3,7 @@ module cosmossdk.io/store
 go 1.21
 
 require (
+	cosmossdk.io/core v0.11.1
 	cosmossdk.io/errors v1.0.0
 	cosmossdk.io/log v1.4.1
 	cosmossdk.io/math v1.3.0
@@ -21,7 +22,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/tidwall/btree v1.7.0
 	golang.org/x/exp v0.0.0-20240404231335-c0f41cb1a7a0
-	google.golang.org/grpc v1.62.1
+	google.golang.org/grpc v1.64.1
 	google.golang.org/protobuf v1.34.2
 	gotest.tools/v3 v3.5.1
 )
@@ -75,6 +76,8 @@ require (
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240314234333-6e1732d8331c // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240709173604-40e1e62336c5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace cosmossdk.io/core => ../core

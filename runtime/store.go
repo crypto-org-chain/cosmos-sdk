@@ -46,6 +46,18 @@ func (t transientStoreService) OpenTransientStore(ctx context.Context) store.KVS
 	return newKVStore(sdk.UnwrapSDKContext(ctx).KVStore(t.key))
 }
 
+func NewObjKVStoreService(key *storetypes.ObjectStoreKey) store.ObjKVStoreService {
+	return &objectStoreService{key}
+}
+
+type objectStoreService struct {
+	key *storetypes.ObjectStoreKey
+}
+
+func (k objectStoreService) OpenObjKVStore(ctx context.Context) store.ObjKVStore {
+	return newObjectStore(sdk.UnwrapSDKContext(ctx).ObjectStore(k.key))
+}
+
 // CoreKVStore is a wrapper of Core/Store kvstore interface
 // Remove after https://github.com/cosmos/cosmos-sdk/issues/14714 is closed
 type coreKVStore struct {
@@ -97,6 +109,57 @@ func (store coreKVStore) Iterator(start, end []byte) (store.Iterator, error) {
 // Exceptionally allowed for cachekv.Store, safe to write in the modules.
 func (store coreKVStore) ReverseIterator(start, end []byte) (store.Iterator, error) {
 	return store.kvStore.ReverseIterator(start, end), nil
+}
+
+type coreObjKVStore struct {
+	objKVStore storetypes.ObjKVStore
+}
+
+// NewObjectStore returns a wrapper of Core/Store objKVstore interface
+// Remove once store migrates to core/store objKVstore interface
+func newObjectStore(objKVStore storetypes.ObjKVStore) store.ObjKVStore {
+	return coreObjKVStore{objKVStore}
+}
+
+// Get returns nil iff key doesn't exist. Errors on nil key.
+func (store coreObjKVStore) Get(key []byte) (any, error) {
+	return store.objKVStore.Get(key), nil
+}
+
+// Has checks if a key exists. Errors on nil key.
+func (store coreObjKVStore) Has(key []byte) (bool, error) {
+	return store.objKVStore.Has(key), nil
+}
+
+// Set sets the key. Errors on nil key or value.
+func (store coreObjKVStore) Set(key []byte, value any) error {
+	store.objKVStore.Set(key, value)
+	return nil
+}
+
+// Delete deletes the key. Errors on nil key.
+func (store coreObjKVStore) Delete(key []byte) error {
+	store.objKVStore.Delete(key)
+	return nil
+}
+
+// Iterator iterates over a domain of keys in ascending order. End is exclusive.
+// Start must be less than end, or the Iterator is invalid.
+// Iterator must be closed by caller.
+// To iterate over entire domain, use store.Iterator(nil, nil)
+// CONTRACT: No writes may happen within a domain while an iterator exists over it.
+// Exceptionally allowed for cachekv.Store, safe to write in the modules.
+func (store coreObjKVStore) Iterator(start, end []byte) (store.GIterator[any], error) {
+	return store.objKVStore.Iterator(start, end), nil
+}
+
+// ReverseIterator iterates over a domain of keys in descending order. End is exclusive.
+// Start must be less than end, or the Iterator is invalid.
+// Iterator must be closed by caller.
+// CONTRACT: No writes may happen within a domain while an iterator exists over it.
+// Exceptionally allowed for cachekv.Store, safe to write in the modules.
+func (store coreObjKVStore) ReverseIterator(start, end []byte) (store.GIterator[any], error) {
+	return store.objKVStore.ReverseIterator(start, end), nil
 }
 
 // Adapter

@@ -7,6 +7,7 @@ import (
 	"github.com/cometbft/cometbft/proto/tendermint/crypto"
 	dbm "github.com/cosmos/cosmos-db"
 
+	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/store/metrics"
 	pruningtypes "cosmossdk.io/store/pruning/types"
 	snapshottypes "cosmossdk.io/store/snapshots/types"
@@ -247,78 +248,13 @@ type CommitMultiStore interface {
 //---------subsp-------------------------------
 // KVStore
 
-// GBasicKVStore is a simple interface to get/set data
-type GBasicKVStore[V any] interface {
-	// Get returns nil if key doesn't exist. Panics on nil key.
-	Get(key []byte) V
-
-	// Has checks if a key exists. Panics on nil key.
-	Has(key []byte) bool
-
-	// Set sets the key. Panics on nil key or value.
-	Set(key []byte, value V)
-
-	// Delete deletes the key. Panics on nil key.
-	Delete(key []byte)
-}
-
-// GKVStore additionally provides iteration and deletion
-type GKVStore[V any] interface {
-	Store
-	GBasicKVStore[V]
-
-	// Iterator over a domain of keys in ascending order. End is exclusive.
-	// Start must be less than end, or the Iterator is invalid.
-	// Iterator must be closed by caller.
-	// To iterate over entire domain, use store.Iterator(nil, nil)
-	// CONTRACT: No writes may happen within a domain while an iterator exists over it.
-	// Exceptionally allowed for cachekv.Store, safe to write in the modules.
-	Iterator(start, end []byte) GIterator[V]
-
-	// Iterator over a domain of keys in descending order. End is exclusive.
-	// Start must be less than end, or the Iterator is invalid.
-	// Iterator must be closed by caller.
-	// CONTRACT: No writes may happen within a domain while an iterator exists over it.
-	// Exceptionally allowed for cachekv.Store, safe to write in the modules.
-	ReverseIterator(start, end []byte) GIterator[V]
-}
-
-// GIterator is the generic version of dbm's Iterator
-type GIterator[V any] interface {
-	// Domain returns the start (inclusive) and end (exclusive) limits of the iterator.
-	// CONTRACT: start, end readonly []byte
-	Domain() (start, end []byte)
-
-	// Valid returns whether the current iterator is valid. Once invalid, the Iterator remains
-	// invalid forever.
-	Valid() bool
-
-	// Next moves the iterator to the next key in the database, as defined by order of iteration.
-	// If Valid returns false, this method will panic.
-	Next()
-
-	// Key returns the key at the current position. Panics if the iterator is invalid.
-	// CONTRACT: key readonly []byte
-	Key() (key []byte)
-
-	// Value returns the value at the current position. Panics if the iterator is invalid.
-	// CONTRACT: value readonly []byte
-	Value() (value V)
-
-	// Error returns the last error encountered by the iterator, if any.
-	Error() error
-
-	// Close closes the iterator, relasing any allocated resources.
-	Close() error
-}
-
 type (
-	Iterator     = GIterator[[]byte]
-	BasicKVStore = GBasicKVStore[[]byte]
+	Iterator     = corestore.GIterator[[]byte]
+	BasicKVStore = corestore.GBasicKVStore[[]byte]
 	KVStore      = GKVStore[[]byte]
 
-	ObjIterator     = GIterator[any]
-	ObjBasicKVStore = GBasicKVStore[any]
+	ObjIterator     = corestore.GIterator[any]
+	ObjBasicKVStore = corestore.GBasicKVStore[any]
 	ObjKVStore      = GKVStore[any]
 )
 
@@ -332,10 +268,16 @@ type CacheKVStore interface {
 	Write()
 }
 
+type GKVStore[V any] interface {
+	corestore.GKVStore[V]
+	Store
+}
+
 // CommitKVStore is an interface for MultiStore.
 type CommitKVStore interface {
 	Committer
 	KVStore
+	Store
 }
 
 //----------------------------------------

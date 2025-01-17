@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 
+	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/store/cachekv"
 	"cosmossdk.io/store/tracekv"
 	"cosmossdk.io/store/types"
@@ -118,7 +119,7 @@ func (s GStore[V]) Delete(key []byte) {
 
 // Implements KVStore
 // Check https://github.com/cometbft/cometbft/blob/master/libs/db/prefix_db.go#L106
-func (s GStore[V]) Iterator(start, end []byte) types.GIterator[V] {
+func (s GStore[V]) Iterator(start, end []byte) corestore.GIterator[V] {
 	newstart := cloneAppend(s.prefix, start)
 
 	var newend []byte
@@ -135,7 +136,7 @@ func (s GStore[V]) Iterator(start, end []byte) types.GIterator[V] {
 
 // ReverseIterator implements KVStore
 // Check https://github.com/cometbft/cometbft/blob/master/libs/db/prefix_db.go#L129
-func (s GStore[V]) ReverseIterator(start, end []byte) types.GIterator[V] {
+func (s GStore[V]) ReverseIterator(start, end []byte) corestore.GIterator[V] {
 	newstart := cloneAppend(s.prefix, start)
 
 	var newend []byte
@@ -156,11 +157,11 @@ type prefixIterator[V any] struct {
 	prefix []byte
 	start  []byte
 	end    []byte
-	iter   types.GIterator[V]
+	iter   corestore.GIterator[V]
 	valid  bool
 }
 
-func newPrefixIterator[V any](prefix, start, end []byte, parent types.GIterator[V]) *prefixIterator[V] {
+func newPrefixIterator[V any](prefix, start, end []byte, parent corestore.GIterator[V]) *prefixIterator[V] {
 	return &prefixIterator[V]{
 		prefix: prefix,
 		start:  start,

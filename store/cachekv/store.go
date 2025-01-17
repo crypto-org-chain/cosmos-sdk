@@ -3,6 +3,7 @@ package cachekv
 import (
 	"io"
 
+	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/store/cachekv/internal"
 	"cosmossdk.io/store/internal/btree"
 	"cosmossdk.io/store/types"
@@ -48,90 +49,90 @@ func NewGStore[V any](parent types.GKVStore[V], isZero func(V) bool, valueLen fu
 }
 
 // GetStoreType implements Store.
-func (store *GStore[V]) GetStoreType() types.StoreType {
-	return store.parent.GetStoreType()
+func (s *GStore[V]) GetStoreType() types.StoreType {
+	return s.parent.GetStoreType()
 }
 
 // Clone creates a copy-on-write snapshot of the cache store,
 // it only performs a shallow copy so is very fast.
-func (store *GStore[V]) Clone() types.BranchStore {
-	v := *store
-	v.writeSet = store.writeSet.Copy()
+func (s *GStore[V]) Clone() types.BranchStore {
+	v := *s
+	v.writeSet = s.writeSet.Copy()
 	return &v
 }
 
 // swapCache swap out the internal cache store and leave the current store unusable.
-func (store *GStore[V]) swapCache() btree.BTree[V] {
-	cache := store.writeSet
-	store.writeSet = btree.BTree[V]{}
+func (s *GStore[V]) swapCache() btree.BTree[V] {
+	cache := s.writeSet
+	s.writeSet = btree.BTree[V]{}
 	return cache
 }
 
 // Restore restores the store cache to a given snapshot, leaving the snapshot unusable.
-func (store *GStore[V]) Restore(s types.BranchStore) {
-	store.writeSet = s.(*GStore[V]).swapCache()
+func (s *GStore[V]) Restore(store types.BranchStore) {
+	s.writeSet = store.(*GStore[V]).swapCache()
 }
 
 // Get implements types.KVStore.
-func (store *GStore[V]) Get(key []byte) V {
+func (s *GStore[V]) Get(key []byte) V {
 	types.AssertValidKey(key)
 
-	value, found := store.writeSet.Get(key)
+	value, found := s.writeSet.Get(key)
 	if !found {
-		return store.parent.Get(key)
+		return s.parent.Get(key)
 	}
 	return value
 }
 
 // Set implements types.KVStore.
-func (store *GStore[V]) Set(key []byte, value V) {
+func (s *GStore[V]) Set(key []byte, value V) {
 	types.AssertValidKey(key)
-	types.AssertValidValueGeneric(value, store.isZero, store.valueLen)
+	types.AssertValidValueGeneric(value, s.isZero, s.valueLen)
 
-	store.writeSet.Set(key, value)
+	s.writeSet.Set(key, value)
 }
 
 // Has implements types.KVStore.
-func (store *GStore[V]) Has(key []byte) bool {
+func (s *GStore[V]) Has(key []byte) bool {
 	types.AssertValidKey(key)
 
-	value, found := store.writeSet.Get(key)
+	value, found := s.writeSet.Get(key)
 	if !found {
-		return store.parent.Has(key)
+		return s.parent.Has(key)
 	}
-	return !store.isZero(value)
+	return !s.isZero(value)
 }
 
 // Delete implements types.KVStore.
-func (store *GStore[V]) Delete(key []byte) {
+func (s *GStore[V]) Delete(key []byte) {
 	types.AssertValidKey(key)
-	store.writeSet.Set(key, store.zeroValue)
+	s.writeSet.Set(key, s.zeroValue)
 }
 
 // Implements Cachetypes.KVStore.
-func (store *GStore[V]) Write() {
-	store.writeSet.Scan(func(key []byte, value V) bool {
-		if store.isZero(value) {
-			store.parent.Delete(key)
+func (s *GStore[V]) Write() {
+	s.writeSet.Scan(func(key []byte, value V) bool {
+		if s.isZero(value) {
+			s.parent.Delete(key)
 		} else {
-			store.parent.Set(key, value)
+			s.parent.Set(key, value)
 		}
 		return true
 	})
-	store.writeSet.Clear()
+	s.writeSet.Clear()
 }
 
-func (store *GStore[V]) Discard() {
-	store.writeSet.Clear()
+func (s *GStore[V]) Discard() {
+	s.writeSet.Clear()
 }
 
 // CacheWrap implements CacheWrapper.
-func (store *GStore[V]) CacheWrap() types.CacheWrap {
-	return NewGStore(store, store.isZero, store.valueLen)
+func (s *GStore[V]) CacheWrap() types.CacheWrap {
+	return NewGStore(s, s.isZero, s.valueLen)
 }
 
 // CacheWrapWithTrace implements the CacheWrapper interface.
-func (store *GStore[V]) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
+func (s *GStore[V]) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
 	panic("cannot CacheWrapWithTrace a cachekv Store")
 }
 
@@ -139,33 +140,33 @@ func (store *GStore[V]) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) t
 // Iteration
 
 // Iterator implements types.KVStore.
-func (store *GStore[V]) Iterator(start, end []byte) types.GIterator[V] {
-	return store.iterator(start, end, true)
+func (s *GStore[V]) Iterator(start, end []byte) corestore.GIterator[V] {
+	return s.iterator(start, end, true)
 }
 
 // ReverseIterator implements types.KVStore.
-func (store *GStore[V]) ReverseIterator(start, end []byte) types.GIterator[V] {
-	return store.iterator(start, end, false)
+func (s *GStore[V]) ReverseIterator(start, end []byte) corestore.GIterator[V] {
+	return s.iterator(start, end, false)
 }
 
-func (store *GStore[V]) iterator(start, end []byte, ascending bool) types.GIterator[V] {
-	isoSortedCache := store.writeSet.Copy()
+func (s *GStore[V]) iterator(start, end []byte, ascending bool) corestore.GIterator[V] {
+	isoSortedCache := s.writeSet.Copy()
 
 	var (
 		err           error
-		parent, cache types.GIterator[V]
+		parent, cache corestore.GIterator[V]
 	)
 
 	if ascending {
-		parent = store.parent.Iterator(start, end)
+		parent = s.parent.Iterator(start, end)
 		cache, err = isoSortedCache.Iterator(start, end)
 	} else {
-		parent = store.parent.ReverseIterator(start, end)
+		parent = s.parent.ReverseIterator(start, end)
 		cache, err = isoSortedCache.ReverseIterator(start, end)
 	}
 	if err != nil {
 		panic(err)
 	}
 
-	return internal.NewCacheMergeIterator(parent, cache, ascending, store.isZero)
+	return internal.NewCacheMergeIterator(parent, cache, ascending, s.isZero)
 }
