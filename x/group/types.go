@@ -200,6 +200,9 @@ func (p PercentageDecisionPolicy) Allow(tally TallyResult, totalPower string) (D
 		return DecisionPolicyResult{}, sdkerrors.Wrap(err, "total power")
 	}
 
+	if totalPowerDec.IsZero() {
+		return DecisionPolicyResult{Allow: false, Final: true}, nil
+	}
 	yesPercentage, err := yesCount.Quo(totalPowerDec)
 	if err != nil {
 		return DecisionPolicyResult{}, err
