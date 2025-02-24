@@ -180,7 +180,7 @@ func (ak AccountKeeper) GetSequence(ctx context.Context, addr sdk.AccAddress) (u
 	return acc.GetSequence(), nil
 }
 
-func (ak AccountKeeper) NextAccountNumberLegacy(ctx context.Context) (uint64, error) {
+func (ak AccountKeeper) GetAccountNumberLegacy(ctx context.Context) (uint64, error) {
 	store := ak.storeService.OpenKVStore(ctx)
 	b, err := store.Get(types.LegacyGlobalAccountNumberKey)
 	if err != nil {
@@ -190,10 +190,6 @@ func (ak AccountKeeper) NextAccountNumberLegacy(ctx context.Context) (uint64, er
 	if err := v.Unmarshal(b); err != nil {
 		return 0, fmt.Errorf("failed to unmarshal legacy account number: %w", err)
 	}
-	if err := ak.AccountNumber.Set(ctx, v.Value+1); err != nil {
-		return 0, fmt.Errorf("failed to set account number: %w", err)
-	}
-
 	return v.Value, nil
 }
 
@@ -201,21 +197,18 @@ func (ak AccountKeeper) NextAccountNumberLegacy(ctx context.Context) (uint64, er
 // If the global account number is not set, it initializes it with value 0.
 func (ak AccountKeeper) NextAccountNumber(ctx context.Context) uint64 {
 	n, err := collections.Item[uint64](ak.AccountNumber).Get(ctx)
-	if err == nil {
-		if err := ak.AccountNumber.Set(ctx, n+1); err != nil {
-			panic(err)
-		}
-		return n
-	}
-
-	if errors.Is(err, collections.ErrNotFound) {
+	if err != nil && errors.Is(err, collections.ErrNotFound) {
 		// this won't happen in the tip of production network,
 		// but can happen when query historical states,
 		// fallback to old key for backward-compatibility.
-		n, err = ak.NextAccountNumberLegacy(ctx)
+		n, err = ak.GetAccountNumberLegacy(ctx)
 	}
 
 	if err != nil {
+		panic(err)
+	}
+
+	if err := ak.AccountNumber.Set(ctx, n+1); err != nil {
 		panic(err)
 	}
 
