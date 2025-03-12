@@ -515,10 +515,34 @@ func (s *TestSuite) TestUpdateGroupMembers() {
 			req: &group.MsgUpdateGroupMembers{
 				GroupId: groupID,
 				Admin:   myAdmin,
-				MemberUpdates: []group.MemberRequest{{
-					Address: member1,
-					Weight:  "2",
-				}},
+				MemberUpdates: []group.MemberRequest{
+					{Address: member1, Weight: "0"},
+					{Address: member3, Weight: "1"},
+				},
+			},
+			expGroup: &group.GroupInfo{
+				Id:          groupID,
+				Admin:       myAdmin,
+				TotalWeight: "3",
+				Version:     2,
+				CreatedAt:   s.blockTime,
+			},
+			expMembers: []*group.GroupMember{
+				{
+					Member:  &group.Member{Address: member3, Weight: "1", AddedAt: s.blockTime},
+					GroupId: groupID,
+				},
+				{
+					Member:  &group.Member{Address: member2, Weight: "2", AddedAt: s.blockTime},
+					GroupId: groupID,
+				},
+			},
+		},
+		"remove existing member": {
+			req: &group.MsgUpdateGroupMembers{
+				GroupId:       groupID,
+				Admin:         myAdmin,
+				MemberUpdates: []group.MemberRequest{{Address: member1, Weight: "0"}},
 			},
 			expGroup: &group.GroupInfo{
 				Id:          groupID,
@@ -530,89 +554,8 @@ func (s *TestSuite) TestUpdateGroupMembers() {
 			expMembers: []*group.GroupMember{
 				{
 					GroupId: groupID,
-					Member: &group.Member{
-						Address: member1,
-						Weight:  "2",
-						AddedAt: s.blockTime,
-					},
 				},
 			},
-		},
-		"update member with same data": {
-			req: &group.MsgUpdateGroupMembers{
-				GroupId: groupID,
-				Admin:   myAdmin,
-				MemberUpdates: []group.MemberRequest{{
-					Address: member1,
-					Weight:  "1",
-				}},
-			},
-			expGroup: &group.GroupInfo{
-				Id:          groupID,
-				Admin:       myAdmin,
-				TotalWeight: "1",
-				Version:     2,
-				CreatedAt:   s.blockTime,
-			},
-			expMembers: []*group.GroupMember{
-				{
-					GroupId: groupID,
-					Member: &group.Member{
-						Address: member1,
-						Weight:  "1",
-						AddedAt: s.blockTime,
-					},
-				},
-			},
-		},
-		"replace member": {
-			req: &group.MsgUpdateGroupMembers{
-				GroupId: groupID,
-				Admin:   myAdmin,
-				MemberUpdates: []group.MemberRequest{
-					{
-						Address: member1,
-						Weight:  "0",
-					},
-					{
-						Address: member2,
-						Weight:  "1",
-					},
-				},
-			},
-			expGroup: &group.GroupInfo{
-				Id:          groupID,
-				Admin:       myAdmin,
-				TotalWeight: "1",
-				Version:     2,
-				CreatedAt:   s.blockTime,
-			},
-			expMembers: []*group.GroupMember{{
-				GroupId: groupID,
-				Member: &group.Member{
-					Address: member2,
-					Weight:  "1",
-					AddedAt: s.sdkCtx.BlockTime(),
-				},
-			}},
-		},
-		"remove existing member": {
-			req: &group.MsgUpdateGroupMembers{
-				GroupId: groupID,
-				Admin:   myAdmin,
-				MemberUpdates: []group.MemberRequest{{
-					Address: member1,
-					Weight:  "0",
-				}},
-			},
-			expGroup: &group.GroupInfo{
-				Id:          groupID,
-				Admin:       myAdmin,
-				TotalWeight: "0",
-				Version:     2,
-				CreatedAt:   s.blockTime,
-			},
-			expMembers: []*group.GroupMember{},
 		},
 		"remove unknown member": {
 			req: &group.MsgUpdateGroupMembers{
@@ -631,13 +574,15 @@ func (s *TestSuite) TestUpdateGroupMembers() {
 				Version:     1,
 				CreatedAt:   s.blockTime,
 			},
-			expMembers: []*group.GroupMember{{
-				GroupId: groupID,
-				Member: &group.Member{
-					Address: member1,
-					Weight:  "1",
+			expMembers: []*group.GroupMember{
+				{
+					GroupId: groupID,
+					Member:  &group.Member{Address: member1, Weight: "1"},
+				}, {
+					Member:  &group.Member{Address: member2, Weight: "2", AddedAt: s.blockTime},
+					GroupId: groupID,
 				},
-			}},
+			},
 		},
 		"with wrong admin": {
 			req: &group.MsgUpdateGroupMembers{
