@@ -118,11 +118,11 @@ func TestDoTallyAndUpdate(t *testing.T) {
 	}
 	var (
 		groupID    uint64
-		proposalId uint64
+		proposalID uint64
 	)
 	for name, spec := range specs {
 		groupID++
-		proposalId++
+		proposalID++
 		t.Run(name, func(t *testing.T) {
 			em := sdk.NewEventManager()
 			ctx := testCtx.Ctx.WithEventManager(em)
@@ -136,7 +136,7 @@ func TestDoTallyAndUpdate(t *testing.T) {
 				})
 				require.NoError(t, err)
 				err = groupKeeper.voteTable.Create(ctx.KVStore(storeKey), &group.Vote{
-					ProposalId: proposalId,
+					ProposalId: proposalID,
 					Voter:      v.address,
 					Option:     v.option,
 				})
@@ -150,7 +150,7 @@ func TestDoTallyAndUpdate(t *testing.T) {
 			require.NoError(t, err)
 
 			myProposal := &group.Proposal{
-				Id:              proposalId,
+				Id:              proposalID,
 				Status:          group.PROPOSAL_STATUS_SUBMITTED,
 				VotingPeriodEnd: ctx.BlockTime().Add(time.Hour),
 			}
@@ -160,7 +160,7 @@ func TestDoTallyAndUpdate(t *testing.T) {
 			// then
 			require.NoError(t, gotErr)
 			assert.Equal(t, spec.expStatus, myProposal.Status)
-			require.Equal(t, spec.expEvents(proposalId), em.Events())
+			require.Equal(t, spec.expEvents(proposalID), em.Events())
 			// and persistent state updated
 			persistedVotes, err := groupKeeper.votesByProposal(ctx, groupID)
 			require.NoError(t, err)
