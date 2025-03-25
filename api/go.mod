@@ -1,6 +1,7 @@
 module cosmossdk.io/api
 
 go 1.20
+toolchain go1.24.1
 
 require (
 	buf.build/gen/go/tendermint/tendermint/protocolbuffers/go v1.32.0-20231117195010-33ed361a9051.1
@@ -8,7 +9,7 @@ require (
 	github.com/cosmos/gogoproto v1.4.12
 	google.golang.org/genproto/googleapis/api v0.0.0-20240205150955-31a09d347014
 	google.golang.org/grpc v1.62.1
-	google.golang.org/protobuf v1.33.0
+	google.golang.org/protobuf v1.36.6
 )
 
 require (
