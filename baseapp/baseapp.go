@@ -359,8 +359,7 @@ func (app *BaseApp) MountMemoryStores(keys map[string]*storetypes.MemoryStoreKey
 // MountObjectStores mounts all transient object stores with the BaseApp's internal
 // commit multi-store.
 func (app *BaseApp) MountObjectStores(keys map[string]*storetypes.ObjectStoreKey) {
-	skeys := maps.Keys(keys)
-	sort.Strings(skeys)
+	skeys := slices.Sorted(maps.Keys(keys))
 	for _, key := range skeys {
 		memKey := keys[key]
 		app.MountStore(memKey, storetypes.StoreTypeObject)
