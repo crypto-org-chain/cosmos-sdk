@@ -44,7 +44,10 @@ func (k Keeper) IncrementValidatorPeriod(ctx sdk.Context, val stakingtypes.Valid
 
 		// can't calculate ratio for zero-token validators
 		// ergo we instead add to the community pool
-		feePool := k.GetFeePool(ctx)
+		feePool, err := k.GetFeePool(ctx)
+		if err != nil {
+			panic(err)
+		}
 		outstanding := k.GetValidatorOutstandingRewards(ctx, val.GetOperator())
 		feePool.CommunityPool = feePool.CommunityPool.Add(rewards.Rewards...)
 		outstanding.Rewards = outstanding.GetRewards().Sub(rewards.Rewards)

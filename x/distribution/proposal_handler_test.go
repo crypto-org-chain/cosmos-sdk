@@ -42,7 +42,7 @@ func TestProposalHandlerPassed(t *testing.T) {
 	app.AccountKeeper.SetAccount(ctx, account)
 	require.True(t, app.BankKeeper.GetAllBalances(ctx, account.GetAddress()).IsZero())
 
-	feePool := app.DistrKeeper.GetFeePool(ctx)
+	feePool, _ := app.DistrKeeper.GetFeePool(ctx)
 	feePool.CommunityPool = sdk.NewDecCoinsFromCoins(amount...)
 	app.DistrKeeper.SetFeePool(ctx, feePool)
 

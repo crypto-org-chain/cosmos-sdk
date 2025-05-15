@@ -38,7 +38,7 @@ func (h Hooks) AfterValidatorRemoved(ctx sdk.Context, _ sdk.ConsAddress, valAddr
 		coins, remainder := commission.TruncateDecimal()
 
 		// remainder to community pool
-		feePool := h.k.GetFeePool(ctx)
+		feePool, _ := h.k.GetFeePool(ctx)
 		feePool.CommunityPool = feePool.CommunityPool.Add(remainder...)
 		h.k.SetFeePool(ctx, feePool)
 
@@ -56,7 +56,10 @@ func (h Hooks) AfterValidatorRemoved(ctx sdk.Context, _ sdk.ConsAddress, valAddr
 	// Add outstanding to community pool
 	// The validator is removed only after it has no more delegations.
 	// This operation sends only the remaining dust to the community pool.
-	feePool := h.k.GetFeePool(ctx)
+	feePool, err := h.k.GetFeePool(ctx)
+	if err != nil {
+		panic(err)
+	}
 	feePool.CommunityPool = feePool.CommunityPool.Add(outstanding...)
 	h.k.SetFeePool(ctx, feePool)
 

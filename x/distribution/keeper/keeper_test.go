@@ -120,12 +120,13 @@ func TestFundCommunityPool(t *testing.T) {
 	amount := sdk.NewCoins(sdk.NewInt64Coin("stake", 100))
 	require.NoError(t, testutil.FundAccount(app.BankKeeper, ctx, addr[0], amount))
 
-	initPool := app.DistrKeeper.GetFeePool(ctx)
+	initPool, _ := app.DistrKeeper.GetFeePool(ctx)
 	assert.Empty(t, initPool.CommunityPool)
 
 	err := app.DistrKeeper.FundCommunityPool(ctx, amount, addr[0])
 	assert.Nil(t, err)
 
-	assert.Equal(t, initPool.CommunityPool.Add(sdk.NewDecCoinsFromCoins(amount...)...), app.DistrKeeper.GetFeePool(ctx).CommunityPool)
+	feePool, _ := app.DistrKeeper.GetFeePool(ctx)
+	assert.Equal(t, initPool.CommunityPool.Add(sdk.NewDecCoinsFromCoins(amount...)...), feePool.CommunityPool)
 	assert.Empty(t, app.BankKeeper.GetAllBalances(ctx, addr[0]))
 }

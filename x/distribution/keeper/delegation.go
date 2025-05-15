@@ -176,7 +176,10 @@ func (k Keeper) withdrawDelegationRewards(ctx sdk.Context, val stakingtypes.Vali
 	// update the outstanding rewards and the community pool only if the
 	// transaction was successful
 	k.SetValidatorOutstandingRewards(ctx, del.GetValidatorAddr(), types.ValidatorOutstandingRewards{Rewards: outstanding.Sub(rewards)})
-	feePool := k.GetFeePool(ctx)
+	feePool, err := k.GetFeePool(ctx)
+	if err != nil {
+		panic(err)
+	}
 	feePool.CommunityPool = feePool.CommunityPool.Add(remainder...)
 	k.SetFeePool(ctx, feePool)
 

@@ -26,15 +26,20 @@ func (k Keeper) AllocateTokens(
 	feesCollectedInt := k.bankKeeper.GetAllBalances(ctx, feeCollector.GetAddress())
 	feesCollected := sdk.NewDecCoinsFromCoins(feesCollectedInt...)
 
+	// temporary workaround to keep CanWithdrawInvariant happy
+	// general discussions here: https://github.com/cosmos/cosmos-sdk/issues/2906#issuecomment-441867634
+	feePool, err := k.GetFeePool(ctx)
+	// Return silently instead of panic
+	if err != nil {
+		return
+	}
+
 	// transfer collected fees to the distribution module account
-	err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, k.feeCollectorName, types.ModuleName, feesCollectedInt)
+	err = k.bankKeeper.SendCoinsFromModuleToModule(ctx, k.feeCollectorName, types.ModuleName, feesCollectedInt)
 	if err != nil {
 		panic(err)
 	}
 
-	// temporary workaround to keep CanWithdrawInvariant happy
-	// general discussions here: https://github.com/cosmos/cosmos-sdk/issues/2906#issuecomment-441867634
-	feePool := k.GetFeePool(ctx)
 	if totalPreviousPower == 0 {
 		feePool.CommunityPool = feePool.CommunityPool.Add(feesCollected...)
 		k.SetFeePool(ctx, feePool)

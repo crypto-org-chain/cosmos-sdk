@@ -97,7 +97,10 @@ func (k Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) {
 
 // ExportGenesis returns a GenesisState for a given context and keeper.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	feePool := k.GetFeePool(ctx)
+	feePool, err := k.GetFeePool(ctx)
+	if err != nil {
+		panic(err)
+	}
 	params := k.GetParams(ctx)
 
 	dwi := make([]types.DelegatorWithdrawInfo, 0)

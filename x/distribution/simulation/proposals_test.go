@@ -36,7 +36,7 @@ func TestProposalContents(t *testing.T) {
 
 	amount := sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(1)), sdk.NewCoin("atoken", sdk.NewInt(2)))
 
-	feePool := app.DistrKeeper.GetFeePool(ctx)
+	feePool, _ := app.DistrKeeper.GetFeePool(ctx)
 	feePool.CommunityPool = sdk.NewDecCoinsFromCoins(amount...)
 	app.DistrKeeper.SetFeePool(ctx, feePool)
 

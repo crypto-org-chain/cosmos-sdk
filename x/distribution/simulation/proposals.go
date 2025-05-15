@@ -30,7 +30,11 @@ func SimulateCommunityPoolSpendProposalContent(k keeper.Keeper) simtypes.Content
 	return func(r *rand.Rand, ctx sdk.Context, accs []simtypes.Account) simtypes.Content {
 		simAccount, _ := simtypes.RandomAcc(r, accs)
 
-		balance := k.GetFeePool(ctx).CommunityPool
+		feePool, err := k.GetFeePool(ctx)
+		if err != nil {
+			panic(err)
+		}
+		balance := feePool.CommunityPool
 		if balance.Empty() {
 			return nil
 		}

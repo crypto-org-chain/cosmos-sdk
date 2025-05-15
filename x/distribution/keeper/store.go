@@ -44,14 +44,17 @@ func (k Keeper) IterateDelegatorWithdrawAddrs(ctx sdk.Context, handler func(del 
 }
 
 // get the global fee pool distribution info
-func (k Keeper) GetFeePool(ctx sdk.Context) (feePool types.FeePool) {
+func (k Keeper) GetFeePool(ctx sdk.Context) (feePool types.FeePool, err error) {
 	store := ctx.KVStore(k.storeKey)
 	b := store.Get(types.FeePoolKey)
 	if b == nil {
 		panic("Stored fee pool should not have been nil")
 	}
-	k.cdc.MustUnmarshal(b, &feePool)
-	return
+	err = k.cdc.Unmarshal(b, &feePool)
+	if err != nil {
+		return types.FeePool{}, err
+	}
+	return feePool, nil
 }
 
 // set the global fee pool distribution info
