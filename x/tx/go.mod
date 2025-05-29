@@ -1,19 +1,19 @@
 module cosmossdk.io/x/tx
 
-go 1.21
+go 1.23.0
 
 require (
 	cosmossdk.io/api v0.7.3
 	cosmossdk.io/core v0.11.0
 	cosmossdk.io/errors v1.0.1
-	cosmossdk.io/math v1.3.0
+	cosmossdk.io/math v1.5.3
 	github.com/cosmos/cosmos-proto v1.0.0-beta.4
 	github.com/cosmos/gogoproto v1.4.12
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/gofuzz v1.2.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/tendermint/go-amino v0.16.0
 	google.golang.org/protobuf v1.33.0
 	gotest.tools/v3 v3.5.1
@@ -21,9 +21,9 @@ require (
 )
 
 require (
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/sys v0.17.0 // indirect
