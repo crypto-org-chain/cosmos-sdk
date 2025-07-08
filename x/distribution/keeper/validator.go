@@ -42,16 +42,6 @@ func (k Keeper) initializeValidator(ctx context.Context, val stakingtypes.Valida
 
 // increment validator period, returning the period just ended
 func (k Keeper) IncrementValidatorPeriod(ctx context.Context, val stakingtypes.ValidatorI) (uint64, error) {
-	defer func() {
-		if err := recover(); err != nil {
-			if str, ok := err.(string); ok && str == "Int overflow" {
-				k.Logger(ctx).Error("integer overflow occurred", "err", err)
-			} else {
-				panic(err)
-			}
-		}
-	}()
-
 	valBz, err := k.stakingKeeper.ValidatorAddressCodec().StringToBytes(val.GetOperator())
 	if err != nil {
 		return 0, err
