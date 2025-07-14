@@ -1,0 +1,21 @@
+syntax = "proto3";
+package cosmos.mintsupply.v1;
+
+import "amino/amino.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/cosmos/cosmos-sdk/x/mintsupply/types";
+
+// Params defines the parameters for the mintsupply module.
+message Params {
+  option (amino.name)      = "cosmos-sdk/x/mintsupply/Params";
+  option (gogoproto.equal) = true;
+
+  // max_supply defines the maximum supply of tokens that can be minted
+  string max_supply = 1 [
+    (cosmos_proto.scalar)  = "cosmos.Int",
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable)   = false
+  ];
+}

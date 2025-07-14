@@ -1,0 +1,14 @@
+syntax = "proto3";
+package cosmos.mintsupply.v1;
+
+import "amino/amino.proto";
+import "cosmos/mintsupply/v1/mintsupply.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/cosmos/cosmos-sdk/x/mintsupply/types";
+
+// GenesisState defines the mintsupply module's genesis state.
+message GenesisState {
+  // params defines all the parameters of the module.
+  Params params = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+}

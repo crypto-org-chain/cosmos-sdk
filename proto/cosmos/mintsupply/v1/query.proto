@@ -1,0 +1,46 @@
+syntax = "proto3";
+package cosmos.mintsupply.v1;
+
+import "amino/amino.proto";
+import "cosmos/mintsupply/v1/mintsupply.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/cosmos/cosmos-sdk/x/mintsupply/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  // Params returns the total set of mintsupply parameters.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/cosmos/mintsupply/v1/params";
+  }
+
+  // MaxSupply returns the maximum supply limit.
+  rpc MaxSupply(QueryMaxSupplyRequest) returns (QueryMaxSupplyResponse) {
+    option (google.api.http).get = "/cosmos/mintsupply/v1/max_supply";
+  }
+}
+
+// QueryParamsRequest is the request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  // params defines the parameters of the module.
+  Params params = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+}
+
+// QueryMaxSupplyRequest is the request type for the Query/MaxSupply RPC method.
+message QueryMaxSupplyRequest {}
+
+// QueryMaxSupplyResponse is the response type for the Query/MaxSupply RPC method.
+message QueryMaxSupplyResponse {
+  // max_supply defines the maximum supply limit.
+  string max_supply = 1 [
+    (cosmos_proto.scalar)  = "cosmos.Int",
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable)   = false,
+    (amino.dont_omitempty) = true
+  ];
+}
