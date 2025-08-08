@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	gogotypes "github.com/cosmos/gogoproto/types"
 	"sort"
+
+	gogotypes "github.com/cosmos/gogoproto/types"
 
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/math"
