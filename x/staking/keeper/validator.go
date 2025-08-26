@@ -539,6 +539,23 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 // UnbondAllMatureValidators unbonds all the mature unbonding validators that
 // have finished their unbonding period.
 func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
+	startTime := time.Now()
+	logger := k.Logger(ctx)
+
+	logger.Info("🔵 UnbondAllMatureValidators STARTED", "timestamp", startTime.Format(time.RFC3339Nano))
+
+	defer func() {
+		duration := time.Since(startTime)
+		logger.Info("🔵 UnbondAllMatureValidators COMPLETED",
+			"duration_ms", duration.Milliseconds(),
+			"duration_us", duration.Microseconds())
+
+		if duration > 50*time.Millisecond {
+			logger.Warn("⚠️  SLOW UnbondAllMatureValidators detected",
+				"duration_ms", duration.Milliseconds())
+		}
+	}()
+
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	blockTime := sdkCtx.BlockTime()
 	blockHeight := sdkCtx.BlockHeight()
@@ -548,13 +565,26 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	// ValidatorQueueKey | timeBzLen (8-byte big endian) | timeBz | heightBz (8-byte big endian),
 	// so it may be possible that certain validator addresses that are iterated
 	// over are not ready to unbond, so an explicit check is required.
+	iteratorStartTime := time.Now()
+	logger.Info("🔍 Creating ValidatorQueueIterator", "timestamp", iteratorStartTime.Format(time.RFC3339Nano))
+
 	unbondingValIterator, err := k.ValidatorQueueIterator(ctx, blockTime, blockHeight)
 	if err != nil {
 		return err
 	}
 	defer unbondingValIterator.Close()
 
+	iteratorCreateDuration := time.Since(iteratorStartTime)
+	logger.Info("🔍 ValidatorQueueIterator CREATED", "duration_ms", iteratorCreateDuration.Milliseconds())
+
+	// Time the iterator loop - this is where 81% CPU time is spent
+	loopStartTime := time.Now()
+	entryCount := 0
+
+	logger.Info("🔄 Starting validator queue iteration")
+
 	for ; unbondingValIterator.Valid(); unbondingValIterator.Next() {
+		entryCount++
 		key := unbondingValIterator.Key()
 		keyTime, keyHeight, err := types.ParseValidatorQueueKey(key)
 		if err != nil {
@@ -617,6 +647,27 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 			}
 		}
 	}
+
+	// Log iterator loop completion timing
+	loopDuration := time.Since(loopStartTime)
+	logger.Info("🔄 Validator queue iteration COMPLETED",
+		"entries_processed", entryCount,
+		"duration_ms", loopDuration.Milliseconds(),
+		"duration_us", loopDuration.Microseconds(),
+		"avg_us_per_entry", func() int64 {
+			if entryCount > 0 {
+				return loopDuration.Microseconds() / int64(entryCount)
+			}
+			return 0
+		}())
+
+	if loopDuration > 10*time.Millisecond && entryCount > 0 {
+		logger.Warn("⚠️  SLOW validator queue iteration",
+			"entries", entryCount,
+			"duration_ms", loopDuration.Milliseconds(),
+			"avg_us_per_entry", loopDuration.Microseconds()/int64(entryCount))
+	}
+
 	return nil
 }
 
