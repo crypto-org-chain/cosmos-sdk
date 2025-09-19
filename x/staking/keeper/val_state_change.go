@@ -105,7 +105,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		"duration_ms", ubdProcessDuration.Milliseconds(),
 		"duration_us", ubdProcessDuration.Microseconds())
 
-	if ubdProcessDuration > 20*time.Millisecond && ubdProcessedCount > 0 {
+	if ubdProcessDuration > 20*time.Millisecond {
 		logger.Warn("⚠️  SLOW unbonding delegation processing",
 			"processed_count", ubdProcessedCount,
 			"duration_ms", ubdProcessDuration.Milliseconds(),
@@ -170,7 +170,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		"duration_ms", redProcessDuration.Milliseconds(),
 		"duration_us", redProcessDuration.Microseconds())
 
-	if redProcessDuration > 20*time.Millisecond && redProcessedCount > 0 {
+	if redProcessDuration > 20*time.Millisecond {
 		logger.Warn("⚠️  SLOW redelegation processing",
 			"processed_count", redProcessedCount,
 			"duration_ms", redProcessDuration.Milliseconds(),
@@ -371,7 +371,7 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 		"validators_unbonded", unbondingCount,
 		"duration_ms", unbondingDuration.Milliseconds())
 
-	if unbondingDuration > 20*time.Millisecond && unbondingCount > 0 {
+	if unbondingDuration > 20*time.Millisecond {
 		logger.Warn("⚠️  SLOW validator unbonding",
 			"validators", unbondingCount,
 			"duration_ms", unbondingDuration.Milliseconds())
