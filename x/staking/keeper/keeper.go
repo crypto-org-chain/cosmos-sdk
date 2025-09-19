@@ -44,7 +44,7 @@ func NewKeeper(
 	authority string,
 	validatorAddressCodec addresscodec.Codec,
 	consensusAddressCodec addresscodec.Codec,
-	queueLastProcessedState types.QueueLastProcessedState,
+	// queueLastProcessedState types.QueueLastProcessedState, //TODO: to update later once testing works
 ) *Keeper {
 	// ensure bonded and not bonded module accounts are set
 	if addr := ak.GetModuleAddress(types.BondedPoolName); addr == nil {
@@ -73,7 +73,7 @@ func NewKeeper(
 		authority:               authority,
 		validatorAddressCodec:   validatorAddressCodec,
 		consensusAddressCodec:   consensusAddressCodec,
-		queueLastProcessedState: queueLastProcessedState,
+		queueLastProcessedState: types.QueueLastProcessedState{},
 	}
 }
 
