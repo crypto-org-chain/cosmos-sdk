@@ -522,6 +522,8 @@ func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corest
 	}
 
 	endKey := types.GetUnbondingDelegationTimeKey(endTime)
+	logger := k.Logger(ctx)
+	logger.Info("🔍 UBDQueueIterator", "startKey", startKey, "endKey", endKey)
 	return store.Iterator(startKey, storetypes.InclusiveEndBytes(endKey))
 }
 
@@ -842,6 +844,8 @@ func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time
 	}
 
 	endKey := types.GetRedelegationTimeKey(endTime)
+	logger := k.Logger(ctx)
+	logger.Info("🔍 RedelegationQueueIterator", "startKey", startKey, "endKey", endKey)
 	return store.Iterator(startKey, storetypes.InclusiveEndBytes(endKey))
 }
 

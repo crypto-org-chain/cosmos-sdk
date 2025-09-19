@@ -544,6 +544,8 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 	}
 
 	endKey := types.GetValidatorQueueKey(endTime, endHeight)
+	logger := k.Logger(ctx)
+	logger.Info("🔍 ValidatorQueueIterator", "startKey", startKey, "endKey", endKey)
 	return store.Iterator(startKey, storetypes.InclusiveEndBytes(endKey))
 }
 
