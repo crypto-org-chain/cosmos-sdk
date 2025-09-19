@@ -538,10 +538,7 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 
 	lastProcessedState := k.GetQueueLastProcessedState()
 
-	startKey := types.ValidatorQueueKey
-	if lastProcessedState != nil {
-		startKey = types.GetValidatorQueueKey(lastProcessedState.Timestamp, int64(lastProcessedState.Height))
-	}
+	startKey := types.GetValidatorQueueKey(lastProcessedState.Timestamp, int64(lastProcessedState.Height))
 
 	endKey := types.GetValidatorQueueKey(endTime, endHeight)
 	logger := k.Logger(ctx)
@@ -670,7 +667,7 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 		"duration_us", loopDuration.Microseconds(),
 	)
 
-	k.GetQueueLastProcessedState().Height = uint64(lowestHeight)
+	k.SetQueueLastProcessedHeight(uint64(lowestHeight))
 	return nil
 }
 

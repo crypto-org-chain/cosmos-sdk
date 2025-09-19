@@ -516,10 +516,7 @@ func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corest
 	// Get the last processed position to optimize iteration range
 	lastProcessedState := k.GetQueueLastProcessedState()
 
-	startKey := types.UnbondingQueueKey
-	if lastProcessedState != nil {
-		startKey = types.GetUnbondingDelegationTimeKey(lastProcessedState.Timestamp)
-	}
+	startKey := types.GetUnbondingDelegationTimeKey(lastProcessedState.Timestamp)
 
 	endKey := types.GetUnbondingDelegationTimeKey(endTime)
 	logger := k.Logger(ctx)
@@ -838,10 +835,7 @@ func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time
 	// Get the last processed position to optimize iteration range
 	lastProcessedState := k.GetQueueLastProcessedState()
 
-	startKey := types.RedelegationQueueKey
-	if lastProcessedState != nil {
-		startKey = types.GetRedelegationTimeKey(lastProcessedState.Timestamp)
-	}
+	startKey := types.GetRedelegationTimeKey(lastProcessedState.Timestamp)
 
 	endKey := types.GetRedelegationTimeKey(endTime)
 	logger := k.Logger(ctx)

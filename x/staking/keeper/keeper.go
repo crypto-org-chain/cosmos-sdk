@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"fmt"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 
@@ -177,6 +178,14 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 }
 
 // GetQueueLastProcessedState retrieves the last processed state of the queue from memory.
-func (k *Keeper) GetQueueLastProcessedState() *types.QueueLastProcessedState {
-	return &k.queueLastProcessedState
+func (k Keeper) GetQueueLastProcessedState() types.QueueLastProcessedState {
+	return k.queueLastProcessedState
+}
+
+func (k *Keeper) SetQueueLastProcessedTimestamp(timestamp time.Time) {
+	k.queueLastProcessedState.Timestamp = timestamp
+}
+
+func (k *Keeper) SetQueueLastProcessedHeight(height uint64) {
+	k.queueLastProcessedState.Height = height
 }
