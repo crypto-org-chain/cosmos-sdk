@@ -587,26 +587,6 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	}
 	defer unbondingValIterator.Close()
 
-	iteratorCreateDuration := time.Since(iteratorStartTime)
-
-	// DEBUG: Count total entries in queue for diagnosis
-	debugStartTime := time.Now()
-	debugCount := 0
-	store := k.storeService.OpenKVStore(ctx)
-	tempIter, err := store.Iterator(types.ValidatorQueueKey, storetypes.PrefixEndBytes(types.ValidatorQueueKey))
-	if err == nil && tempIter != nil {
-		defer tempIter.Close()
-		for ; tempIter.Valid(); tempIter.Next() {
-			debugCount++
-		}
-	}
-	debugDuration := time.Since(debugStartTime)
-
-	logger.Info("🔍 ValidatorQueueIterator CREATED",
-		"duration_ms", iteratorCreateDuration.Milliseconds(),
-		"total_queue_entries", debugCount,
-		"debug_scan_ms", debugDuration.Milliseconds())
-
 	// Time the iterator loop - this is where 81% CPU time is spent
 	loopStartTime := time.Now()
 	lowestHeight := blockHeight

@@ -177,6 +177,6 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 }
 
 // GetQueueLastProcessedState retrieves the last processed state of the queue from memory.
-func (k Keeper) GetQueueLastProcessedState() *types.QueueLastProcessedState {
+func (k *Keeper) GetQueueLastProcessedState() *types.QueueLastProcessedState {
 	return &k.queueLastProcessedState
 }
