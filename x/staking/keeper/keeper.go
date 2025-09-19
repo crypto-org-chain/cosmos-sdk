@@ -172,3 +172,31 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 
 	return valUpdates.Updates, nil
 }
+
+// GetQueueLastProcessedState retrieves the last processed state of the queue.
+// Returns nil if no previous processing has occurred.
+func (k Keeper) GetQueueLastProcessedState(ctx context.Context) (*types.QueueLastProcessedState, error) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.QueueLastProcessedStateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if bz == nil {
+		return nil, nil
+	}
+
+	var state types.QueueLastProcessedState
+	err = k.cdc.Unmarshal(bz, &state)
+	return &state, err
+}
+
+// SetQueueLastProcessedState stores the last processed state of the queue.
+func (k Keeper) SetQueueLastProcessedState(ctx context.Context, state *types.QueueLastProcessedState) error {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := k.cdc.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return store.Set(types.QueueLastProcessedStateKey, bz)
+}

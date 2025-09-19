@@ -512,8 +512,20 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 // UBDQueueIterator returns all the unbonding queue timeslices from time 0 until endTime.
 func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.UnbondingQueueKey,
-		storetypes.InclusiveEndBytes(types.GetUnbondingDelegationTimeKey(endTime)))
+
+	// Get the last processed position to optimize iteration range
+	lastProcessedState, err := k.GetQueueLastProcessedState(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	startKey := types.UnbondingQueueKey
+	if lastProcessedState != nil {
+		startKey = types.GetUnbondingDelegationTimeKey(lastProcessedState.Timestamp)
+	}
+
+	endKey := types.GetUnbondingDelegationTimeKey(endTime)
+	return store.Iterator(startKey, storetypes.InclusiveEndBytes(endKey))
 }
 
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
@@ -824,7 +836,20 @@ func (k Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelegat
 // time 0 until endTime.
 func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time) (storetypes.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.RedelegationQueueKey, storetypes.InclusiveEndBytes(types.GetRedelegationTimeKey(endTime)))
+
+	// Get the last processed position to optimize iteration range
+	lastProcessedState, err := k.GetQueueLastProcessedState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
+	startKey := types.RedelegationQueueKey
+	if lastProcessedState != nil {
+		startKey = types.GetRedelegationTimeKey(lastProcessedState.Timestamp)
+	}
+
+	endKey := types.GetRedelegationTimeKey(endTime)
+	return store.Iterator(startKey, storetypes.InclusiveEndBytes(endKey))
 }
 
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
