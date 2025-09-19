@@ -177,14 +177,7 @@ func (k Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpda
 			"avg_us_per_redelegation", redProcessDuration.Microseconds()/int64(redProcessedCount))
 	}
 
-	newLastProcessedState := types.QueueLastProcessedState{
-		Timestamp: sdkCtx.BlockTime(),
-		Height:    uint64(sdkCtx.BlockHeight()),
-	}
-	
-	if err := k.SetQueueLastProcessedState(ctx, &newLastProcessedState); err != nil {
-		logger.Error("failed to update queue last processed state", "error", err)
-	}
+	k.GetQueueLastProcessedState().Timestamp = sdkCtx.BlockTime()
 
 	return validatorUpdates, nil
 }

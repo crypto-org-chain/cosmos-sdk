@@ -24,14 +24,15 @@ var _ types.DelegationSet = Keeper{}
 
 // Keeper of the x/staking store
 type Keeper struct {
-	storeService          storetypes.KVStoreService
-	cdc                   codec.BinaryCodec
-	authKeeper            types.AccountKeeper
-	bankKeeper            types.BankKeeper
-	hooks                 types.StakingHooks
-	authority             string
-	validatorAddressCodec addresscodec.Codec
-	consensusAddressCodec addresscodec.Codec
+	storeService            storetypes.KVStoreService
+	cdc                     codec.BinaryCodec
+	authKeeper              types.AccountKeeper
+	bankKeeper              types.BankKeeper
+	hooks                   types.StakingHooks
+	authority               string
+	validatorAddressCodec   addresscodec.Codec
+	consensusAddressCodec   addresscodec.Codec
+	queueLastProcessedState types.QueueLastProcessedState
 }
 
 // NewKeeper creates a new staking Keeper instance
@@ -43,6 +44,7 @@ func NewKeeper(
 	authority string,
 	validatorAddressCodec addresscodec.Codec,
 	consensusAddressCodec addresscodec.Codec,
+	queueLastProcessedState types.QueueLastProcessedState,
 ) *Keeper {
 	// ensure bonded and not bonded module accounts are set
 	if addr := ak.GetModuleAddress(types.BondedPoolName); addr == nil {
@@ -63,14 +65,15 @@ func NewKeeper(
 	}
 
 	return &Keeper{
-		storeService:          storeService,
-		cdc:                   cdc,
-		authKeeper:            ak,
-		bankKeeper:            bk,
-		hooks:                 nil,
-		authority:             authority,
-		validatorAddressCodec: validatorAddressCodec,
-		consensusAddressCodec: consensusAddressCodec,
+		storeService:            storeService,
+		cdc:                     cdc,
+		authKeeper:              ak,
+		bankKeeper:              bk,
+		hooks:                   nil,
+		authority:               authority,
+		validatorAddressCodec:   validatorAddressCodec,
+		consensusAddressCodec:   consensusAddressCodec,
+		queueLastProcessedState: queueLastProcessedState,
 	}
 }
 
@@ -173,30 +176,7 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 	return valUpdates.Updates, nil
 }
 
-// GetQueueLastProcessedState retrieves the last processed state of the queue.
-// Returns nil if no previous processing has occurred.
-func (k Keeper) GetQueueLastProcessedState(ctx context.Context) (*types.QueueLastProcessedState, error) {
-	store := k.storeService.OpenKVStore(ctx)
-	bz, err := store.Get(types.QueueLastProcessedStateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if bz == nil {
-		return nil, nil
-	}
-
-	var state types.QueueLastProcessedState
-	err = k.cdc.Unmarshal(bz, &state)
-	return &state, err
-}
-
-// SetQueueLastProcessedState stores the last processed state of the queue.
-func (k Keeper) SetQueueLastProcessedState(ctx context.Context, state *types.QueueLastProcessedState) error {
-	store := k.storeService.OpenKVStore(ctx)
-	bz, err := k.cdc.Marshal(state)
-	if err != nil {
-		return err
-	}
-	return store.Set(types.QueueLastProcessedStateKey, bz)
+// GetQueueLastProcessedState retrieves the last processed state of the queue from memory.
+func (k Keeper) GetQueueLastProcessedState() *types.QueueLastProcessedState {
+	return &k.queueLastProcessedState
 }

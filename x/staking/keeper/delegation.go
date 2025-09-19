@@ -514,10 +514,7 @@ func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corest
 	store := k.storeService.OpenKVStore(ctx)
 
 	// Get the last processed position to optimize iteration range
-	lastProcessedState, err := k.GetQueueLastProcessedState(ctx)
-	if err != nil {
-		return nil, err
-	}
+	lastProcessedState := k.GetQueueLastProcessedState()
 
 	startKey := types.UnbondingQueueKey
 	if lastProcessedState != nil {
@@ -533,7 +530,6 @@ func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corest
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
-	// gets an iterator for all timeslices from time 0 until the current Blockheader time
 	unbondingTimesliceIterator, err := k.UBDQueueIterator(ctx, currTime)
 	if err != nil {
 		return matureUnbonds, err
@@ -838,11 +834,8 @@ func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time
 	store := k.storeService.OpenKVStore(ctx)
 
 	// Get the last processed position to optimize iteration range
-	lastProcessedState, err := k.GetQueueLastProcessedState(ctx)
-	if err != nil {
-		return nil, err
-	}
-	
+	lastProcessedState := k.GetQueueLastProcessedState()
+
 	startKey := types.RedelegationQueueKey
 	if lastProcessedState != nil {
 		startKey = types.GetRedelegationTimeKey(lastProcessedState.Timestamp)
@@ -858,7 +851,6 @@ func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time
 func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
-	// gets an iterator for all timeslices from time 0 until the current Blockheader time
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	redelegationTimesliceIterator, err := k.RedelegationQueueIterator(ctx, sdkCtx.HeaderInfo().Time)
 	if err != nil {

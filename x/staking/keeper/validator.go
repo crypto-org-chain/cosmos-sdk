@@ -529,8 +529,6 @@ func (k Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) e
 	return k.SetUnbondingValidatorsQueue(ctx, val.UnbondingTime, val.UnbondingHeight, newAddrs)
 }
 
-
-
 // ValidatorQueueIterator returns an iterator ranging over validators that are
 // unbonding whose unbonding completion occurs at the given height and time.
 // The iterator is optimized to start from the last processed position to avoid
@@ -538,11 +536,7 @@ func (k Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) e
 func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, endHeight int64) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
 
-	// Get the last processed position to optimize iteration range
-	lastProcessedState, err := k.GetQueueLastProcessedState(ctx)
-	if err != nil {
-		return nil, err
-	}
+	lastProcessedState := k.GetQueueLastProcessedState()
 
 	startKey := types.ValidatorQueueKey
 	if lastProcessedState != nil {
@@ -613,12 +607,11 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 
 	// Time the iterator loop - this is where 81% CPU time is spent
 	loopStartTime := time.Now()
-	entryCount := 0
+	lowestHeight := blockHeight
 
 	logger.Info("🔄 Starting validator queue iteration")
 
 	for ; unbondingValIterator.Valid(); unbondingValIterator.Next() {
-		entryCount++
 		key := unbondingValIterator.Key()
 		keyTime, keyHeight, err := types.ParseValidatorQueueKey(key)
 		if err != nil {
@@ -628,6 +621,7 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 		// All addresses for the given key have the same unbonding height and time.
 		// We only unbond if the height and time are less than the current height
 		// and time.
+		removed := false
 		if keyHeight <= blockHeight && (keyTime.Before(blockTime) || keyTime.Equal(blockTime)) {
 			addrs := types.ValAddresses{}
 			if err = k.cdc.Unmarshal(unbondingValIterator.Value(), &addrs); err != nil {
@@ -677,31 +671,24 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 					if err = k.DeleteValidatorQueue(ctx, val); err != nil {
 						return err
 					}
+					removed = true
 				}
 			}
+		}
+		// Track the lowest non-mature validator unbonding height to serve as the lower bound for the subsequent iteration
+		if !removed && keyHeight < lowestHeight {
+			lowestHeight = keyHeight
 		}
 	}
 
 	// Log iterator loop completion timing
 	loopDuration := time.Since(loopStartTime)
 	logger.Info("🔄 Validator queue iteration COMPLETED",
-		"entries_processed", entryCount,
 		"duration_ms", loopDuration.Milliseconds(),
 		"duration_us", loopDuration.Microseconds(),
-		"avg_us_per_entry", func() int64 {
-			if entryCount > 0 {
-				return loopDuration.Microseconds() / int64(entryCount)
-			}
-			return 0
-		}())
+	)
 
-	if loopDuration > 10*time.Millisecond && entryCount > 0 {
-		logger.Warn("⚠️  SLOW validator queue iteration",
-			"entries", entryCount,
-			"duration_ms", loopDuration.Milliseconds(),
-			"avg_us_per_entry", loopDuration.Microseconds()/int64(entryCount))
-	}
-
+	k.GetQueueLastProcessedState().Height = uint64(lowestHeight)
 	return nil
 }
 
