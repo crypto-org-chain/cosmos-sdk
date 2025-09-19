@@ -533,7 +533,7 @@ func (k Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) e
 // unbonding whose unbonding completion occurs at the given height and time.
 // The iterator is optimized to start from the last processed position to avoid
 // redundant traversal of already-processed entries.
-func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, endHeight int64) (corestore.Iterator, error) {
+func (k *Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, endHeight int64) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
 	logger := k.Logger(ctx)
 
@@ -549,7 +549,7 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 
 // UnbondAllMatureValidators unbonds all the mature unbonding validators that
 // have finished their unbonding period.
-func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
+func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	startTime := time.Now()
 	logger := k.Logger(ctx)
 
