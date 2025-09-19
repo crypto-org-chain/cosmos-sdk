@@ -535,13 +535,14 @@ func (k Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) e
 // redundant traversal of already-processed entries.
 func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, endHeight int64) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
+	logger := k.Logger(ctx)
 
 	lastProcessedState := k.GetQueueLastProcessedState()
+	logger.Info("🔍 ValidatorQueueIterator lastProcessedState", lastProcessedState)
 
 	startKey := types.GetValidatorQueueKey(lastProcessedState.Timestamp, int64(lastProcessedState.Height))
 
 	endKey := types.GetValidatorQueueKey(endTime, endHeight)
-	logger := k.Logger(ctx)
 	logger.Info("🔍 ValidatorQueueIterator", "startKey", startKey, "endKey", endKey)
 	return store.Iterator(startKey, storetypes.InclusiveEndBytes(endKey))
 }
