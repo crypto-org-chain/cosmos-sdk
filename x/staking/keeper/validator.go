@@ -696,3 +696,117 @@ func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (
 
 	return pubkey, nil
 }
+
+// UnbondAllMatureValidatorsWithIterator unbonds all the mature unbonding validators using a pre-created iterator
+func (k *Keeper) UnbondAllMatureValidatorsWithIterator(ctx context.Context, iterator corestore.Iterator) error {
+	startTime := time.Now()
+	logger := k.Logger(ctx)
+
+	logger.Info("🔵 UnbondAllMatureValidatorsWithIterator STARTED", "timestamp", startTime.Format(time.RFC3339Nano))
+
+	defer func() {
+		duration := time.Since(startTime)
+		logger.Info("🔵 UnbondAllMatureValidatorsWithIterator COMPLETED",
+			"duration_ms", duration.Milliseconds(),
+			"duration_us", duration.Microseconds())
+
+		if duration > 50*time.Millisecond {
+			logger.Warn("⚠️  SLOW UnbondAllMatureValidatorsWithIterator detected",
+				"duration_ms", duration.Milliseconds())
+		}
+	}()
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	blockTime := sdkCtx.BlockTime()
+	blockHeight := sdkCtx.BlockHeight()
+
+	// Time the iterator loop - this is where 81% CPU time is spent
+	loopStartTime := time.Now()
+	lowestHeight := blockHeight
+
+	logger.Info("🔄 Starting validator queue iteration with pre-created iterator")
+
+	for ; iterator.Valid(); iterator.Next() {
+		key := iterator.Key()
+		keyTime, keyHeight, err := types.ParseValidatorQueueKey(key)
+		if err != nil {
+			return fmt.Errorf("failed to parse unbonding key: %w", err)
+		}
+
+		// All addresses for the given key have the same unbonding height and time.
+		// We only unbond if the height and time are less than the current height
+		// and time.
+		removed := false
+		if keyHeight <= blockHeight && (keyTime.Before(blockTime) || keyTime.Equal(blockTime)) {
+			addrs := types.ValAddresses{}
+			if err = k.cdc.Unmarshal(iterator.Value(), &addrs); err != nil {
+				return err
+			}
+
+			for _, valAddr := range addrs.Addresses {
+				addr, err := k.validatorAddressCodec.StringToBytes(valAddr)
+				if err != nil {
+					return err
+				}
+				val, err := k.GetValidator(ctx, addr)
+				if err != nil {
+					return errorsmod.Wrap(err, "validator in the unbonding queue was not found")
+				}
+
+				if !val.IsUnbonding() {
+					return fmt.Errorf("unexpected validator in unbonding queue; status was not unbonding")
+				}
+
+				if val.UnbondingOnHoldRefCount == 0 {
+					for _, id := range val.UnbondingIds {
+						if err = k.DeleteUnbondingIndex(ctx, id); err != nil {
+							return err
+						}
+					}
+
+					val, err = k.UnbondingToUnbonded(ctx, val)
+					if err != nil {
+						return err
+					}
+
+					if val.GetDelegatorShares().IsZero() {
+						str, err := k.validatorAddressCodec.StringToBytes(val.GetOperator())
+						if err != nil {
+							return err
+						}
+						if err = k.RemoveValidator(ctx, str); err != nil {
+							return err
+						}
+					} else {
+						// remove unbonding ids
+						val.UnbondingIds = []uint64{}
+					}
+
+					// remove validator from queue
+					if err = k.DeleteValidatorQueue(ctx, val); err != nil {
+						return err
+					}
+					removed = true
+				}
+			}
+		}
+		// Track the lowest non-mature validator unbonding height to serve as the lower bound for the subsequent iteration
+		if !removed && keyHeight < lowestHeight {
+			lowestHeight = keyHeight
+		}
+	}
+
+	loopDuration := time.Since(loopStartTime)
+	logger.Info("🔄 Validator queue iteration completed",
+		"duration_ms", loopDuration.Milliseconds(),
+		"duration_us", loopDuration.Microseconds(),
+		"lowest_height", lowestHeight)
+
+	if loopDuration > 20*time.Millisecond {
+		logger.Warn("⚠️  SLOW validator queue iteration",
+			"duration_ms", loopDuration.Milliseconds(),
+			"duration_us", loopDuration.Microseconds())
+	}
+
+	return nil
+}

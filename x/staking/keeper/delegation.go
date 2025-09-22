@@ -1402,3 +1402,45 @@ func (k Keeper) ValidateUnbondAmount(
 
 	return shares, nil
 }
+
+// DequeueAllMatureUBDQueueWithIterator returns a concatenated list of all the timeslices using a pre-created iterator
+func (k *Keeper) DequeueAllMatureUBDQueueWithIterator(ctx context.Context, iterator corestore.Iterator) (matureUnbonds []types.DVPair, err error) {
+	store := k.storeService.OpenKVStore(ctx)
+
+	for ; iterator.Valid(); iterator.Next() {
+		timeslice := types.DVPairs{}
+		value := iterator.Value()
+		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
+			return matureUnbonds, err
+		}
+
+		matureUnbonds = append(matureUnbonds, timeslice.Pairs...)
+
+		if err = store.Delete(iterator.Key()); err != nil {
+			return matureUnbonds, err
+		}
+	}
+
+	return matureUnbonds, nil
+}
+
+// DequeueAllMatureRedelegationQueueWithIterator returns a concatenated list of all the timeslices using a pre-created iterator
+func (k *Keeper) DequeueAllMatureRedelegationQueueWithIterator(ctx context.Context, iterator storetypes.Iterator) (matureRedelegations []types.DVVTriplet, err error) {
+	store := k.storeService.OpenKVStore(ctx)
+
+	for ; iterator.Valid(); iterator.Next() {
+		timeslice := types.DVVTriplets{}
+		value := iterator.Value()
+		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
+			return nil, err
+		}
+
+		matureRedelegations = append(matureRedelegations, timeslice.Triplets...)
+
+		if err = store.Delete(iterator.Key()); err != nil {
+			return nil, err
+		}
+	}
+
+	return matureRedelegations, nil
+}
