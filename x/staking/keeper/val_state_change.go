@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	gogotypes "github.com/cosmos/gogoproto/types"
@@ -58,9 +57,9 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 	blockHeight := sdkCtx.BlockHeight()
 
 	// Fetch all iterators in parallel
-	validatorIterator, ubdIterator, redelegationIterator, err := k.fetchIteratorsInParallel(ctx, blockTime, blockHeight)
-	if err != nil {
-		return nil, err
+	validatorIterator, ubdIterator, redelegationIterator, iteratorErrors := k.fetchIteratorsInParallel(ctx, blockTime, blockHeight)
+	if len(iteratorErrors) > 0 {
+		return nil, fmt.Errorf("iterator creation errors: %v", iteratorErrors)
 	}
 
 	// Ensure all iterators are properly closed
@@ -872,7 +871,7 @@ func (k *Keeper) fetchIteratorsInParallel(ctx context.Context, blockTime time.Ti
 	validatorIterator interface{},
 	ubdIterator interface{},
 	redelegationIterator interface{},
-	err error,
+	errors []error,
 ) {
 	logger := k.Logger(ctx)
 	startTime := time.Now()
@@ -883,48 +882,39 @@ func (k *Keeper) fetchIteratorsInParallel(ctx context.Context, blockTime time.Ti
 	ubdChan := make(chan IteratorResult, 1)
 	redelegationChan := make(chan IteratorResult, 1)
 
-	// Use WaitGroup to wait for all goroutines to complete
-	var wg sync.WaitGroup
-	wg.Add(3)
-
 	// Fetch ValidatorQueueIterator in parallel
 	go func() {
-		defer wg.Done()
 		iterator, err := k.ValidatorQueueIterator(ctx, blockTime, blockHeight)
 		validatorChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
 	// Fetch UBDQueueIterator in parallel
 	go func() {
-		defer wg.Done()
 		iterator, err := k.UBDQueueIterator(ctx, blockTime)
 		ubdChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
 	// Fetch RedelegationQueueIterator in parallel
 	go func() {
-		defer wg.Done()
 		iterator, err := k.RedelegationQueueIterator(ctx, blockTime)
 		redelegationChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
-	// Wait for all goroutines to complete
-	wg.Wait()
-
-	// Collect results
+	// Collect results directly from channels
 	validatorResult := <-validatorChan
 	ubdResult := <-ubdChan
 	redelegationResult := <-redelegationChan
 
-	// Check for errors
+	// Collect all errors
+	var allErrors []error
 	if validatorResult.Error != nil {
-		return nil, nil, nil, fmt.Errorf("failed to fetch validator iterator: %w", validatorResult.Error)
+		allErrors = append(allErrors, fmt.Errorf("failed to fetch validator iterator: %w", validatorResult.Error))
 	}
 	if ubdResult.Error != nil {
-		return nil, nil, nil, fmt.Errorf("failed to fetch UBD iterator: %w", ubdResult.Error)
+		allErrors = append(allErrors, fmt.Errorf("failed to fetch UBD iterator: %w", ubdResult.Error))
 	}
 	if redelegationResult.Error != nil {
-		return nil, nil, nil, fmt.Errorf("failed to fetch redelegation iterator: %w", redelegationResult.Error)
+		allErrors = append(allErrors, fmt.Errorf("failed to fetch redelegation iterator: %w", redelegationResult.Error))
 	}
 
 	duration := time.Since(startTime)
@@ -932,5 +922,5 @@ func (k *Keeper) fetchIteratorsInParallel(ctx context.Context, blockTime time.Ti
 		"duration_ms", duration.Milliseconds(),
 		"duration_us", duration.Microseconds())
 
-	return validatorResult.Iterator, ubdResult.Iterator, redelegationResult.Iterator, nil
+	return validatorResult.Iterator, ubdResult.Iterator, redelegationResult.Iterator, allErrors
 }
