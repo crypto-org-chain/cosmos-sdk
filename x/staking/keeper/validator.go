@@ -540,11 +540,11 @@ func (k *Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, 
 	lastProcessedState := k.GetQueueLastProcessedState()
 	logger.Info("🔍 ValidatorQueueIterator lastProcessedState", lastProcessedState)
 
-	startKey := types.GetValidatorQueueKey(lastProcessedState.Timestamp, int64(lastProcessedState.Height))
-
-	endKey := types.GetValidatorQueueKey(endTime, endHeight)
+	startKey := types.GetValidatorQueueKey(endTime, endHeight)  // Current time (hot data)
+	endKey := types.GetValidatorQueueKey(lastProcessedState.Timestamp, int64(lastProcessedState.Height))  // Old timestamp
 	logger.Info("🔍 ValidatorQueueIterator", "startKey", startKey, "endKey", endKey)
-	return store.Iterator(startKey, storetypes.InclusiveEndBytes(endKey))
+	
+	return store.ReverseIterator(startKey, storetypes.InclusiveEndBytes(endKey))
 }
 
 // UnbondAllMatureValidators unbonds all the mature unbonding validators that
