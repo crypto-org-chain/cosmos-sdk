@@ -575,7 +575,10 @@ func (s *KeeperTestSuite) TestUndelegateFromUnbondedValidator() {
 
 	// unbond the validator
 	ctx = ctx.WithBlockTime(validator.UnbondingTime)
-	err = keeper.UnbondAllMatureValidators(ctx)
+	lastProcessedState := keeper.GetQueueLastProcessedState()
+	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	require.NoError(err)
+	err = keeper.UnbondAllMatureValidators(ctx, iterator)
 	require.NoError(err)
 
 	// Make sure validator is still in state because there is still an outstanding delegation
@@ -659,7 +662,10 @@ func (s *KeeperTestSuite) TestUnbondingAllDelegationFromValidator() {
 
 	// unbond the validator
 	ctx = ctx.WithBlockTime(validator.UnbondingTime)
-	err = keeper.UnbondAllMatureValidators(ctx)
+	lastProcessedState := keeper.GetQueueLastProcessedState()
+	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	require.NoError(err)
+	err = keeper.UnbondAllMatureValidators(ctx, iterator)
 	require.NoError(err)
 
 	// validator should now be deleted from state

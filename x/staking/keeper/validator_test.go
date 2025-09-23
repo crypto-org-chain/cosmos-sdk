@@ -415,18 +415,27 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 
 	// check unbonding mature validators
 	ctx = ctx.WithBlockHeight(endHeight).WithBlockTime(endTime)
-	err = keeper.UnbondAllMatureValidators(ctx)
+	lastProcessedState := keeper.GetQueueLastProcessedState()
+	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	require.NoError(err)
+	err = keeper.UnbondAllMatureValidators(ctx, iterator)
 	require.EqualError(err, "validator in the unbonding queue was not found: validator does not exist")
 
 	require.NoError(keeper.SetValidator(ctx, validator))
 	ctx = ctx.WithBlockHeight(endHeight).WithBlockTime(endTime)
 
-	err = keeper.UnbondAllMatureValidators(ctx)
+	lastProcessedState = keeper.GetQueueLastProcessedState()
+	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	require.NoError(err)
+	err = keeper.UnbondAllMatureValidators(ctx, iterator)
 	require.EqualError(err, "unexpected validator in unbonding queue; status was not unbonding")
 
 	validator.Status = stakingtypes.Unbonding
 	require.NoError(keeper.SetValidator(ctx, validator))
-	require.NoError(keeper.UnbondAllMatureValidators(ctx))
+	lastProcessedState = keeper.GetQueueLastProcessedState()
+	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	require.NoError(err)
+	require.NoError(keeper.UnbondAllMatureValidators(ctx, iterator))
 	validator, err = keeper.GetValidator(ctx, valAddr)
 	require.ErrorIs(err, stakingtypes.ErrNoValidatorFound)
 
@@ -435,7 +444,10 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	validator, _ = validator.AddTokensFromDel(addTokens)
 	validator.Status = stakingtypes.Unbonding
 	require.NoError(keeper.SetValidator(ctx, validator))
-	require.NoError(keeper.UnbondAllMatureValidators(ctx))
+	lastProcessedState = keeper.GetQueueLastProcessedState()
+	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	require.NoError(err)
+	require.NoError(keeper.UnbondAllMatureValidators(ctx, iterator))
 	validator, err = keeper.GetValidator(ctx, valAddr)
 	require.NoError(err)
 	require.Equal(stakingtypes.Unbonded, validator.Status)

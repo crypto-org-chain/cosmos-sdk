@@ -12,7 +12,6 @@ import (
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/core/store"
 	"cosmossdk.io/math"
-	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -22,22 +21,6 @@ import (
 // BlockValidatorUpdates calculates the ValidatorUpdates for the current block
 // Called in each EndBlock
 func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate, error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔵 BlockValidatorUpdates STARTED", "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔵 BlockValidatorUpdates COMPLETED",
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 100*time.Millisecond {
-			logger.Warn("⚠️  SLOW BlockValidatorUpdates detected",
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	// Calculate validator set changes.
 	//
 	// NOTE: ApplyAndReturnValidatorSetUpdates has to come before
@@ -56,55 +39,31 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 	blockTime := sdkCtx.BlockHeader().Time
 	blockHeight := sdkCtx.BlockHeight()
 
-	// Fetch all iterators in parallel
-	validatorIterator, ubdIterator, redelegationIterator, iteratorErrors := k.fetchIteratorsInParallel(ctx, blockTime, blockHeight)
-	if len(iteratorErrors) > 0 {
-		return nil, fmt.Errorf("iterator creation errors: %v", iteratorErrors)
-	}
+	validatorIterator, ubdIterator, redelegationIterator, errors := k.fetchIterators(ctx, blockTime, blockHeight)
 
-	// Ensure all iterators are properly closed
 	defer func() {
-		if validatorIterator != nil {
-			if iter, ok := validatorIterator.(store.Iterator); ok {
-				iter.Close()
-			}
-		}
-		if ubdIterator != nil {
-			if iter, ok := ubdIterator.(store.Iterator); ok {
-				iter.Close()
-			}
-		}
-		if redelegationIterator != nil {
-			if iter, ok := redelegationIterator.(storetypes.Iterator); ok {
-				iter.Close()
-			}
-		}
+		validatorIterator.Close()
+		ubdIterator.Close()
+		redelegationIterator.Close()
 	}()
 
-	// Process validators using pre-created iterator
-	err = k.UnbondAllMatureValidatorsWithIterator(ctx, validatorIterator.(store.Iterator))
+	if len(errors) > 0 {
+		return nil, fmt.Errorf("iterator creation errors: %v", errors)
+	}
+
+
+	err = k.UnbondAllMatureValidators(ctx, validatorIterator)
 	if err != nil {
 		return nil, err
 	}
 
-	// Remove all mature unbonding delegations from the ubd queue using pre-created iterator
-	ubdStartTime := time.Now()
-	logger.Info("📋 Dequeuing mature unbonding delegations with pre-created iterator", "timestamp", ubdStartTime.Format(time.RFC3339Nano))
 
-	matureUnbonds, err := k.DequeueAllMatureUBDQueueWithIterator(ctx, ubdIterator.(store.Iterator))
+	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, ubdIterator)
 	if err != nil {
 		return nil, err
 	}
-
-	ubdDequeueTime := time.Since(ubdStartTime)
-	logger.Info("📋 Mature unbonding delegations DEQUEUED", "count", len(matureUnbonds), "duration_ms", ubdDequeueTime.Milliseconds())
-
-	ubdProcessStartTime := time.Now()
-	ubdProcessedCount := 0
-	logger.Info("🔄 Processing unbonding delegations", "count", len(matureUnbonds))
 
 	for _, dvPair := range matureUnbonds {
-		ubdProcessedCount++
 		addr, err := k.validatorAddressCodec.StringToBytes(dvPair.ValidatorAddress)
 		if err != nil {
 			return nil, err
@@ -129,37 +88,14 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		)
 	}
 
-	ubdProcessDuration := time.Since(ubdProcessStartTime)
-	logger.Info("🔄 Unbonding delegations processing COMPLETED",
-		"processed_count", ubdProcessedCount,
-		"duration_ms", ubdProcessDuration.Milliseconds(),
-		"duration_us", ubdProcessDuration.Microseconds())
 
-	if ubdProcessDuration > 20*time.Millisecond {
-		logger.Warn("⚠️  SLOW unbonding delegation processing",
-			"processed_count", ubdProcessedCount,
-			"duration_ms", ubdProcessDuration.Milliseconds(),
-			"avg_us_per_delegation", ubdProcessDuration.Microseconds()/int64(ubdProcessedCount))
-	}
 
-	// Remove all mature redelegations from the red queue using pre-created iterator
-	redStartTime := time.Now()
-	logger.Info("📋 Dequeuing mature redelegations with pre-created iterator", "timestamp", redStartTime.Format(time.RFC3339Nano))
-
-	matureRedelegations, err := k.DequeueAllMatureRedelegationQueueWithIterator(ctx, redelegationIterator.(storetypes.Iterator))
+	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, redelegationIterator)
 	if err != nil {
 		return nil, err
 	}
 
-	redDequeueTime := time.Since(redStartTime)
-	logger.Info("📋 Mature redelegations DEQUEUED", "count", len(matureRedelegations), "duration_ms", redDequeueTime.Milliseconds())
-
-	redProcessStartTime := time.Now()
-	redProcessedCount := 0
-	logger.Info("🔄 Processing redelegations", "count", len(matureRedelegations))
-
 	for _, dvvTriplet := range matureRedelegations {
-		redProcessedCount++
 		valSrcAddr, err := k.validatorAddressCodec.StringToBytes(dvvTriplet.ValidatorSrcAddress)
 		if err != nil {
 			return nil, err
@@ -194,22 +130,8 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		)
 	}
 
-	redProcessDuration := time.Since(redProcessStartTime)
-	logger.Info("🔄 Redelegations processing COMPLETED",
-		"processed_count", redProcessedCount,
-		"duration_ms", redProcessDuration.Milliseconds(),
-		"duration_us", redProcessDuration.Microseconds())
-
-	if redProcessDuration > 20*time.Millisecond {
-		logger.Warn("⚠️  SLOW redelegation processing",
-			"processed_count", redProcessedCount,
-			"duration_ms", redProcessDuration.Milliseconds(),
-			"avg_us_per_redelegation", redProcessDuration.Microseconds()/int64(redProcessedCount))
-	}
-
 	k.SetQueueLastProcessedTimestamp(blockTime)
 
-	logger.Info("🔍 QueueLastProcessedState", "timestamp", k.GetQueueLastProcessedState().Timestamp, "height", k.GetQueueLastProcessedState().Height)
 	return validatorUpdates, nil
 }
 
@@ -860,52 +782,45 @@ func sortNoLongerBonded(last validatorsByAddr, ac address.Codec) ([][]byte, erro
 	return noLongerBonded, nil
 }
 
-// IteratorResult holds the result of an iterator fetch operation
 type IteratorResult struct {
-	Iterator interface{}
+	Iterator store.Iterator
 	Error    error
 }
 
-// fetchIteratorsInParallel fetches all three iterators concurrently using goroutines
-func (k *Keeper) fetchIteratorsInParallel(ctx context.Context, blockTime time.Time, blockHeight int64) (
-	validatorIterator interface{},
-	ubdIterator interface{},
-	redelegationIterator interface{},
+// fetchIterators fetches all three cpu consuming iterators concurrently
+func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHeight int64) (
+	validatorIterator store.Iterator,
+	ubdIterator store.Iterator,
+	redelegationIterator store.Iterator,
 	errors []error,
 ) {
-	logger := k.Logger(ctx)
-	startTime := time.Now()
-	logger.Info("🚀 Starting parallel iterator fetching", "timestamp", startTime.Format(time.RFC3339Nano))
-
-	// Create channels to receive results
 	validatorChan := make(chan IteratorResult, 1)
 	ubdChan := make(chan IteratorResult, 1)
 	redelegationChan := make(chan IteratorResult, 1)
 
-	// Fetch ValidatorQueueIterator in parallel
+	lastProcessedState := k.GetQueueLastProcessedState()
+	startTime := lastProcessedState.Timestamp
+	startHeight := lastProcessedState.Height
+
 	go func() {
-		iterator, err := k.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+		iterator, err := k.ValidatorQueueIterator(ctx, startTime, int64(startHeight), blockTime, blockHeight)
 		validatorChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
-	// Fetch UBDQueueIterator in parallel
 	go func() {
-		iterator, err := k.UBDQueueIterator(ctx, blockTime)
+		iterator, err := k.UBDQueueIterator(ctx, startTime, blockTime)
 		ubdChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
-	// Fetch RedelegationQueueIterator in parallel
 	go func() {
-		iterator, err := k.RedelegationQueueIterator(ctx, blockTime)
+		iterator, err := k.RedelegationQueueIterator(ctx, startTime, blockTime)
 		redelegationChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
-	// Collect results directly from channels
 	validatorResult := <-validatorChan
 	ubdResult := <-ubdChan
 	redelegationResult := <-redelegationChan
 
-	// Collect all errors
 	var allErrors []error
 	if validatorResult.Error != nil {
 		allErrors = append(allErrors, fmt.Errorf("failed to fetch validator iterator: %w", validatorResult.Error))
@@ -916,11 +831,6 @@ func (k *Keeper) fetchIteratorsInParallel(ctx context.Context, blockTime time.Ti
 	if redelegationResult.Error != nil {
 		allErrors = append(allErrors, fmt.Errorf("failed to fetch redelegation iterator: %w", redelegationResult.Error))
 	}
-
-	duration := time.Since(startTime)
-	logger.Info("🚀 Parallel iterator fetching completed",
-		"duration_ms", duration.Milliseconds(),
-		"duration_us", duration.Microseconds())
 
 	return validatorResult.Iterator, ubdResult.Iterator, redelegationResult.Iterator, allErrors
 }

@@ -66,7 +66,7 @@ func (s *KeeperTestSuite) SetupTest() {
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		address.NewBech32Codec("cosmosvaloper"),
 		address.NewBech32Codec("cosmosvalcons"),
-		// stakingtypes.QueueLastProcessedState{},
+		stakingtypes.QueueLastProcessedState{},
 	)
 	require.NoError(keeper.SetParams(ctx, stakingtypes.DefaultParams()))
 
