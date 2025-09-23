@@ -808,5 +808,7 @@ func (k *Keeper) UnbondAllMatureValidatorsWithIterator(ctx context.Context, iter
 			"duration_us", loopDuration.Microseconds())
 	}
 
+	k.SetQueueLastProcessedHeight(uint64(lowestHeight))
+
 	return nil
 }
