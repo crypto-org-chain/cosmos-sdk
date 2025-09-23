@@ -538,7 +538,7 @@ func (k *Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, 
 	logger := k.Logger(ctx)
 
 	lastProcessedState := k.GetQueueLastProcessedState()
-	logger.Info("🔍 ValidatorQueueIterator lastProcessedState", lastProcessedState)
+	logger.Info("🔍 ValidatorQueueIterator lastProcessedState", lastProcessedState.Height, lastProcessedState.Timestamp)
 
 	startKey := types.GetValidatorQueueKey(lastProcessedState.Timestamp, int64(lastProcessedState.Height))
 
