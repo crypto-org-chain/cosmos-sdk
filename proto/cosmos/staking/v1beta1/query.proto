@@ -129,12 +129,6 @@ service Query {
     option (cosmos.query.v1.module_query_safe) = true;
     option (google.api.http).get               = "/cosmos/staking/v1beta1/params";
   }
-
-  // ValidatorQueue queries the validator unbonding queue for debugging.
-  rpc ValidatorQueue(QueryValidatorQueueRequest) returns (QueryValidatorQueueResponse) {
-    option (cosmos.query.v1.module_query_safe) = true;
-    option (google.api.http).get               = "/cosmos/staking/v1beta1/validator_queue";
-  }
 }
 
 // QueryValidatorsRequest is request type for Query/Validators RPC method.
@@ -391,37 +385,4 @@ message QueryParamsRequest {}
 message QueryParamsResponse {
   // params holds all the parameters of this module.
   Params params = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
-}
-
-// QueryValidatorQueueRequest is request type for Query/ValidatorQueue RPC method.
-message QueryValidatorQueueRequest {
-  // pagination defines an optional pagination for the request.
-  cosmos.base.query.v1beta1.PageRequest pagination = 1;
-}
-
-// ValidatorQueueEntry represents a single entry in the validator queue
-message ValidatorQueueEntry {
-  // unbonding_time is when these validators will finish unbonding
-  google.protobuf.Timestamp unbonding_time = 1 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
-
-  // unbonding_height is the block height when unbonding completes
-  int64 unbonding_height = 2;
-
-  // validator_addresses are the validators that unbond at this time/height
-  repeated string validator_addresses = 3;
-}
-
-// QueryValidatorQueueResponse is response type for the Query/ValidatorQueue RPC method.
-message QueryValidatorQueueResponse {
-  // entries contains the validator queue entries
-  repeated ValidatorQueueEntry entries = 1 [(gogoproto.nullable) = false];
-
-  // pagination defines the pagination in the response.
-  cosmos.base.query.v1beta1.PageResponse pagination = 2;
-
-  // total_count is the total number of entries in the queue
-  uint64 total_count = 3;
-
-  // total_validators is the total number of validators across all entries
-  uint64 total_validators = 4;
 }
