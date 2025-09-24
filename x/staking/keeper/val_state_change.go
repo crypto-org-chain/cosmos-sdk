@@ -148,24 +148,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 // at the previous block height or were removed from the validator set entirely
 // are returned to CometBFT.
 func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates []abci.ValidatorUpdate, err error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
 
-	logger.Info("🔵 ApplyAndReturnValidatorSetUpdates STARTED", "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔵 ApplyAndReturnValidatorSetUpdates COMPLETED",
-			"updates_count", len(updates),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 200*time.Millisecond {
-			logger.Warn("⚠️  SLOW ApplyAndReturnValidatorSetUpdates detected",
-				"updates_count", len(updates),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	params, err := k.GetParams(ctx)
 	if err != nil {
 		return nil, err
@@ -178,20 +161,10 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 	// Retrieve the last validator set.
 	// The persistent set is updated later in this function.
 	// (see LastValidatorPowerKey).
-	getLastStartTime := time.Now()
-	logger.Info("🔍 Retrieving last validator set", "timestamp", getLastStartTime.Format(time.RFC3339Nano))
-
 	last, err := k.getLastValidatorsByAddr(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	getLastDuration := time.Since(getLastStartTime)
-	logger.Info("🔍 Last validator set RETRIEVED", "count", len(last), "duration_ms", getLastDuration.Milliseconds())
-
-	// Iterate over validators, highest power to lowest.
-	iteratorStartTime := time.Now()
-	logger.Info("🔄 Creating validators power iterator", "timestamp", iteratorStartTime.Format(time.RFC3339Nano))
 
 	iterator, err := k.ValidatorsPowerStoreIterator(ctx)
 	if err != nil {
@@ -199,15 +172,7 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 	}
 	defer iterator.Close()
 
-	iteratorCreateDuration := time.Since(iteratorStartTime)
-	logger.Info("🔄 Validators power iterator CREATED", "duration_ms", iteratorCreateDuration.Milliseconds())
-
-	loopStartTime := time.Now()
-	validatorCount := 0
-	logger.Info("🔄 Starting validator power iteration", "max_validators", maxValidators)
-
 	for count := 0; iterator.Valid() && count < int(maxValidators); iterator.Next() {
-		validatorCount++
 		// everything that is iterated in this loop is becoming or already a
 		// part of the bonded validator set
 		valAddr := sdk.ValAddress(iterator.Value())
@@ -263,42 +228,12 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 		totalPower = totalPower.AddRaw(newPower)
 	}
 
-	loopDuration := time.Since(loopStartTime)
-	logger.Info("🔄 Validator power iteration COMPLETED",
-		"validators_processed", validatorCount,
-		"duration_ms", loopDuration.Milliseconds(),
-		"duration_us", loopDuration.Microseconds(),
-		"avg_us_per_validator", func() int64 {
-			if validatorCount > 0 {
-				return loopDuration.Microseconds() / int64(validatorCount)
-			}
-			return 0
-		}())
-
-	if loopDuration > 50*time.Millisecond && validatorCount > 0 {
-		logger.Warn("⚠️  SLOW validator power iteration",
-			"validators", validatorCount,
-			"duration_ms", loopDuration.Milliseconds(),
-			"avg_us_per_validator", loopDuration.Microseconds()/int64(validatorCount))
-	}
-
-	sortStartTime := time.Now()
-	logger.Info("🔍 Sorting no longer bonded validators", "count", len(last))
-
 	noLongerBonded, err := sortNoLongerBonded(last, k.validatorAddressCodec)
 	if err != nil {
 		return nil, err
 	}
 
-	sortDuration := time.Since(sortStartTime)
-	logger.Info("🔍 No longer bonded validators SORTED", "count", len(noLongerBonded), "duration_ms", sortDuration.Milliseconds())
-
-	unbondingStartTime := time.Now()
-	unbondingCount := 0
-	logger.Info("🔄 Starting unbonding of no longer bonded validators")
-
 	for _, valAddrBytes := range noLongerBonded {
-		unbondingCount++
 		validator := k.mustGetValidator(ctx, sdk.ValAddress(valAddrBytes))
 		validator, err = k.bondedToUnbonding(ctx, validator)
 		if err != nil {
@@ -314,17 +249,6 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 		}
 
 		updates = append(updates, validator.ABCIValidatorUpdateZero())
-	}
-
-	unbondingDuration := time.Since(unbondingStartTime)
-	logger.Info("🔄 Unbonding of no longer bonded validators COMPLETED",
-		"validators_unbonded", unbondingCount,
-		"duration_ms", unbondingDuration.Milliseconds())
-
-	if unbondingDuration > 20*time.Millisecond {
-		logger.Warn("⚠️  SLOW validator unbonding",
-			"validators", unbondingCount,
-			"duration_ms", unbondingDuration.Milliseconds())
 	}
 
 	// Update the pools based on the recent updates in the validator set:
@@ -364,24 +288,6 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 // Validator state transitions
 
 func (k Keeper) bondedToUnbonding(ctx context.Context, validator types.Validator) (types.Validator, error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔄 bondedToUnbonding STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔄 bondedToUnbonding COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 10*time.Millisecond {
-			logger.Warn("⚠️  SLOW bondedToUnbonding detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	if !validator.IsBonded() {
 		panic(fmt.Sprintf("bad state transition bondedToUnbonding, validator: %v\n", validator))
 	}
@@ -390,24 +296,6 @@ func (k Keeper) bondedToUnbonding(ctx context.Context, validator types.Validator
 }
 
 func (k Keeper) unbondingToBonded(ctx context.Context, validator types.Validator) (types.Validator, error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔄 unbondingToBonded STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔄 unbondingToBonded COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 10*time.Millisecond {
-			logger.Warn("⚠️  SLOW unbondingToBonded detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	if !validator.IsUnbonding() {
 		panic(fmt.Sprintf("bad state transition unbondingToBonded, validator: %v\n", validator))
 	}
@@ -416,24 +304,6 @@ func (k Keeper) unbondingToBonded(ctx context.Context, validator types.Validator
 }
 
 func (k Keeper) unbondedToBonded(ctx context.Context, validator types.Validator) (types.Validator, error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔄 unbondedToBonded STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔄 unbondedToBonded COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 10*time.Millisecond {
-			logger.Warn("⚠️  SLOW unbondedToBonded detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	if !validator.IsUnbonded() {
 		panic(fmt.Sprintf("bad state transition unbondedToBonded, validator: %v\n", validator))
 	}
@@ -443,24 +313,6 @@ func (k Keeper) unbondedToBonded(ctx context.Context, validator types.Validator)
 
 // UnbondingToUnbonded switches a validator from unbonding state to unbonded state
 func (k Keeper) UnbondingToUnbonded(ctx context.Context, validator types.Validator) (types.Validator, error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔄 UnbondingToUnbonded STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔄 UnbondingToUnbonded COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 10*time.Millisecond {
-			logger.Warn("⚠️  SLOW UnbondingToUnbonded detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	if !validator.IsUnbonding() {
 		return types.Validator{}, fmt.Errorf("bad state transition unbondingToUnbonded, validator: %v", validator)
 	}
@@ -470,24 +322,6 @@ func (k Keeper) UnbondingToUnbonded(ctx context.Context, validator types.Validat
 
 // send a validator to jail
 func (k Keeper) jailValidator(ctx context.Context, validator types.Validator) error {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔒 jailValidator STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔒 jailValidator COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 20*time.Millisecond {
-			logger.Warn("⚠️  SLOW jailValidator detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	if validator.Jailed {
 		return types.ErrValidatorJailed.Wrapf("cannot jail already jailed validator, validator: %v", validator)
 	}
@@ -502,24 +336,6 @@ func (k Keeper) jailValidator(ctx context.Context, validator types.Validator) er
 
 // remove a validator from jail
 func (k Keeper) unjailValidator(ctx context.Context, validator types.Validator) error {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔓 unjailValidator STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔓 unjailValidator COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 20*time.Millisecond {
-			logger.Warn("⚠️  SLOW unjailValidator detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	if !validator.Jailed {
 		return fmt.Errorf("cannot unjail already unjailed validator, validator: %v", validator)
 	}
@@ -534,24 +350,6 @@ func (k Keeper) unjailValidator(ctx context.Context, validator types.Validator) 
 
 // perform all the store operations for when a validator status becomes bonded
 func (k Keeper) bondValidator(ctx context.Context, validator types.Validator) (types.Validator, error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔗 bondValidator STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔗 bondValidator COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 30*time.Millisecond {
-			logger.Warn("⚠️  SLOW bondValidator detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	// delete the validator by power index, as the key will change
 	if err := k.DeleteValidatorByPowerIndex(ctx, validator); err != nil {
 		return validator, err
@@ -593,45 +391,15 @@ func (k Keeper) bondValidator(ctx context.Context, validator types.Validator) (t
 
 // BeginUnbondingValidator performs all the store operations for when a validator begins unbonding
 func (k Keeper) BeginUnbondingValidator(ctx context.Context, validator types.Validator) (types.Validator, error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔗 BeginUnbondingValidator STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔗 BeginUnbondingValidator COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 50*time.Millisecond {
-			logger.Warn("⚠️  SLOW BeginUnbondingValidator detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
-	paramsStartTime := time.Now()
-	logger.Info("🔍 Getting unbonding parameters")
-
 	params, err := k.GetParams(ctx)
 	if err != nil {
 		return validator, err
 	}
 
-	paramsDuration := time.Since(paramsStartTime)
-	logger.Info("🔍 Parameters retrieved", "unbonding_time", params.UnbondingTime, "duration_ms", paramsDuration.Milliseconds())
-
 	// delete the validator by power index, as the key will change
-	deleteStartTime := time.Now()
-	logger.Info("🗑️ Deleting validator by power index")
-
 	if err = k.DeleteValidatorByPowerIndex(ctx, validator); err != nil {
 		return validator, err
 	}
-
-	deleteDuration := time.Since(deleteStartTime)
-	logger.Info("🗑️ Validator deleted by power index", "duration_ms", deleteDuration.Milliseconds())
 
 	// sanity check
 	if validator.Status != types.Bonded {
@@ -662,20 +430,11 @@ func (k Keeper) BeginUnbondingValidator(ctx context.Context, validator types.Val
 	}
 
 	// Adds to unbonding validator queue
-	queueStartTime := time.Now()
-	logger.Info("📋 Adding to unbonding validator queue")
-
 	if err = k.InsertUnbondingValidatorQueue(ctx, validator); err != nil {
 		return validator, err
 	}
 
-	queueDuration := time.Since(queueStartTime)
-	logger.Info("📋 Added to unbonding validator queue", "duration_ms", queueDuration.Milliseconds())
-
 	// trigger hook
-	hookStartTime := time.Now()
-	logger.Info("🪝 Triggering unbonding hooks")
-
 	consAddr, err := validator.GetConsAddr()
 	if err != nil {
 		return validator, err
@@ -698,36 +457,11 @@ func (k Keeper) BeginUnbondingValidator(ctx context.Context, validator types.Val
 		return validator, err
 	}
 
-	hookDuration := time.Since(hookStartTime)
-	logger.Info("🪝 Unbonding hooks COMPLETED", "duration_ms", hookDuration.Milliseconds())
-
-	if hookDuration > 10*time.Millisecond {
-		logger.Warn("⚠️  SLOW unbonding hooks", "duration_ms", hookDuration.Milliseconds())
-	}
-
 	return validator, nil
 }
 
 // perform all the store operations for when a validator status becomes unbonded
 func (k Keeper) completeUnbondingValidator(ctx context.Context, validator types.Validator) (types.Validator, error) {
-	startTime := time.Now()
-	logger := k.Logger(ctx)
-
-	logger.Info("🔗 completeUnbondingValidator STARTED", "validator", validator.GetOperator(), "timestamp", startTime.Format(time.RFC3339Nano))
-
-	defer func() {
-		duration := time.Since(startTime)
-		logger.Info("🔗 completeUnbondingValidator COMPLETED",
-			"validator", validator.GetOperator(),
-			"duration_ms", duration.Milliseconds(),
-			"duration_us", duration.Microseconds())
-
-		if duration > 20*time.Millisecond {
-			logger.Warn("⚠️  SLOW completeUnbondingValidator detected",
-				"validator", validator.GetOperator(),
-				"duration_ms", duration.Milliseconds())
-		}
-	}()
 	validator = validator.UpdateStatus(types.Unbonded)
 	if err := k.SetValidator(ctx, validator); err != nil {
 		return validator, err
