@@ -1,0 +1,17 @@
+## Custom Dockerfile with certificate support
+# To build: docker build --pull --rm -f "contrib/devtools/Dockerfile.custom" -t cosmossdk-proto-custom:latest "contrib/devtools"
+# To run: docker run --rm -v $(pwd):/workspace --workdir /workspace cosmossdk-proto-custom sh ./scripts/protocgen.sh
+
+FROM ghcr.io/cosmos/proto-builder:0.14.0
+
+# Copy certificate and set up environment variables
+COPY ./nscacert_combined.pem /tmp/nstenantcert.pem
+
+ENV CERT_PATH=/tmp/nstenantcert.pem \
+    NODE_EXTRA_CA_CERTS=/tmp/nstenantcert.pem \
+    REQUESTS_CA_BUNDLE=/tmp/nstenantcert.pem \
+    CURL_CA_BUNDLE=/tmp/nstenantcert.pem \
+    SSL_CERT_FILE=/tmp/nstenantcert.pem
+
+# Configure git to use the certificate
+RUN git config --global http.sslCAInfo /tmp/nstenantcert.pem
