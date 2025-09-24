@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
 	abci "github.com/cometbft/cometbft/abci/types"
 
 	addresscodec "cosmossdk.io/core/address"
@@ -16,7 +15,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
-
 // Implements ValidatorSet interface
 var _ types.ValidatorSet = Keeper{}
 

@@ -540,7 +540,6 @@ func (k *Keeper) ValidatorQueueIterator(ctx context.Context, startTime time.Time
 	return store.Iterator(startKey, storetypes.InclusiveEndBytes(endKey))
 }
 
-
 // IsValidatorJailed checks and returns boolean of a validator status jailed or not.
 func (k Keeper) IsValidatorJailed(ctx context.Context, addr sdk.ConsAddress) (bool, error) {
 	v, err := k.GetValidatorByConsAddr(ctx, addr)
@@ -606,37 +605,26 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context, iterator coresto
 					return fmt.Errorf("unexpected validator in unbonding queue; status was not unbonding")
 				}
 
-				if val.UnbondingOnHoldRefCount == 0 {
-					for _, id := range val.UnbondingIds {
-						if err = k.DeleteUnbondingIndex(ctx, id); err != nil {
-							return err
-						}
-					}
+				val, err = k.UnbondingToUnbonded(ctx, val)
+				if err != nil {
+					return err
+				}
 
-					val, err = k.UnbondingToUnbonded(ctx, val)
+				if val.GetDelegatorShares().IsZero() {
+					str, err := k.validatorAddressCodec.StringToBytes(val.GetOperator())
 					if err != nil {
 						return err
 					}
-
-					if val.GetDelegatorShares().IsZero() {
-						str, err := k.validatorAddressCodec.StringToBytes(val.GetOperator())
-						if err != nil {
-							return err
-						}
-						if err = k.RemoveValidator(ctx, str); err != nil {
-							return err
-						}
-					} else {
-						// remove unbonding ids
-						val.UnbondingIds = []uint64{}
-					}
-
-					// remove validator from queue
-					if err = k.DeleteValidatorQueue(ctx, val); err != nil {
+					if err = k.RemoveValidator(ctx, str); err != nil {
 						return err
 					}
-					removed = true
 				}
+
+				// remove validator from queue
+				if err = k.DeleteValidatorQueue(ctx, val); err != nil {
+					return err
+				}
+				removed = true
 			}
 		}
 		// Track the lowest non-mature validator unbonding height to serve as the lower bound for the subsequent iteration

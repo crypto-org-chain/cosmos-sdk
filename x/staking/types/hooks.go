@@ -107,12 +107,3 @@ func (h MultiStakingHooks) BeforeValidatorSlashed(ctx context.Context, valAddr s
 	}
 	return nil
 }
-
-func (h MultiStakingHooks) AfterUnbondingInitiated(ctx context.Context, id uint64) error {
-	for i := range h {
-		if err := h[i].AfterUnbondingInitiated(ctx, id); err != nil {
-			return err
-		}
-	}
-	return nil
-}
