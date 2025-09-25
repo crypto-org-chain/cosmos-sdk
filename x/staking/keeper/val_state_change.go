@@ -12,6 +12,7 @@ import (
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/core/store"
 	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -51,12 +52,10 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		return nil, fmt.Errorf("iterator creation errors: %v", errors)
 	}
 
-
 	err = k.UnbondAllMatureValidators(ctx, validatorIterator)
 	if err != nil {
 		return nil, err
 	}
-
 
 	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, ubdIterator)
 	if err != nil {
@@ -87,8 +86,6 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 			),
 		)
 	}
-
-
 
 	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, redelegationIterator)
 	if err != nil {
@@ -520,19 +517,27 @@ func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockH
 	lastProcessedState := k.GetQueueLastProcessedState()
 	startTime := lastProcessedState.Timestamp
 	startHeight := lastProcessedState.Height
+	
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+
+	// Create separate cached contexts for each goroutine to avoid gas meter race conditions
+	validatorCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+	ubdCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+	redelegationCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 
 	go func() {
-		iterator, err := k.ValidatorQueueIterator(ctx, startTime, startHeight, blockTime, blockHeight)
+		iterator, err := k.ValidatorQueueIterator(validatorCtx.Context(), startTime, startHeight, blockTime, blockHeight)
 		validatorChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
 	go func() {
-		iterator, err := k.UBDQueueIterator(ctx, startTime, blockTime)
+		iterator, err := k.UBDQueueIterator(ubdCtx.Context(), startTime, blockTime)
 		ubdChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
 	go func() {
-		iterator, err := k.RedelegationQueueIterator(ctx, startTime, blockTime)
+		iterator, err := k.RedelegationQueueIterator(redelegationCtx.Context(), startTime, blockTime)
 		redelegationChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
@@ -550,6 +555,10 @@ func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockH
 	if redelegationResult.Error != nil {
 		allErrors = append(allErrors, fmt.Errorf("failed to fetch redelegation iterator: %w", redelegationResult.Error))
 	}
+
+	sdkCtx.GasMeter().ConsumeGas(validatorCtx.GasMeter().GasConsumed(), "fetchIterators")
+	sdkCtx.GasMeter().ConsumeGas(ubdCtx.GasMeter().GasConsumed(), "fetchIterators")
+	sdkCtx.GasMeter().ConsumeGas(redelegationCtx.GasMeter().GasConsumed(), "fetchIterators")
 
 	return validatorResult.Iterator, ubdResult.Iterator, redelegationResult.Iterator, allErrors
 }
