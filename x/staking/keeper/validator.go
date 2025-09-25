@@ -633,7 +633,7 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context, iterator coresto
 		}
 	}
 
-	k.SetQueueLastProcessedHeight(uint64(lowestHeight))
+	k.SetQueueLastProcessedHeight(lowestHeight)
 
 	return nil
 }

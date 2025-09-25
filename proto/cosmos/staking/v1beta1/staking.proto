@@ -392,14 +392,3 @@ enum Infraction {
 message ValidatorUpdates {
   repeated tendermint.abci.ValidatorUpdate updates = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
 }
-
-// QueueLastProcessedState tracks the last processed position in the validator unbonding queue.
-// This state is used to optimize EndBlocker unbonding iterations by avoiding redundant
-// traversal of already-processed queue entries, significantly reducing iteration time.
-message QueueLastProcessedState {
-  // height defines the queue last processed height.
-  uint64 height = 1;
-  // timestamp defines the queue last processed timestamp.
-  google.protobuf.Timestamp timestamp = 2
-      [(gogoproto.nullable) = false, (amino.dont_omitempty) = true, (gogoproto.stdtime) = true];
-}

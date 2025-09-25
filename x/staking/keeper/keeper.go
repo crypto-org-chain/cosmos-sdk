@@ -21,6 +21,16 @@ var _ types.ValidatorSet = Keeper{}
 // Implements DelegationSet interface
 var _ types.DelegationSet = Keeper{}
 
+// QueueLastProcessedState tracks the last processed position in the validator unbonding queue.
+// This state is used to optimize EndBlocker unbonding iterations by avoiding redundant
+// traversal of already-processed queue entries, significantly reducing iteration time.
+type QueueLastProcessedState struct {
+	// height defines the queue last processed height.
+	Height int64 
+	// timestamp defines the queue last processed timestamp.
+	Timestamp time.Time
+}
+
 // Keeper of the x/staking store
 type Keeper struct {
 	storeService            storetypes.KVStoreService
@@ -31,7 +41,7 @@ type Keeper struct {
 	authority               string
 	validatorAddressCodec   addresscodec.Codec
 	consensusAddressCodec   addresscodec.Codec
-	queueLastProcessedState types.QueueLastProcessedState
+	queueLastProcessedState QueueLastProcessedState
 }
 
 // NewKeeper creates a new staking Keeper instance
@@ -43,7 +53,7 @@ func NewKeeper(
 	authority string,
 	validatorAddressCodec addresscodec.Codec,
 	consensusAddressCodec addresscodec.Codec,
-	queueLastProcessedState types.QueueLastProcessedState,
+	queueLastProcessedState QueueLastProcessedState,
 ) *Keeper {
 	// ensure bonded and not bonded module accounts are set
 	if addr := ak.GetModuleAddress(types.BondedPoolName); addr == nil {
@@ -176,7 +186,7 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 }
 
 // GetQueueLastProcessedState retrieves the last processed state of the queue from memory.
-func (k Keeper) GetQueueLastProcessedState() types.QueueLastProcessedState {
+func (k Keeper) GetQueueLastProcessedState() QueueLastProcessedState {
 	return k.queueLastProcessedState
 }
 
@@ -184,6 +194,6 @@ func (k *Keeper) SetQueueLastProcessedTimestamp(timestamp time.Time) {
 	k.queueLastProcessedState.Timestamp = timestamp
 }
 
-func (k *Keeper) SetQueueLastProcessedHeight(height uint64) {
+func (k *Keeper) SetQueueLastProcessedHeight(height int64) {
 	k.queueLastProcessedState.Height = height
 }

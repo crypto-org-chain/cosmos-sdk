@@ -522,7 +522,7 @@ func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockH
 	startHeight := lastProcessedState.Height
 
 	go func() {
-		iterator, err := k.ValidatorQueueIterator(ctx, startTime, int64(startHeight), blockTime, blockHeight)
+		iterator, err := k.ValidatorQueueIterator(ctx, startTime, startHeight, blockTime, blockHeight)
 		validatorChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
