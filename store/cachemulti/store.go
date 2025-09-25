@@ -36,8 +36,8 @@ var _ types.CacheMultiStore = Store{}
 // CacheWrapper objects and a KVStore as the database. Each CacheWrapper store
 // is a branched store.
 func NewFromKVStore(
-	stores map[types.StoreKey]types.CacheWrapper,
-	traceWriter io.Writer, traceContext types.TraceContext,
+	store types.KVStore, stores map[types.StoreKey]types.CacheWrapper,
+	keys map[string]types.StoreKey, traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
 	cms := Store{
 		stores:       make(map[types.StoreKey]types.CacheWrap, len(stores)),
@@ -58,7 +58,7 @@ func NewStore(
 	stores map[types.StoreKey]types.CacheWrapper,
 	traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
-	return NewFromKVStore(stores, traceWriter, traceContext)
+	return NewFromKVStore(nil, stores, nil, traceWriter, traceContext)
 }
 
 // NewFromParent constructs a cache multistore with a parent store lazily,
