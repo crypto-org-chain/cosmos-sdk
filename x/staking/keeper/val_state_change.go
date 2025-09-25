@@ -517,7 +517,6 @@ func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockH
 	lastProcessedState := k.GetQueueLastProcessedState()
 	startTime := lastProcessedState.Timestamp
 	startHeight := lastProcessedState.Height
-	
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
@@ -527,17 +526,17 @@ func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockH
 	redelegationCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 
 	go func() {
-		iterator, err := k.ValidatorQueueIterator(validatorCtx.Context(), startTime, startHeight, blockTime, blockHeight)
+		iterator, err := k.ValidatorQueueIterator(validatorCtx, startTime, startHeight, blockTime, blockHeight)
 		validatorChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
 	go func() {
-		iterator, err := k.UBDQueueIterator(ubdCtx.Context(), startTime, blockTime)
+		iterator, err := k.UBDQueueIterator(ubdCtx, startTime, blockTime)
 		ubdChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
 	go func() {
-		iterator, err := k.RedelegationQueueIterator(redelegationCtx.Context(), startTime, blockTime)
+		iterator, err := k.RedelegationQueueIterator(redelegationCtx, startTime, blockTime)
 		redelegationChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
