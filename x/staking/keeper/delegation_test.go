@@ -575,7 +575,7 @@ func (s *KeeperTestSuite) TestUndelegateFromUnbondedValidator() {
 	// unbond the validator
 	ctx = ctx.WithBlockTime(validator.UnbondingTime)
 	lastProcessedState := keeper.GetQueueLastProcessedState()
-	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, lastProcessedState.Height, ctx.BlockTime(), ctx.BlockHeight())
 	require.NoError(err)
 	err = keeper.UnbondAllMatureValidators(ctx, iterator)
 	require.NoError(err)
@@ -662,7 +662,7 @@ func (s *KeeperTestSuite) TestUnbondingAllDelegationFromValidator() {
 	// unbond the validator
 	ctx = ctx.WithBlockTime(validator.UnbondingTime)
 	lastProcessedState := keeper.GetQueueLastProcessedState()
-	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, lastProcessedState.Height, ctx.BlockTime(), ctx.BlockHeight())
 	require.NoError(err)
 	err = keeper.UnbondAllMatureValidators(ctx, iterator)
 	require.NoError(err)

@@ -416,7 +416,7 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	// check unbonding mature validators
 	ctx = ctx.WithBlockHeight(endHeight).WithBlockTime(endTime)
 	lastProcessedState := keeper.GetQueueLastProcessedState()
-	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, lastProcessedState.Height, ctx.BlockTime(), ctx.BlockHeight())
 	require.NoError(err)
 	err = keeper.UnbondAllMatureValidators(ctx, iterator)
 	require.EqualError(err, "validator in the unbonding queue was not found: validator does not exist")
@@ -425,7 +425,7 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	ctx = ctx.WithBlockHeight(endHeight).WithBlockTime(endTime)
 
 	lastProcessedState = keeper.GetQueueLastProcessedState()
-	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, lastProcessedState.Height, ctx.BlockTime(), ctx.BlockHeight())
 	require.NoError(err)
 	err = keeper.UnbondAllMatureValidators(ctx, iterator)
 	require.EqualError(err, "unexpected validator in unbonding queue; status was not unbonding")
@@ -433,7 +433,7 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	validator.Status = stakingtypes.Unbonding
 	require.NoError(keeper.SetValidator(ctx, validator))
 	lastProcessedState = keeper.GetQueueLastProcessedState()
-	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, lastProcessedState.Height, ctx.BlockTime(), ctx.BlockHeight())
 	require.NoError(err)
 	require.NoError(keeper.UnbondAllMatureValidators(ctx, iterator))
 	validator, err = keeper.GetValidator(ctx, valAddr)
@@ -445,7 +445,7 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	validator.Status = stakingtypes.Unbonding
 	require.NoError(keeper.SetValidator(ctx, validator))
 	lastProcessedState = keeper.GetQueueLastProcessedState()
-	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, int64(lastProcessedState.Height), ctx.BlockTime(), ctx.BlockHeight())
+	iterator, err = keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, lastProcessedState.Height, ctx.BlockTime(), ctx.BlockHeight())
 	require.NoError(err)
 	require.NoError(keeper.UnbondAllMatureValidators(ctx, iterator))
 	validator, err = keeper.GetValidator(ctx, valAddr)
