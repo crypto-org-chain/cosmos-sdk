@@ -40,6 +40,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (x/staking) [#22795](https://github.com/crypto-org-chain/cosmos-sdk/pull/1725) Optimize staking endblocker execution by retrieving iterators in parallel and reducing the range of iteration.
 * (x/staking) [#22795](https://github.com/cosmos/cosmos-sdk/pull/22795) `NewUnbondingDelegationEntry`, `NewUnbondingDelegation`, `AddEntry`, `NewRedelegationEntry`, `NewRedelegation` and `NewRedelegationEntryResponse` no longer take an ID in there function signatures.
 * (x/staking) [#22795](https://github.com/cosmos/cosmos-sdk/pull/22795) AfterUnbondingInitiated hook has been removed as it is no longer required by ICS.
 * (x/staking) [#22795](https://github.com/cosmos/cosmos-sdk/pull/22795) Keys `stakingtypes.UnbondingIDKey, stakingtypes.UnbondingIndexKey, stakingtypes.UnbondingTypeKey` have been removed as they are no longer required by ICS.
