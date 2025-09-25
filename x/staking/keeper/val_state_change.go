@@ -520,7 +520,7 @@ func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockH
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
-	// Create separate cached contexts for each goroutine to avoid gas meter race conditions
+	// Create separate gasMeters for each goroutine to avoid race conditions
 	validatorCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	ubdCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	redelegationCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -555,9 +555,10 @@ func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockH
 		allErrors = append(allErrors, fmt.Errorf("failed to fetch redelegation iterator: %w", redelegationResult.Error))
 	}
 
-	sdkCtx.GasMeter().ConsumeGas(validatorCtx.GasMeter().GasConsumed(), "fetchIterators")
-	sdkCtx.GasMeter().ConsumeGas(ubdCtx.GasMeter().GasConsumed(), "fetchIterators")
-	sdkCtx.GasMeter().ConsumeGas(redelegationCtx.GasMeter().GasConsumed(), "fetchIterators")
+	// Consume the gas used by each iterator
+	sdkCtx.GasMeter().ConsumeGas(validatorCtx.GasMeter().GasConsumed(), "fetchIterators - validator")
+	sdkCtx.GasMeter().ConsumeGas(ubdCtx.GasMeter().GasConsumed(), "fetchIterators - UBD")
+	sdkCtx.GasMeter().ConsumeGas(redelegationCtx.GasMeter().GasConsumed(), "fetchIterators - redelegation")
 
 	return validatorResult.Iterator, ubdResult.Iterator, redelegationResult.Iterator, allErrors
 }
