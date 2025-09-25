@@ -504,7 +504,7 @@ type IteratorResult struct {
 }
 
 // fetchIterators fetches all three cpu consuming iterators concurrently
-func (k *Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHeight int64) (
+func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHeight int64) (
 	validatorIterator store.Iterator,
 	ubdIterator store.Iterator,
 	redelegationIterator store.Iterator,

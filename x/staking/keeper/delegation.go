@@ -492,7 +492,7 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 }
 
 // UBDQueueIterator returns all the unbonding queue timeslices from time startTime until endTime.
-func (k *Keeper) UBDQueueIterator(ctx context.Context, startTime time.Time, endTime time.Time) (corestore.Iterator, error) {
+func (k Keeper) UBDQueueIterator(ctx context.Context, startTime time.Time, endTime time.Time) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
 
 	startKey := types.GetUnbondingDelegationTimeKey(startTime)
@@ -763,7 +763,7 @@ func (k Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelegat
 
 // RedelegationQueueIterator returns all the redelegation queue timeslices from
 // startTime until endTime.
-func (k *Keeper) RedelegationQueueIterator(ctx context.Context, startTime time.Time, endTime time.Time) (storetypes.Iterator, error) {
+func (k Keeper) RedelegationQueueIterator(ctx context.Context, startTime time.Time, endTime time.Time) (storetypes.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
 
 	startKey := types.GetRedelegationTimeKey(startTime)
@@ -1296,7 +1296,7 @@ func (k Keeper) ValidateUnbondAmount(
 
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
 // currTime, and deletes the timeslices from the queue.
-func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, iterator corestore.Iterator) (matureUnbonds []types.DVPair, err error) {
+func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, iterator corestore.Iterator) (matureUnbonds []types.DVPair, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
 	for ; iterator.Valid(); iterator.Next() {
@@ -1319,7 +1319,7 @@ func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, iterator corestor
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
 // timeslices inclusively previous to currTime, and deletes the timeslices from
 // the queue.
-func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, iterator corestore.Iterator) (matureRedelegations []types.DVVTriplet, err error) {
+func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, iterator corestore.Iterator) (matureRedelegations []types.DVVTriplet, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
 	for ; iterator.Valid(); iterator.Next() {
