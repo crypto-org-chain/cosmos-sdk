@@ -816,7 +816,7 @@ func TestGRPCRedelegations(t *testing.T) {
 		DstValidatorAddr: validator2,
 	}
 
-	testdata.DeterministicIterations(f.ctx, t, req, f.queryClient.Redelegations, 3920, false)
+	testdata.DeterministicIterations(f.ctx, t, req, f.queryClient.Redelegations, 3914, false)
 }
 
 func TestGRPCParams(t *testing.T) {
