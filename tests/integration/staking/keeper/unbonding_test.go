@@ -23,16 +23,6 @@ func SetupUnbondingTests(t *testing.T, f *fixture, hookCalled *bool, ubdeID *uin
 	mockCtrl := gomock.NewController(t)
 	mockStackingHooks := testutil.NewMockStakingHooks(mockCtrl)
 	mockStackingHooks.EXPECT().AfterDelegationModified(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStackingHooks.EXPECT().AfterUnbondingInitiated(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx sdk.Context, id uint64) error {
-		*hookCalled = true
-		// save id
-		*ubdeID = id
-		// call back to stop unbonding
-		err := f.stakingKeeper.PutUnbondingOnHold(f.sdkCtx, id)
-		assert.NilError(t, err)
-
-		return nil
-	}).AnyTimes()
 	mockStackingHooks.EXPECT().AfterValidatorBeginUnbonding(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockStackingHooks.EXPECT().AfterValidatorBonded(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockStackingHooks.EXPECT().AfterValidatorCreated(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -186,12 +176,10 @@ func TestValidatorUnbondingOnHold1(t *testing.T) {
 	completionTime := validator.UnbondingTime
 	completionHeight := validator.UnbondingHeight
 
-	// CONSUMER CHAIN'S UNBONDING PERIOD ENDS - STOPPED UNBONDING CAN NOW COMPLETE
-	err := f.stakingKeeper.UnbondingCanComplete(f.sdkCtx, ubdeID)
+	iterator, err := f.stakingKeeper.ValidatorQueueIterator(f.sdkCtx, completionTime, completionHeight, f.sdkCtx.BlockTime(), f.sdkCtx.BlockHeight())
 	assert.NilError(t, err)
-
 	// Try to unbond validator
-	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx))
+	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx, iterator))
 
 	// Check that validator unbonding is not complete (is not mature yet)
 	validator, found := f.stakingKeeper.GetValidator(f.sdkCtx, addrVals[0])
@@ -205,7 +193,9 @@ func TestValidatorUnbondingOnHold1(t *testing.T) {
 	// PROVIDER CHAIN'S UNBONDING PERIOD ENDS - BUT UNBONDING CANNOT COMPLETE
 	f.sdkCtx = f.sdkCtx.WithBlockTime(completionTime.Add(time.Duration(1)))
 	f.sdkCtx = f.sdkCtx.WithBlockHeight(completionHeight + 1)
-	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx))
+	iterator, err = f.stakingKeeper.ValidatorQueueIterator(f.sdkCtx, completionTime, completionHeight, f.sdkCtx.BlockTime(), f.sdkCtx.BlockHeight())
+	assert.NilError(t, err)
+	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx, iterator))
 
 	// Check that validator unbonding is complete
 	validator, found = f.stakingKeeper.GetValidator(f.sdkCtx, addrVals[0])
@@ -251,7 +241,9 @@ func TestValidatorUnbondingOnHold2(t *testing.T) {
 	// PROVIDER CHAIN'S UNBONDING PERIOD ENDS - BUT UNBONDING CANNOT COMPLETE
 	f.sdkCtx = f.sdkCtx.WithBlockTime(completionTime.Add(time.Duration(1)))
 	f.sdkCtx = f.sdkCtx.WithBlockHeight(completionHeight + 1)
-	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx))
+	iterator, err := f.stakingKeeper.ValidatorQueueIterator(f.sdkCtx, completionTime, completionHeight, f.sdkCtx.BlockTime(), f.sdkCtx.BlockHeight())
+	assert.NilError(t, err)
+	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx, iterator))
 
 	// Check that unbonding is not complete for both validators
 	validator1, found := f.stakingKeeper.GetValidator(f.sdkCtx, addrVals[0])
@@ -266,12 +258,10 @@ func TestValidatorUnbondingOnHold2(t *testing.T) {
 	assert.Equal(t, validator1.OperatorAddress, unbondingVals[0])
 	assert.Equal(t, validator2.OperatorAddress, unbondingVals[1])
 
-	// CONSUMER CHAIN'S UNBONDING PERIOD ENDS - STOPPED UNBONDING CAN NOW COMPLETE
-	err = f.stakingKeeper.UnbondingCanComplete(f.sdkCtx, ubdeIDs[0])
-	assert.NilError(t, err)
-
 	// Try again to unbond validators
-	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx))
+	iterator, err = f.stakingKeeper.ValidatorQueueIterator(f.sdkCtx, completionTime, completionHeight, f.sdkCtx.BlockTime(), f.sdkCtx.BlockHeight())
+	assert.NilError(t, err)
+	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx, iterator))
 
 	// Check that unbonding is complete for validator1, but not for validator2
 	validator1, found = f.stakingKeeper.GetValidator(f.sdkCtx, addrVals[0])
@@ -285,12 +275,11 @@ func TestValidatorUnbondingOnHold2(t *testing.T) {
 	assert.Equal(t, 1, len(unbondingVals))
 	assert.Equal(t, validator2.OperatorAddress, unbondingVals[0])
 
-	// Unbonding for validator2 can complete
-	err = f.stakingKeeper.UnbondingCanComplete(f.sdkCtx, ubdeIDs[1])
-	assert.NilError(t, err)
 
 	// Try again to unbond validators
-	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx))
+	iterator, err = f.stakingKeeper.ValidatorQueueIterator(f.sdkCtx, completionTime, completionHeight, f.sdkCtx.BlockTime(), f.sdkCtx.BlockHeight())
+	assert.NilError(t, err)
+	assert.NilError(t, f.stakingKeeper.UnbondAllMatureValidators(f.sdkCtx, iterator))
 
 	// Check that unbonding is complete for validator2
 	validator2, found = f.stakingKeeper.GetValidator(f.sdkCtx, addrVals[1])
@@ -314,9 +303,6 @@ func TestRedelegationOnHold1(t *testing.T) {
 	_, addrDels, addrVals := SetupUnbondingTests(t, f, &hookCalled, &ubdeID)
 	completionTime := doRedelegation(t, f.stakingKeeper, f.sdkCtx, addrDels, addrVals, &hookCalled)
 
-	// CONSUMER CHAIN'S UNBONDING PERIOD ENDS - BUT UNBONDING CANNOT COMPLETE
-	err := f.stakingKeeper.UnbondingCanComplete(f.sdkCtx, ubdeID)
-	assert.NilError(t, err)
 
 	// Redelegation is not complete - still exists
 	redelegations, err := f.stakingKeeper.GetRedelegationsFromSrcValidator(f.sdkCtx, addrVals[0])
@@ -357,10 +343,6 @@ func TestRedelegationOnHold2(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, 1, len(redelegations))
 
-	// CONSUMER CHAIN'S UNBONDING PERIOD ENDS - STOPPED UNBONDING CAN NOW COMPLETE
-	err = f.stakingKeeper.UnbondingCanComplete(f.sdkCtx, ubdeID)
-	assert.NilError(t, err)
-
 	// Redelegation is complete and record is gone
 	redelegations, err = f.stakingKeeper.GetRedelegationsFromSrcValidator(f.sdkCtx, addrVals[0])
 	assert.NilError(t, err)
@@ -380,10 +362,6 @@ func TestUnbondingDelegationOnHold1(t *testing.T) {
 	bondDenom, addrDels, addrVals := SetupUnbondingTests(t, f, &hookCalled, &ubdeID)
 	completionTime, bondedAmt1, notBondedAmt1 := doUnbondingDelegation(t, f.stakingKeeper, f.bankKeeper, f.sdkCtx, bondDenom, addrDels, addrVals, &hookCalled)
 
-	// CONSUMER CHAIN'S UNBONDING PERIOD ENDS - BUT UNBONDING CANNOT COMPLETE
-	err := f.stakingKeeper.UnbondingCanComplete(f.sdkCtx, ubdeID)
-	assert.NilError(t, err)
-
 	bondedAmt3 := f.bankKeeper.GetBalance(f.sdkCtx, f.stakingKeeper.GetBondedPool(f.sdkCtx).GetAddress(), bondDenom).Amount
 	notBondedAmt3 := f.bankKeeper.GetBalance(f.sdkCtx, f.stakingKeeper.GetNotBondedPool(f.sdkCtx).GetAddress(), bondDenom).Amount
 
@@ -392,10 +370,7 @@ func TestUnbondingDelegationOnHold1(t *testing.T) {
 	assert.Assert(math.IntEq(t, bondedAmt1, bondedAmt3))
 	assert.Assert(math.IntEq(t, notBondedAmt1, notBondedAmt3))
 
-	// PROVIDER CHAIN'S UNBONDING PERIOD ENDS - STOPPED UNBONDING CAN NOW COMPLETE
 	f.sdkCtx = f.sdkCtx.WithBlockTime(completionTime)
-	_, err = f.stakingKeeper.CompleteUnbonding(f.sdkCtx, addrDels[0], addrVals[0])
-	assert.NilError(t, err)
 
 	// Check that the unbonding was finally completed
 	bondedAmt5 := f.bankKeeper.GetBalance(f.sdkCtx, f.stakingKeeper.GetBondedPool(f.sdkCtx).GetAddress(), bondDenom).Amount
@@ -431,10 +406,6 @@ func TestUnbondingDelegationOnHold2(t *testing.T) {
 	// unbondingDelegation has not completed
 	assert.Assert(math.IntEq(t, bondedAmt1, bondedAmt3))
 	assert.Assert(math.IntEq(t, notBondedAmt1, notBondedAmt3))
-
-	// CONSUMER CHAIN'S UNBONDING PERIOD ENDS - STOPPED UNBONDING CAN NOW COMPLETE
-	err = f.stakingKeeper.UnbondingCanComplete(f.sdkCtx, ubdeID)
-	assert.NilError(t, err)
 
 	// Check that the unbonding was finally completed
 	bondedAmt5 := f.bankKeeper.GetBalance(f.sdkCtx, f.stakingKeeper.GetBondedPool(f.sdkCtx).GetAddress(), bondDenom).Amount
