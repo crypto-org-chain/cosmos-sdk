@@ -452,3 +452,42 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	require.NoError(err)
 	require.Equal(stakingtypes.Unbonded, validator.Status)
 }
+
+func (s *KeeperTestSuite) TestLastQueueProcessedState() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	// add unbonding validator
+	endTime := time.Now()
+	endHeight := ctx.BlockHeight() + 10
+	require.NoError(keeper.SetUnbondingValidatorsQueue(ctx, endTime, endHeight, []string{valAddr.String()}))
+
+	resVals, err := keeper.GetUnbondingValidators(ctx, endTime, endHeight)
+	require.NoError(err)
+	require.Equal(1, len(resVals))
+	require.Equal(valAddr.String(), resVals[0])
+
+	// add another unbonding validator
+	valAddr1 := sdk.ValAddress(PKs[1].Address().Bytes())
+	validator1 := testutil.NewValidator(s.T(), valAddr1, PKs[1])
+	valUnbondingHeight1 := endHeight - 100
+	valUnbondingTime1 := endTime.Add(100 * time.Second)
+	validator1.UnbondingHeight = valUnbondingHeight1
+	validator1.UnbondingTime = valUnbondingTime1
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator1))
+
+	// sanity check that there are 2 unbonding validators
+	resVals, err = keeper.GetUnbondingValidators(ctx, endTime, endHeight)
+	require.NoError(err)
+	require.Equal(2, len(resVals))
+
+	// last queue processed state must be updated with the lowest unbond height
+	lastProcessedState := keeper.GetQueueLastProcessedState()
+	iterator, err := keeper.ValidatorQueueIterator(ctx, lastProcessedState.Timestamp, lastProcessedState.Height, ctx.BlockTime(), ctx.BlockHeight())
+	require.NoError(err)
+	err = keeper.UnbondAllMatureValidators(ctx, iterator)
+	require.NoError(err)
+	require.Equal(valUnbondingHeight1, lastProcessedState.Height)
+}

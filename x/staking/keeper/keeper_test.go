@@ -100,6 +100,21 @@ func (s *KeeperTestSuite) TestParams() {
 	require.True(expParams.Equal(resParams))
 }
 
+func (s *KeeperTestSuite) TestQueueLastProcessedState() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	expected := stakingkeeper.QueueLastProcessedState{
+		Height:    100,
+		Timestamp: ctx.BlockTime(),
+	}
+	keeper.SetQueueLastProcessedHeight(expected.Height)
+	keeper.SetQueueLastProcessedTimestamp(expected.Timestamp)
+	resQueueLastProcessedState := keeper.GetQueueLastProcessedState()
+	require.Equal(expected.Height, resQueueLastProcessedState.Height)
+	require.Equal(expected.Timestamp, resQueueLastProcessedState.Timestamp)
+}
+
 func (s *KeeperTestSuite) TestLastTotalPower() {
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
