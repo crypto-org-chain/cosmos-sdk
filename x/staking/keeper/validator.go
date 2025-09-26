@@ -584,7 +584,6 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context, iterator coresto
 		// All addresses for the given key have the same unbonding height and time.
 		// We only unbond if the height and time are less than the current height
 		// and time.
-		removed := false
 		if keyHeight <= blockHeight && (keyTime.Before(blockTime) || keyTime.Equal(blockTime)) {
 			addrs := types.ValAddresses{}
 			if err = k.cdc.Unmarshal(iterator.Value(), &addrs); err != nil {
@@ -624,11 +623,9 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context, iterator coresto
 				if err = k.DeleteValidatorQueue(ctx, val); err != nil {
 					return err
 				}
-				removed = true
 			}
-		}
-		// Track the lowest non-mature validator unbonding height to serve as the lower bound for the subsequent iteration
-		if !removed && keyHeight < lowestHeight {
+		} else if keyHeight < lowestHeight {
+			// Track the lowest non-mature validator unbonding height to serve as the lower bound for the subsequent iteration
 			lowestHeight = keyHeight
 		}
 	}
