@@ -129,8 +129,6 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 
 	k.SetQueueLastProcessedTimestamp(blockTime)
 
-	k.Logger(ctx).Info("BlockValidatorUpdates", "startTime", k.GetQueueLastProcessedState().Timestamp, "startHeight", k.GetQueueLastProcessedState().Height)
-
 	return validatorUpdates, nil
 }
 
@@ -519,8 +517,6 @@ func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHe
 	lastProcessedState := k.GetQueueLastProcessedState()
 	startTime := lastProcessedState.Timestamp
 	startHeight := lastProcessedState.Height
-
-	k.Logger(ctx).Info("fetchIterators", "startTime", startTime, "startHeight", startHeight, "blockTime", blockTime, "blockHeight", blockHeight)
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
