@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"testing"
+	"time"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
@@ -66,7 +67,7 @@ func (s *KeeperTestSuite) SetupTest() {
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		address.NewBech32Codec("cosmosvaloper"),
 		address.NewBech32Codec("cosmosvalcons"),
-		stakingkeeper.QueueLastProcessedState{},
+		nil,
 	)
 	require.NoError(keeper.SetParams(ctx, stakingtypes.DefaultParams()))
 
@@ -101,18 +102,27 @@ func (s *KeeperTestSuite) TestParams() {
 }
 
 func (s *KeeperTestSuite) TestQueueLastProcessedState() {
-	ctx, keeper := s.ctx, s.stakingKeeper
+	_, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
-
-	expected := stakingkeeper.QueueLastProcessedState{
-		Height:    100,
-		Timestamp: ctx.BlockTime(),
+	t1 := time.Now()
+	t2 := time.Now().Add(-1 * time.Minute)
+	t3 := time.Now().Add(-2 * time.Minute)
+	expected := map[stakingkeeper.Key]time.Time{
+		stakingkeeper.ValidatorQueue:    t1,
+		stakingkeeper.UBDQueue:          t2,
+		stakingkeeper.RedelegationQueue: t3,
 	}
-	keeper.SetQueueLastProcessedHeight(expected.Height)
-	keeper.SetQueueLastProcessedTimestamp(expected.Timestamp)
-	resQueueLastProcessedState := keeper.GetQueueLastProcessedState()
-	require.Equal(expected.Height, resQueueLastProcessedState.Height)
-	require.Equal(expected.Timestamp, resQueueLastProcessedState.Timestamp)
+
+	keeper.SetLastProcessedTimestamp(stakingkeeper.ValidatorQueue, expected[stakingkeeper.ValidatorQueue])
+	keeper.SetLastProcessedTimestamp(stakingkeeper.UBDQueue, expected[stakingkeeper.UBDQueue])
+	keeper.SetLastProcessedTimestamp(stakingkeeper.RedelegationQueue, expected[stakingkeeper.RedelegationQueue])
+
+	resValidatorQueue := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
+	resUBDQueue := keeper.GetLastProcessedTimestamp(stakingkeeper.UBDQueue)
+	resRedelegationQueue := keeper.GetLastProcessedTimestamp(stakingkeeper.RedelegationQueue)
+	require.Equal(expected[stakingkeeper.ValidatorQueue], resValidatorQueue)
+	require.Equal(expected[stakingkeeper.UBDQueue], resUBDQueue)
+	require.Equal(expected[stakingkeeper.RedelegationQueue], resRedelegationQueue)
 }
 
 func (s *KeeperTestSuite) TestLastTotalPower() {
