@@ -453,7 +453,7 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	require.Equal(stakingtypes.Unbonded, validator.Status)
 }
 
-func (s *KeeperTestSuite) TestLastQueueProcessedState() {
+func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -464,7 +464,12 @@ func (s *KeeperTestSuite) TestLastQueueProcessedState() {
 	// add unbonding validator - ready to unbond
 	valPubKey := PKs[0]
 	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
-	require.NoError(keeper.SetUnbondingValidatorsQueue(ctx, blockTime, blockHeight, []string{valAddr.String()}))
+	val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	val.UnbondingHeight = blockHeight
+	val.UnbondingTime = blockTime
+	val.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, val))
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, val))
 
 	// add another unbonding validator
 	valAddr1 := sdk.ValAddress(PKs[1].Address().Bytes())
@@ -473,20 +478,54 @@ func (s *KeeperTestSuite) TestLastQueueProcessedState() {
 	valUnbondingTime1 := blockTime.Add(-1 * time.Minute)
 	validator1.UnbondingHeight = valUnbondingHeight1
 	validator1.UnbondingTime = valUnbondingTime1
+	validator1.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, validator1))
 	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator1))
 
 	valItr, _, _, errs := keeper.FetchIterators(ctx, blockTime, blockHeight)
-	count := 0
-	for ; valItr.Valid(); valItr.Next() {
-		count++
-	}
-	require.Equal(2, count)
 	require.Empty(errs)
 	err := keeper.UnbondAllMatureValidators(ctx, valItr)
 	require.NoError(err)
+
 	v, err := keeper.GetAllValidators(ctx)
 	require.NoError(err)
 	require.Equal(0, len(v))
+	
 	t := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
 	require.Equal(blockTime, t)
+}
+func (s *KeeperTestSuite) TestUpdateTimestampToEarliestNonMatureUnbondingValidator() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime, _ := time.Parse(time.RFC3339Nano, "2024-01-01T12:00:00Z")
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	valUnbondingHeight := blockHeight + 100000
+	valUnbondingTime := blockTime.Add(-1 * time.Minute)
+
+	// add unbonding validator - with a future blockHeight
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	require.NoError(keeper.SetUnbondingValidatorsQueue(ctx, valUnbondingTime, valUnbondingHeight, []string{valAddr.String()}))
+	validator := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	validator.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, validator))
+	v, err := keeper.GetAllValidators(ctx)
+	require.NoError(err)
+	require.Equal(1, len(v))
+
+	valItr, _, _, errs := keeper.FetchIterators(ctx, blockTime, blockHeight)
+	require.Empty(errs)
+	err = keeper.UnbondAllMatureValidators(ctx, valItr)
+	require.NoError(err)
+
+	v, err = keeper.GetAllValidators(ctx)
+	require.NoError(err)
+	require.Equal(1, len(v))
+	require.True(v[0].IsUnbonding())
+
+	t := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
+	require.Equal(valUnbondingTime, t)
 }
