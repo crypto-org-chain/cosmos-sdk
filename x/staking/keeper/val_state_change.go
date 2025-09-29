@@ -43,9 +43,15 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 	validatorIterator, ubdIterator, redelegationIterator, errors := k.FetchIterators(ctx, blockTime, blockHeight)
 
 	defer func() {
-		validatorIterator.Close()
-		ubdIterator.Close()
-		redelegationIterator.Close()
+		if validatorIterator != nil {
+			validatorIterator.Close()
+		}
+		if ubdIterator != nil {
+			ubdIterator.Close()
+		}
+		if redelegationIterator != nil {
+			redelegationIterator.Close()
+		}
 	}()
 
 	if len(errors) > 0 {
