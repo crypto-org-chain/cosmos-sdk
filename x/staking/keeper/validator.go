@@ -625,7 +625,7 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context, iterator coresto
 			}
 		} else if keyTime.Before(lastProcessedTimestamp) { 
 			// in the exceptional case where the unbonding validator is retrieved but has not reached the unbonding height (keyHeight > blockHeight), 
-			// we need to restrict the lower bound of the range to be that of the earliest non-mature unbonding validator
+			// we need to restrict the lower bound of the timestamp range to be that of the earliest non-mature unbonding validator
 			lastProcessedTimestamp = keyTime
 		}
 	}

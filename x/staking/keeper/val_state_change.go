@@ -502,7 +502,6 @@ type IteratorResult struct {
 	Error    error
 }
 
-// fetchIterators fetches all three cpu consuming iterators concurrently
 func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHeight int64) (
 	validatorIterator store.Iterator,
 	ubdIterator store.Iterator,
@@ -528,7 +527,7 @@ func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHe
 		}
 		lowestHeight := blockHeight
 		for _, v := range validators {
-			if v.Status == types.Unbonding && v.UnbondingHeight < lowestHeight {
+			if v.IsUnbonding() && v.UnbondingHeight < lowestHeight {
 				lowestHeight = v.UnbondingHeight
 			}
 		}
