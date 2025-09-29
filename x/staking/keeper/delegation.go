@@ -1314,7 +1314,7 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, iterator corestore
 	}
 	
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	k.SetLastProcessedTimestamp(UBDQueue, sdkCtx.BlockHeader().Time)
+	k.SetLastProcessedTimestamp(UBDQueue, sdkCtx.BlockTime())
 
 	return matureUnbonds, nil
 }
@@ -1340,7 +1340,7 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, iterator 
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	k.SetLastProcessedTimestamp(RedelegationQueue, sdkCtx.BlockHeader().Time)
+	k.SetLastProcessedTimestamp(RedelegationQueue, sdkCtx.BlockTime())
 
 	return matureRedelegations, nil
 }
