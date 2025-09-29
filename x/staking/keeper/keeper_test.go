@@ -101,7 +101,7 @@ func (s *KeeperTestSuite) TestParams() {
 	require.True(expParams.Equal(resParams))
 }
 
-func (s *KeeperTestSuite) TestQueueLastProcessedState() {
+func (s *KeeperTestSuite) TestLastProcessedTimestamp() {
 	_, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 	t1 := time.Now()
