@@ -1312,6 +1312,9 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, iterator corestore
 			return matureUnbonds, err
 		}
 	}
+	
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	k.SetLastProcessedTimestamp(UBDQueue, sdkCtx.BlockHeader().Time)
 
 	return matureUnbonds, nil
 }
@@ -1335,6 +1338,9 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, iterator 
 			return nil, err
 		}
 	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	k.SetLastProcessedTimestamp(RedelegationQueue, sdkCtx.BlockHeader().Time)
 
 	return matureRedelegations, nil
 }

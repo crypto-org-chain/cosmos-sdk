@@ -572,8 +572,7 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context, iterator coresto
 	blockTime := sdkCtx.BlockTime()
 	blockHeight := sdkCtx.BlockHeight()
 
-	lowestHeight := blockHeight
-
+	lastProcessedTimestamp := blockTime
 	for ; iterator.Valid(); iterator.Next() {
 		key := iterator.Key()
 		keyTime, keyHeight, err := types.ParseValidatorQueueKey(key)
@@ -624,13 +623,14 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context, iterator coresto
 					return err
 				}
 			}
-		} else if keyHeight < lowestHeight {
-			// Track the lowest non-mature validator unbonding height to serve as the lower bound for the subsequent iteration
-			lowestHeight = keyHeight
+		} else if keyTime.Before(lastProcessedTimestamp) { 
+			// in the exceptional case where the unbonding validator is retrieved but has not reached the unbonding height (keyHeight > blockHeight), 
+			// we need to restrict the lower bound of the range to be that of the earliest non-mature unbonding validator
+			lastProcessedTimestamp = keyTime
 		}
 	}
 
-	k.SetQueueLastProcessedHeight(lowestHeight)
+	k.SetLastProcessedTimestamp(ValidatorQueue, lastProcessedTimestamp)
 
 	return nil
 }

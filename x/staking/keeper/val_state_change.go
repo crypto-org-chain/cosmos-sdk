@@ -127,7 +127,6 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		)
 	}
 
-	k.SetQueueLastProcessedTimestamp(blockTime)
 
 	return validatorUpdates, nil
 }
@@ -514,10 +513,6 @@ func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHe
 	ubdChan := make(chan IteratorResult, 1)
 	redelegationChan := make(chan IteratorResult, 1)
 
-	lastProcessedState := k.GetQueueLastProcessedState()
-	startTime := lastProcessedState.Timestamp
-	startHeight := lastProcessedState.Height
-
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
 	// Create separate gasMeters for each goroutine to avoid race conditions
@@ -526,17 +521,20 @@ func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHe
 	redelegationCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 
 	go func() {
-		iterator, err := k.ValidatorQueueIterator(validatorCtx, startTime, startHeight, blockTime, blockHeight)
+		t := k.GetLastProcessedTimestamp(ValidatorQueue)
+		iterator, err := k.ValidatorQueueIterator(validatorCtx, t, 0, blockTime, blockHeight)
 		validatorChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
 	go func() {
-		iterator, err := k.UBDQueueIterator(ubdCtx, startTime, blockTime)
+		t := k.GetLastProcessedTimestamp(UBDQueue)
+		iterator, err := k.UBDQueueIterator(ubdCtx, t, blockTime)
 		ubdChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
 	go func() {
-		iterator, err := k.RedelegationQueueIterator(redelegationCtx, startTime, blockTime)
+		t := k.GetLastProcessedTimestamp(RedelegationQueue)
+		iterator, err := k.RedelegationQueueIterator(redelegationCtx, t, blockTime)
 		redelegationChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 

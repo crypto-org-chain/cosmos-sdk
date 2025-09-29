@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+
 	abci "github.com/cometbft/cometbft/abci/types"
 
 	addresscodec "cosmossdk.io/core/address"
@@ -15,34 +16,37 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
+
 // Implements ValidatorSet interface
 var _ types.ValidatorSet = Keeper{}
 
 // Implements DelegationSet interface
 var _ types.DelegationSet = Keeper{}
 
-// QueueLastProcessedState tracks the last processed position in the validator unbonding queue.
-// This state is used to optimize EndBlocker unbonding iterations by avoiding redundant
-// traversal of already-processed queue entries, significantly reducing iteration time.
-type QueueLastProcessedState struct {
-	// height defines the queue last processed height.
-	Height int64 
-	// timestamp defines the queue last processed timestamp.
-	Timestamp time.Time
-}
+type Key string
+
+const (
+    ValidatorQueue   Key = "validator"
+    UBDQueue Key = "ubd"
+    RedelegationQueue  Key = "redelegation"
+)
 
 // Keeper of the x/staking store
 type Keeper struct {
-	storeService            storetypes.KVStoreService
-	cdc                     codec.BinaryCodec
-	authKeeper              types.AccountKeeper
-	bankKeeper              types.BankKeeper
-	hooks                   types.StakingHooks
-	authority               string
-	validatorAddressCodec   addresscodec.Codec
-	consensusAddressCodec   addresscodec.Codec
-	queueLastProcessedState QueueLastProcessedState
+	storeService          storetypes.KVStoreService
+	cdc                   codec.BinaryCodec
+	authKeeper            types.AccountKeeper
+	bankKeeper            types.BankKeeper
+	hooks                 types.StakingHooks
+	authority             string
+	validatorAddressCodec addresscodec.Codec
+	consensusAddressCodec addresscodec.Codec
+	// LastProcessedTimestamps tracks the last processed timestamps of the unbonding queues.
+	// This state is used to optimize EndBlocker unbonding iterations by avoiding redundant
+	// traversal of already-processed timestamps, significantly reducing iteration time.
+	lastProcessedTimestamps map[Key]time.Time
 }
+
 
 // NewKeeper creates a new staking Keeper instance
 func NewKeeper(
@@ -53,7 +57,7 @@ func NewKeeper(
 	authority string,
 	validatorAddressCodec addresscodec.Codec,
 	consensusAddressCodec addresscodec.Codec,
-	queueLastProcessedState QueueLastProcessedState,
+	lastProcessedTimestamps map[Key]time.Time,
 ) *Keeper {
 	// ensure bonded and not bonded module accounts are set
 	if addr := ak.GetModuleAddress(types.BondedPoolName); addr == nil {
@@ -73,6 +77,10 @@ func NewKeeper(
 		panic("validator and/or consensus address codec are nil")
 	}
 
+	if lastProcessedTimestamps == nil {
+		lastProcessedTimestamps = make(map[Key]time.Time)
+	}
+
 	return &Keeper{
 		storeService:            storeService,
 		cdc:                     cdc,
@@ -82,7 +90,7 @@ func NewKeeper(
 		authority:               authority,
 		validatorAddressCodec:   validatorAddressCodec,
 		consensusAddressCodec:   consensusAddressCodec,
-		queueLastProcessedState: queueLastProcessedState,
+		lastProcessedTimestamps: lastProcessedTimestamps,
 	}
 }
 
@@ -185,15 +193,10 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 	return valUpdates.Updates, nil
 }
 
-// GetQueueLastProcessedState retrieves the last processed state of the queue from memory.
-func (k Keeper) GetQueueLastProcessedState() QueueLastProcessedState {
-	return k.queueLastProcessedState
+func (k Keeper) GetLastProcessedTimestamp(key Key) time.Time {
+	return k.lastProcessedTimestamps[key]
 }
 
-func (k *Keeper) SetQueueLastProcessedTimestamp(timestamp time.Time) {
-	k.queueLastProcessedState.Timestamp = timestamp
-}
-
-func (k *Keeper) SetQueueLastProcessedHeight(height int64) {
-	k.queueLastProcessedState.Height = height
+func (k *Keeper) SetLastProcessedTimestamp(key Key, t time.Time) {
+	k.lastProcessedTimestamps[key] = t
 }

@@ -233,7 +233,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 		authority.String(),
 		in.ValidatorAddressCodec,
 		in.ConsensusAddressCodec,
-		keeper.QueueLastProcessedState{},
+		nil,
 	)
 	m := NewAppModule(in.Cdc, k, in.AccountKeeper, in.BankKeeper, in.LegacySubspace)
 	return ModuleOutputs{StakingKeeper: k, Module: m}
