@@ -515,14 +515,25 @@ func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHe
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
-	// Create separate gasMeters for each goroutine to avoid race conditions
 	validatorCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	ubdCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	redelegationCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 
 	go func() {
 		t := k.GetLastProcessedTimestamp(ValidatorQueue)
-		iterator, err := k.ValidatorQueueIterator(validatorCtx, t, 0, blockTime, blockHeight)
+		validators, err := k.GetAllValidators(validatorCtx)
+		if err != nil {
+			validatorChan <- IteratorResult{Iterator: nil, Error: err}
+			return
+		}
+		lowestHeight := blockHeight
+		for _, v := range validators {
+			if v.Status == types.Unbonding && v.UnbondingHeight < lowestHeight {
+				lowestHeight = v.UnbondingHeight
+			}
+		}
+		// Set the lower bound of the height range to be the lowest height of all unbonding validators
+		iterator, err := k.ValidatorQueueIterator(validatorCtx, t, lowestHeight, blockTime, blockHeight)
 		validatorChan <- IteratorResult{Iterator: iterator, Error: err}
 	}()
 
