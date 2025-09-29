@@ -40,7 +40,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 	blockTime := sdkCtx.BlockHeader().Time
 	blockHeight := sdkCtx.BlockHeight()
 
-	validatorIterator, ubdIterator, redelegationIterator, errors := k.fetchIterators(ctx, blockTime, blockHeight)
+	validatorIterator, ubdIterator, redelegationIterator, errors := k.FetchIterators(ctx, blockTime, blockHeight)
 
 	defer func() {
 		validatorIterator.Close()
@@ -126,7 +126,6 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 			),
 		)
 	}
-
 
 	return validatorUpdates, nil
 }
@@ -502,7 +501,7 @@ type IteratorResult struct {
 	Error    error
 }
 
-func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHeight int64) (
+func (k Keeper) FetchIterators(ctx context.Context, blockTime time.Time, blockHeight int64) (
 	validatorIterator store.Iterator,
 	ubdIterator store.Iterator,
 	redelegationIterator store.Iterator,
@@ -563,10 +562,8 @@ func (k Keeper) fetchIterators(ctx context.Context, blockTime time.Time, blockHe
 		allErrors = append(allErrors, fmt.Errorf("failed to fetch redelegation iterator: %w", redelegationResult.Error))
 	}
 
-	// Consume the gas used by each iterator
 	sdkCtx.GasMeter().ConsumeGas(validatorCtx.GasMeter().GasConsumed(), "fetchIterators - validator")
 	sdkCtx.GasMeter().ConsumeGas(ubdCtx.GasMeter().GasConsumed(), "fetchIterators - UBD")
 	sdkCtx.GasMeter().ConsumeGas(redelegationCtx.GasMeter().GasConsumed(), "fetchIterators - redelegation")
-
 	return validatorResult.Iterator, ubdResult.Iterator, redelegationResult.Iterator, allErrors
 }
