@@ -36,102 +36,102 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		return nil, err
 	}
 
-	// sdkCtx := sdk.UnwrapSDKContext(ctx)
-	// blockTime := sdkCtx.BlockHeader().Time
-	// blockHeight := sdkCtx.BlockHeight()
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	blockTime := sdkCtx.BlockHeader().Time
+	blockHeight := sdkCtx.BlockHeight()
 
-	// validatorIterator, ubdIterator, redelegationIterator, errors := k.FetchIterators(ctx, blockTime, blockHeight)
+	validatorIterator, ubdIterator, redelegationIterator, errors := k.FetchIterators(ctx, blockTime, blockHeight)
 
-	// defer func() {
-	// 	if validatorIterator != nil {
-	// 		validatorIterator.Close()
-	// 	}
-	// 	if ubdIterator != nil {
-	// 		ubdIterator.Close()
-	// 	}
-	// 	if redelegationIterator != nil {
-	// 		redelegationIterator.Close()
-	// 	}
-	// }()
+	defer func() {
+		if validatorIterator != nil {
+			validatorIterator.Close()
+		}
+		if ubdIterator != nil {
+			ubdIterator.Close()
+		}
+		if redelegationIterator != nil {
+			redelegationIterator.Close()
+		}
+	}()
 
-	// if len(errors) > 0 {
-	// 	return nil, fmt.Errorf("iterator creation errors: %v", errors)
-	// }
+	if len(errors) > 0 {
+		return nil, fmt.Errorf("iterator creation errors: %v", errors)
+	}
 
-	// err = k.UnbondAllMatureValidators(ctx, validatorIterator)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	err = k.UnbondAllMatureValidators(ctx, validatorIterator)
+	if err != nil {
+		return nil, err
+	}
 
-	// matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, ubdIterator)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, ubdIterator)
+	if err != nil {
+		return nil, err
+	}
 
-	// for _, dvPair := range matureUnbonds {
-	// 	addr, err := k.validatorAddressCodec.StringToBytes(dvPair.ValidatorAddress)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	delegatorAddress, err := k.authKeeper.AddressCodec().StringToBytes(dvPair.DelegatorAddress)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
+	for _, dvPair := range matureUnbonds {
+		addr, err := k.validatorAddressCodec.StringToBytes(dvPair.ValidatorAddress)
+		if err != nil {
+			return nil, err
+		}
+		delegatorAddress, err := k.authKeeper.AddressCodec().StringToBytes(dvPair.DelegatorAddress)
+		if err != nil {
+			return nil, err
+		}
 
-	// 	balances, err := k.CompleteUnbonding(ctx, delegatorAddress, addr)
-	// 	if err != nil {
-	// 		continue
-	// 	}
+		balances, err := k.CompleteUnbonding(ctx, delegatorAddress, addr)
+		if err != nil {
+			continue
+		}
 
-	// 	sdkCtx.EventManager().EmitEvent(
-	// 		sdk.NewEvent(
-	// 			types.EventTypeCompleteUnbonding,
-	// 			sdk.NewAttribute(sdk.AttributeKeyAmount, balances.String()),
-	// 			sdk.NewAttribute(types.AttributeKeyValidator, dvPair.ValidatorAddress),
-	// 			sdk.NewAttribute(types.AttributeKeyDelegator, dvPair.DelegatorAddress),
-	// 		),
-	// 	)
-	// }
+		sdkCtx.EventManager().EmitEvent(
+			sdk.NewEvent(
+				types.EventTypeCompleteUnbonding,
+				sdk.NewAttribute(sdk.AttributeKeyAmount, balances.String()),
+				sdk.NewAttribute(types.AttributeKeyValidator, dvPair.ValidatorAddress),
+				sdk.NewAttribute(types.AttributeKeyDelegator, dvPair.DelegatorAddress),
+			),
+		)
+	}
 
-	// matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, redelegationIterator)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, redelegationIterator)
+	if err != nil {
+		return nil, err
+	}
 
-	// for _, dvvTriplet := range matureRedelegations {
-	// 	valSrcAddr, err := k.validatorAddressCodec.StringToBytes(dvvTriplet.ValidatorSrcAddress)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	valDstAddr, err := k.validatorAddressCodec.StringToBytes(dvvTriplet.ValidatorDstAddress)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	delegatorAddress, err := k.authKeeper.AddressCodec().StringToBytes(dvvTriplet.DelegatorAddress)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
+	for _, dvvTriplet := range matureRedelegations {
+		valSrcAddr, err := k.validatorAddressCodec.StringToBytes(dvvTriplet.ValidatorSrcAddress)
+		if err != nil {
+			return nil, err
+		}
+		valDstAddr, err := k.validatorAddressCodec.StringToBytes(dvvTriplet.ValidatorDstAddress)
+		if err != nil {
+			return nil, err
+		}
+		delegatorAddress, err := k.authKeeper.AddressCodec().StringToBytes(dvvTriplet.DelegatorAddress)
+		if err != nil {
+			return nil, err
+		}
 
-	// 	balances, err := k.CompleteRedelegation(
-	// 		ctx,
-	// 		delegatorAddress,
-	// 		valSrcAddr,
-	// 		valDstAddr,
-	// 	)
-	// 	if err != nil {
-	// 		continue
-	// 	}
+		balances, err := k.CompleteRedelegation(
+			ctx,
+			delegatorAddress,
+			valSrcAddr,
+			valDstAddr,
+		)
+		if err != nil {
+			continue
+		}
 
-	// 	sdkCtx.EventManager().EmitEvent(
-	// 		sdk.NewEvent(
-	// 			types.EventTypeCompleteRedelegation,
-	// 			sdk.NewAttribute(sdk.AttributeKeyAmount, balances.String()),
-	// 			sdk.NewAttribute(types.AttributeKeyDelegator, dvvTriplet.DelegatorAddress),
-	// 			sdk.NewAttribute(types.AttributeKeySrcValidator, dvvTriplet.ValidatorSrcAddress),
-	// 			sdk.NewAttribute(types.AttributeKeyDstValidator, dvvTriplet.ValidatorDstAddress),
-	// 		),
-	// 	)
-	// }
+		sdkCtx.EventManager().EmitEvent(
+			sdk.NewEvent(
+				types.EventTypeCompleteRedelegation,
+				sdk.NewAttribute(sdk.AttributeKeyAmount, balances.String()),
+				sdk.NewAttribute(types.AttributeKeyDelegator, dvvTriplet.DelegatorAddress),
+				sdk.NewAttribute(types.AttributeKeySrcValidator, dvvTriplet.ValidatorSrcAddress),
+				sdk.NewAttribute(types.AttributeKeyDstValidator, dvvTriplet.ValidatorDstAddress),
+			),
+		)
+	}
 
 	return validatorUpdates, nil
 }
