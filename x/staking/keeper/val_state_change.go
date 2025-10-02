@@ -5,14 +5,11 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"time"
 
 	gogotypes "github.com/cosmos/gogoproto/types"
 
 	"cosmossdk.io/core/address"
-	"cosmossdk.io/core/store"
 	"cosmossdk.io/math"
-	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -36,34 +33,14 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		return nil, err
 	}
 
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	blockTime := sdkCtx.BlockHeader().Time
-	blockHeight := sdkCtx.BlockHeight()
-
-	validatorIterator, ubdIterator, redelegationIterator, errors := k.FetchIterators(ctx, blockTime, blockHeight)
-
-	defer func() {
-		if validatorIterator != nil {
-			validatorIterator.Close()
-		}
-		if ubdIterator != nil {
-			ubdIterator.Close()
-		}
-		if redelegationIterator != nil {
-			redelegationIterator.Close()
-		}
-	}()
-
-	if len(errors) > 0 {
-		return nil, fmt.Errorf("iterator creation errors: %v", errors)
-	}
-
-	err = k.UnbondAllMatureValidators(ctx, validatorIterator)
+	err = k.UnbondAllMatureValidators(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, ubdIterator)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+
+	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, sdkCtx.BlockTime())
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +70,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		)
 	}
 
-	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, redelegationIterator)
+	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, sdkCtx.BlockTime())
 	if err != nil {
 		return nil, err
 	}
@@ -500,76 +477,4 @@ func sortNoLongerBonded(last validatorsByAddr, ac address.Codec) ([][]byte, erro
 	})
 
 	return noLongerBonded, nil
-}
-
-type IteratorResult struct {
-	Iterator store.Iterator
-	Error    error
-}
-
-func (k Keeper) FetchIterators(ctx context.Context, blockTime time.Time, blockHeight int64) (
-	validatorIterator store.Iterator,
-	ubdIterator store.Iterator,
-	redelegationIterator store.Iterator,
-	errors []error,
-) {
-	validatorChan := make(chan IteratorResult, 1)
-	ubdChan := make(chan IteratorResult, 1)
-	redelegationChan := make(chan IteratorResult, 1)
-
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-
-	validatorCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
-	ubdCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
-	redelegationCtx := sdkCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
-
-	go func() {
-		t := k.GetLastProcessedTimestamp(ValidatorQueue)
-		validators, err := k.GetAllValidators(validatorCtx)
-		if err != nil {
-			validatorChan <- IteratorResult{Iterator: nil, Error: err}
-			return
-		}
-		lowestHeight := blockHeight
-		for _, v := range validators {
-			if v.IsUnbonding() && v.UnbondingHeight < lowestHeight {
-				lowestHeight = v.UnbondingHeight
-			}
-		}
-		// Set the lower bound of the height range to be the lowest height of all unbonding validators
-		iterator, err := k.ValidatorQueueIterator(validatorCtx, t, lowestHeight, blockTime, blockHeight)
-		validatorChan <- IteratorResult{Iterator: iterator, Error: err}
-	}()
-
-	go func() {
-		t := k.GetLastProcessedTimestamp(UBDQueue)
-		iterator, err := k.UBDQueueIterator(ubdCtx, t, blockTime)
-		ubdChan <- IteratorResult{Iterator: iterator, Error: err}
-	}()
-
-	go func() {
-		t := k.GetLastProcessedTimestamp(RedelegationQueue)
-		iterator, err := k.RedelegationQueueIterator(redelegationCtx, t, blockTime)
-		redelegationChan <- IteratorResult{Iterator: iterator, Error: err}
-	}()
-
-	validatorResult := <-validatorChan
-	ubdResult := <-ubdChan
-	redelegationResult := <-redelegationChan
-
-	var allErrors []error
-	if validatorResult.Error != nil {
-		allErrors = append(allErrors, fmt.Errorf("failed to fetch validator iterator: %w", validatorResult.Error))
-	}
-	if ubdResult.Error != nil {
-		allErrors = append(allErrors, fmt.Errorf("failed to fetch UBD iterator: %w", ubdResult.Error))
-	}
-	if redelegationResult.Error != nil {
-		allErrors = append(allErrors, fmt.Errorf("failed to fetch redelegation iterator: %w", redelegationResult.Error))
-	}
-
-	sdkCtx.GasMeter().ConsumeGas(validatorCtx.GasMeter().GasConsumed(), "fetchIterators - validator")
-	sdkCtx.GasMeter().ConsumeGas(ubdCtx.GasMeter().GasConsumed(), "fetchIterators - UBD")
-	sdkCtx.GasMeter().ConsumeGas(redelegationCtx.GasMeter().GasConsumed(), "fetchIterators - redelegation")
-	return validatorResult.Iterator, ubdResult.Iterator, redelegationResult.Iterator, allErrors
 }

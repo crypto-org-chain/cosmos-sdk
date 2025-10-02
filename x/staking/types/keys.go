@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	addresscodec "cosmossdk.io/core/address"
 	"cosmossdk.io/math"
 
+	"github.com/cosmos/cosmos-sdk/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"
 	"github.com/cosmos/cosmos-sdk/types/kv"
@@ -188,6 +191,25 @@ func GetValidatorQueueKey(timestamp time.Time, height int64) []byte {
 	return bz
 }
 
+func GetCacheValidatorQueueKey(time time.Time, height int64) string {
+	return fmt.Sprintf("%s-%d", time.Format(types.SortableTimeFormat), height)
+}
+
+func ParseCacheValidatorQueueKey(key string) (time.Time, int64, error) {
+	parts := strings.Split(key, "-")
+	t, err := types.ParseTime(parts[0])
+	if err != nil {
+		return time.Time{}, 0, err
+	}
+
+	height, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return time.Time{}, 0, err
+	}
+
+	return t, height, nil
+}
+
 // ParseValidatorQueueKey returns the encoded time and height from a key created
 // from GetValidatorQueueKey.
 func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
@@ -301,6 +323,21 @@ func GetUnbondingDelegationTimeKey(timestamp time.Time) []byte {
 	return append(UnbondingQueueKey, bz...)
 }
 
+// ParseUnbondingDelegationTimeKey parses the unbonding delegation time key and returns the timestamp
+func ParseUnbondingDelegationTimeKey(bz []byte) (time.Time, error) {
+	prefixL := len(UnbondingQueueKey)
+	if len(bz) <= prefixL {
+		return time.Time{}, fmt.Errorf("invalid key length; expected at least %d bytes, got %d", prefixL+1, len(bz))
+	}
+
+	if prefix := bz[:prefixL]; !bytes.Equal(prefix, UnbondingQueueKey) {
+		return time.Time{}, fmt.Errorf("invalid prefix; expected: %X, got: %X", UnbondingQueueKey, prefix)
+	}
+
+	timeBz := bz[prefixL:]
+	return sdk.ParseTimeBytes(timeBz)
+}
+
 // GetREDKey returns a key prefix for indexing a redelegation from a delegator
 // and source validator to a destination validator.
 func GetREDKey(delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress) []byte {
@@ -391,6 +428,21 @@ func GetREDKeyFromValDstIndexKey(indexKey []byte) []byte {
 func GetRedelegationTimeKey(timestamp time.Time) []byte {
 	bz := sdk.FormatTimeBytes(timestamp)
 	return append(RedelegationQueueKey, bz...)
+}
+
+// ParseRedelegationTimeKey parses the redelegation time key and returns the timestamp
+func ParseRedelegationTimeKey(bz []byte) (time.Time, error) {
+	prefixL := len(RedelegationQueueKey)
+	if len(bz) <= prefixL {
+		return time.Time{}, fmt.Errorf("invalid key length; expected at least %d bytes, got %d", prefixL+1, len(bz))
+	}
+
+	if prefix := bz[:prefixL]; !bytes.Equal(prefix, RedelegationQueueKey) {
+		return time.Time{}, fmt.Errorf("invalid prefix; expected: %X, got: %X", RedelegationQueueKey, prefix)
+	}
+
+	timeBz := bz[prefixL:]
+	return sdk.ParseTimeBytes(timeBz)
 }
 
 // GetREDsKey returns a key prefix for indexing a redelegation from a delegator

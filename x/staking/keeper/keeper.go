@@ -3,7 +3,6 @@ package keeper
 import (
 	"context"
 	"fmt"
-	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 
@@ -23,14 +22,6 @@ var _ types.ValidatorSet = Keeper{}
 // Implements DelegationSet interface
 var _ types.DelegationSet = Keeper{}
 
-type Key string
-
-const (
-    ValidatorQueue   Key = "validator"
-    UBDQueue Key = "ubd"
-    RedelegationQueue  Key = "redelegation"
-)
-
 // Keeper of the x/staking store
 type Keeper struct {
 	storeService          storetypes.KVStoreService
@@ -41,12 +32,10 @@ type Keeper struct {
 	authority             string
 	validatorAddressCodec addresscodec.Codec
 	consensusAddressCodec addresscodec.Codec
-	// LastProcessedTimestamps tracks the last processed timestamps of the unbonding queues.
-	// This state is used to optimize EndBlocker unbonding iterations by avoiding redundant
-	// traversal of already-processed timestamps, significantly reducing iteration time.
-	lastProcessedTimestamps map[Key]time.Time
+	unbondingValidators   map[string][]string
+	unbondingDelegations  map[string][]types.DVPair
+	redelegations         map[string][]types.DVVTriplet
 }
-
 
 // NewKeeper creates a new staking Keeper instance
 func NewKeeper(
@@ -57,7 +46,6 @@ func NewKeeper(
 	authority string,
 	validatorAddressCodec addresscodec.Codec,
 	consensusAddressCodec addresscodec.Codec,
-	lastProcessedTimestamps map[Key]time.Time,
 ) *Keeper {
 	// ensure bonded and not bonded module accounts are set
 	if addr := ak.GetModuleAddress(types.BondedPoolName); addr == nil {
@@ -77,20 +65,15 @@ func NewKeeper(
 		panic("validator and/or consensus address codec are nil")
 	}
 
-	if lastProcessedTimestamps == nil {
-		lastProcessedTimestamps = make(map[Key]time.Time)
-	}
-
 	return &Keeper{
-		storeService:            storeService,
-		cdc:                     cdc,
-		authKeeper:              ak,
-		bankKeeper:              bk,
-		hooks:                   nil,
-		authority:               authority,
-		validatorAddressCodec:   validatorAddressCodec,
-		consensusAddressCodec:   consensusAddressCodec,
-		lastProcessedTimestamps: lastProcessedTimestamps,
+		storeService:          storeService,
+		cdc:                   cdc,
+		authKeeper:            ak,
+		bankKeeper:            bk,
+		hooks:                 nil,
+		authority:             authority,
+		validatorAddressCodec: validatorAddressCodec,
+		consensusAddressCodec: consensusAddressCodec,
 	}
 }
 
@@ -191,12 +174,4 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 	}
 
 	return valUpdates.Updates, nil
-}
-
-func (k Keeper) GetLastProcessedTimestamp(key Key) time.Time {
-	return k.lastProcessedTimestamps[key]
-}
-
-func (k *Keeper) SetLastProcessedTimestamp(key Key, t time.Time) {
-	k.lastProcessedTimestamps[key] = t
 }
