@@ -175,3 +175,27 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 
 	return valUpdates.Updates, nil
 }
+
+func (k Keeper) GetUnbondingValidatorsCache(ctx context.Context) map[string][]string {
+	return k.unbondingValidators
+}
+
+func (k *Keeper) SetUnbondingValidatorsCache(unbondingValidators map[string][]string) {
+	k.unbondingValidators = unbondingValidators
+}
+
+func (k Keeper) GetUnbondingDelegationCache(ctx context.Context) map[string][]types.DVPair {
+	return k.unbondingDelegations
+}
+
+func (k *Keeper) SetUnbondingDelegationCache(unbondingDelegations map[string][]types.DVPair) {
+	k.unbondingDelegations = unbondingDelegations
+}
+
+func (k Keeper) GetRedelegationCache(ctx context.Context) map[string][]types.DVVTriplet {
+	return k.redelegations
+}
+
+func (k *Keeper) SetRedelegationCache(redelegations map[string][]types.DVVTriplet) {
+	k.redelegations = redelegations
+}
