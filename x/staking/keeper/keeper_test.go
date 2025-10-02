@@ -2,7 +2,6 @@ package keeper_test
 
 import (
 	"testing"
-	"time"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
@@ -67,7 +66,6 @@ func (s *KeeperTestSuite) SetupTest() {
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		address.NewBech32Codec("cosmosvaloper"),
 		address.NewBech32Codec("cosmosvalcons"),
-		nil,
 	)
 	require.NoError(keeper.SetParams(ctx, stakingtypes.DefaultParams()))
 
@@ -99,30 +97,6 @@ func (s *KeeperTestSuite) TestParams() {
 	resParams, err = keeper.GetParams(ctx)
 	require.NoError(err)
 	require.True(expParams.Equal(resParams))
-}
-
-func (s *KeeperTestSuite) TestLastProcessedTimestamp() {
-	_, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-	t1 := time.Now()
-	t2 := time.Now().Add(-1 * time.Minute)
-	t3 := time.Now().Add(-2 * time.Minute)
-	expected := map[stakingkeeper.Key]time.Time{
-		stakingkeeper.ValidatorQueue:    t1,
-		stakingkeeper.UBDQueue:          t2,
-		stakingkeeper.RedelegationQueue: t3,
-	}
-
-	keeper.SetLastProcessedTimestamp(stakingkeeper.ValidatorQueue, expected[stakingkeeper.ValidatorQueue])
-	keeper.SetLastProcessedTimestamp(stakingkeeper.UBDQueue, expected[stakingkeeper.UBDQueue])
-	keeper.SetLastProcessedTimestamp(stakingkeeper.RedelegationQueue, expected[stakingkeeper.RedelegationQueue])
-
-	resValidatorQueue := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	resUBDQueue := keeper.GetLastProcessedTimestamp(stakingkeeper.UBDQueue)
-	resRedelegationQueue := keeper.GetLastProcessedTimestamp(stakingkeeper.RedelegationQueue)
-	require.Equal(expected[stakingkeeper.ValidatorQueue], resValidatorQueue)
-	require.Equal(expected[stakingkeeper.UBDQueue], resUBDQueue)
-	require.Equal(expected[stakingkeeper.RedelegationQueue], resRedelegationQueue)
 }
 
 func (s *KeeperTestSuite) TestLastTotalPower() {
