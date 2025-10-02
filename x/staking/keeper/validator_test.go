@@ -415,27 +415,18 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 
 	// check unbonding mature validators
 	ctx = ctx.WithBlockHeight(endHeight).WithBlockTime(endTime)
-	t := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	iterator, err := keeper.ValidatorQueueIterator(ctx, t, 0, ctx.BlockTime(), ctx.BlockHeight())
-	require.NoError(err)
-	err = keeper.UnbondAllMatureValidators(ctx, iterator)
+	err = keeper.UnbondAllMatureValidators(ctx)
 	require.EqualError(err, "validator in the unbonding queue was not found: validator does not exist")
 
 	require.NoError(keeper.SetValidator(ctx, validator))
 	ctx = ctx.WithBlockHeight(endHeight).WithBlockTime(endTime)
 
-	t = keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	iterator, err = keeper.ValidatorQueueIterator(ctx, t, 0, ctx.BlockTime(), ctx.BlockHeight())
-	require.NoError(err)
-	err = keeper.UnbondAllMatureValidators(ctx, iterator)
+	err = keeper.UnbondAllMatureValidators(ctx)
 	require.EqualError(err, "unexpected validator in unbonding queue; status was not unbonding")
 
 	validator.Status = stakingtypes.Unbonding
 	require.NoError(keeper.SetValidator(ctx, validator))
-	t = keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	iterator, err = keeper.ValidatorQueueIterator(ctx, t, 0, ctx.BlockTime(), ctx.BlockHeight())
-	require.NoError(err)
-	require.NoError(keeper.UnbondAllMatureValidators(ctx, iterator))
+	require.NoError(keeper.UnbondAllMatureValidators(ctx))
 	validator, err = keeper.GetValidator(ctx, valAddr)
 	require.ErrorIs(err, stakingtypes.ErrNoValidatorFound)
 
@@ -444,22 +435,350 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	validator, _ = validator.AddTokensFromDel(addTokens)
 	validator.Status = stakingtypes.Unbonding
 	require.NoError(keeper.SetValidator(ctx, validator))
-	t = keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	iterator, err = keeper.ValidatorQueueIterator(ctx, t, 0, ctx.BlockTime(), ctx.BlockHeight())
-	require.NoError(err)
-	require.NoError(keeper.UnbondAllMatureValidators(ctx, iterator))
+	require.NoError(keeper.UnbondAllMatureValidators(ctx))
 	validator, err = keeper.GetValidator(ctx, valAddr)
 	require.NoError(err)
 	require.Equal(stakingtypes.Unbonded, validator.Status)
+}
+
+func (s *KeeperTestSuite) TestInitUnbondingValidatorsCache() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingValidatorsCache(ctx))
+
+	// add ready to unbond validator directly to store
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	val.UnbondingHeight = blockHeight
+	val.UnbondingTime = blockTime
+	val.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, val))
+	require.NoError(keeper.SetUnbondingValidatorQueueStore(ctx, val.UnbondingTime, val.UnbondingHeight, []string{val.GetOperator()}))
+
+	// add another unbonding validator directly to store
+	valAddr1 := sdk.ValAddress(PKs[1].Address().Bytes())
+	validator1 := testutil.NewValidator(s.T(), valAddr1, PKs[1])
+	valUnbondingHeight1 := blockHeight - 10
+	valUnbondingTime1 := blockTime.Add(-1 * time.Minute)
+	validator1.UnbondingHeight = valUnbondingHeight1
+	validator1.UnbondingTime = valUnbondingTime1
+	validator1.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, validator1))
+	require.NoError(keeper.SetUnbondingValidatorQueueStore(ctx, validator1.UnbondingTime, validator1.UnbondingHeight, []string{validator1.GetOperator()}))
+
+	// init unbonding validators cache should return the inserted validators
+	unbondingValidators, err := keeper.InitUnbondingValidatorsCache(ctx)
+	require.NoError(err)
+	require.Equal(2, len(unbondingValidators))
+	require.Equal(val.GetOperator(), unbondingValidators[stakingtypes.GetCacheValidatorQueueKey(val.UnbondingTime, val.UnbondingHeight)][0])
+	require.Equal(validator1.GetOperator(), unbondingValidators[stakingtypes.GetCacheValidatorQueueKey(validator1.UnbondingTime, validator1.UnbondingHeight)][0])
+}
+
+func (s *KeeperTestSuite) TestGetAllUnbondingValidators() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingValidatorsCache(ctx))
+
+	// add ready to unbond validator
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	val.UnbondingHeight = blockHeight
+	val.UnbondingTime = blockTime
+	val.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, val))
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, val))
+
+	// add another unbonding validator
+	valAddr1 := sdk.ValAddress(PKs[1].Address().Bytes())
+	validator1 := testutil.NewValidator(s.T(), valAddr1, PKs[1])
+	valUnbondingHeight1 := blockHeight - 10
+	valUnbondingTime1 := blockTime.Add(-1 * time.Minute)
+	validator1.UnbondingHeight = valUnbondingHeight1
+	validator1.UnbondingTime = valUnbondingTime1
+	validator1.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, validator1))
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator1))
+
+	// get all unbonding validators should return the inserted validators
+	unbondingValidators, err := keeper.GetAllUnbondingValidators(ctx)
+	require.NoError(err)
+	require.Equal(2, len(unbondingValidators))
+	require.Equal(val.GetOperator(), unbondingValidators[stakingtypes.GetCacheValidatorQueueKey(val.UnbondingTime, val.UnbondingHeight)][0])
+	require.Equal(validator1.GetOperator(), unbondingValidators[stakingtypes.GetCacheValidatorQueueKey(validator1.UnbondingTime, validator1.UnbondingHeight)][0])
+}
+
+func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueCache() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingValidatorsCache(ctx))
+
+	// add ready to unbond validator directly to cache
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	val.UnbondingHeight = blockHeight
+	val.UnbondingTime = blockTime
+	val.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, val))
+	require.NoError(keeper.SetUnbondingValidatorQueueCache(ctx, blockTime, blockHeight, []string{val.GetOperator()}))
+
+	// cache should be populated with unbonding validator
+	require.Equal(1, len(keeper.GetUnbondingValidatorsCache(ctx)))
+	require.Equal(val.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(blockTime, blockHeight)][0])
+
+}
+
+func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueStore() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	iterator, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	// no unbonding validator in the queue initally
+	require.Equal(0, count)
+
+	// add ready to unbond validator directly to store
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	val.UnbondingHeight = blockHeight
+	val.UnbondingTime = blockTime
+	val.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, val))
+	require.NoError(keeper.SetUnbondingValidatorQueueStore(ctx, blockTime, blockHeight, []string{val.GetOperator()}))
+
+	iterator1, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	require.NoError(err)
+	defer iterator1.Close()
+	count1 := 0
+	for ; iterator1.Valid(); iterator1.Next() {
+		count1++
+	}
+
+	// unbonding validator should be retrieved
+	require.Equal(1, count1)
+
+}
+
+func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	iterator, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	// no unbonding validator in the queue initally
+	require.Equal(0, count)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingValidatorsCache(ctx))
+
+	// add ready to unbond validator
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	val.UnbondingHeight = blockHeight
+	val.UnbondingTime = blockTime
+	val.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, val))
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, val))
+
+	// add another unbonding validator with same unbonding time and height
+	valAddr1 := sdk.ValAddress(PKs[1].Address().Bytes())
+	validator1 := testutil.NewValidator(s.T(), valAddr1, PKs[1])
+	valUnbondingHeight1 := blockHeight
+	valUnbondingTime1 := blockTime
+	validator1.UnbondingHeight = valUnbondingHeight1
+	validator1.UnbondingTime = valUnbondingTime1
+	validator1.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, validator1))
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator1))
+
+	iterator1, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	require.NoError(err)
+	defer iterator1.Close()
+	count1 := 0
+	for ; iterator1.Valid(); iterator1.Next() {
+		count1++
+	}
+
+	// unbonding validator should be retrieved
+	// count 1 due to same unbonding time and height
+	require.Equal(1, count1)
+
+	// cache should be populated with unbonding validators
+	require.Equal(1, len(keeper.GetUnbondingValidatorsCache(ctx))) // length 1 due to same unbonding time and height
+	require.Equal(val.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(blockTime, blockHeight)][0])
+	require.Equal(validator1.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(validator1.UnbondingTime, validator1.UnbondingHeight)][1])
+
+	// add another unbonding validator with different unbonding time and height
+	valAddr2 := sdk.ValAddress(PKs[1].Address().Bytes())
+	validator2 := testutil.NewValidator(s.T(), valAddr2, PKs[1])
+	valUnbondingHeight2 := blockHeight - 10
+	valUnbondingTime2 := blockTime.Add(-1 * time.Minute)
+	validator2.UnbondingHeight = valUnbondingHeight2
+	validator2.UnbondingTime = valUnbondingTime2
+	validator2.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, validator2))
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator2))
+
+	iterator2, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	require.NoError(err)
+	defer iterator2.Close()
+	count2 := 0
+	for ; iterator2.Valid(); iterator2.Next() {
+		count2++
+	}
+
+	// unbonding validator should be retrieved
+	require.Equal(2, count2)
+
+	// cache should be populated with unbonding validators
+	require.Equal(2, len(keeper.GetUnbondingValidatorsCache(ctx)))
+	require.Equal(val.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(blockTime, blockHeight)][0])
+	require.Equal(validator1.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(validator1.UnbondingTime, validator1.UnbondingHeight)][1])
+	require.Equal(validator2.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(validator2.UnbondingTime, validator2.UnbondingHeight)][0])
+
+}
+
+func (s *KeeperTestSuite) TestDeleteFromValidatorQueueCache() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingValidatorsCache(ctx))
+
+	// add ready to unbond validator directly to cache
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	val.UnbondingHeight = blockHeight
+	val.UnbondingTime = blockTime
+	val.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, val))
+	require.NoError(keeper.SetUnbondingValidatorQueueCache(ctx, blockTime, blockHeight, []string{val.GetOperator()}))
+
+	// cache should be populated with unbonding validator
+	require.Equal(1, len(keeper.GetUnbondingValidatorsCache(ctx)))
+	require.Equal(val.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(blockTime, blockHeight)][0])
+
+	keeper.DeleteFromValidatorQueueCache(ctx, blockTime, blockHeight)
+
+	// cache should also remove the removed unbonding validator
+	require.Equal(0, len(keeper.GetUnbondingValidatorsCache(ctx)))
+
+}
+
+func (s *KeeperTestSuite) TestDeleteValidatorQueueStore() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// add ready to unbond validator directly to store
+	valPubKey := PKs[0]
+	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+	val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+	val.UnbondingHeight = blockHeight
+	val.UnbondingTime = blockTime
+	val.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, val))
+	require.NoError(keeper.SetUnbondingValidatorQueueStore(ctx, blockTime, blockHeight, []string{val.GetOperator()}))
+
+	iterator, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	// unbonding validator in the queue
+	require.Equal(1, count)
+	require.NoError(keeper.DeleteValidatorQueueStore(ctx, blockTime, blockHeight))
+
+	iterator, err = keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	require.NoError(err)
+	defer iterator.Close()
+	count = 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+
+	// unbonding validator should be removed
+	require.Equal(0, count)
+}
+
+func (s *KeeperTestSuite) TestGetAndParseCacheValidatorQueueKey() {
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	key := stakingtypes.GetCacheValidatorQueueKey(blockTime, blockHeight)
+	time, height, err := stakingtypes.ParseCacheValidatorQueueKey(key)
+	require.NoError(err)
+	require.Equal(blockTime, time)
+	require.Equal(blockHeight, height)
+
 }
 
 func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
-	blockTime, _ := time.Parse(time.RFC3339Nano, "2024-01-01T12:00:00Z")
+	blockTime := time.Now().UTC()
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingValidatorsCache(ctx))
 
 	// add unbonding validator - ready to unbond
 	valPubKey := PKs[0]
@@ -482,50 +801,18 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 	require.NoError(keeper.SetValidator(ctx, validator1))
 	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator1))
 
-	valItr, _, _, errs := keeper.FetchIterators(ctx, blockTime, blockHeight)
-	require.Empty(errs)
-	err := keeper.UnbondAllMatureValidators(ctx, valItr)
+	// cache should be populated with unbonding validators
+	require.Equal(2, len(keeper.GetUnbondingValidatorsCache(ctx)))
+
+
+	err := keeper.UnbondAllMatureValidators(ctx)
 	require.NoError(err)
 
+	// all unbonding validators should be removed
 	v, err := keeper.GetAllValidators(ctx)
 	require.NoError(err)
 	require.Equal(0, len(v))
-	
-	t := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	require.Equal(blockTime, t)
-}
-func (s *KeeperTestSuite) TestUpdateTimestampToEarliestNonMatureUnbondingValidator() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
 
-	blockTime, _ := time.Parse(time.RFC3339Nano, "2024-01-01T12:00:00Z")
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	valUnbondingHeight := blockHeight + 100000
-	valUnbondingTime := blockTime.Add(-1 * time.Minute)
-
-	// add unbonding validator - with a future blockHeight
-	valPubKey := PKs[0]
-	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
-	require.NoError(keeper.SetUnbondingValidatorsQueue(ctx, valUnbondingTime, valUnbondingHeight, []string{valAddr.String()}))
-	validator := testutil.NewValidator(s.T(), valAddr, valPubKey)
-	validator.Status = stakingtypes.Unbonding
-	require.NoError(keeper.SetValidator(ctx, validator))
-	v, err := keeper.GetAllValidators(ctx)
-	require.NoError(err)
-	require.Equal(1, len(v))
-
-	valItr, _, _, errs := keeper.FetchIterators(ctx, blockTime, blockHeight)
-	require.Empty(errs)
-	err = keeper.UnbondAllMatureValidators(ctx, valItr)
-	require.NoError(err)
-
-	v, err = keeper.GetAllValidators(ctx)
-	require.NoError(err)
-	require.Equal(1, len(v))
-	require.True(v[0].IsUnbonding())
-
-	t := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	require.Equal(valUnbondingTime, t)
+	// cache should be empty after unbonding all mature validators
+	require.Empty(keeper.GetUnbondingValidatorsCache(ctx))
 }
