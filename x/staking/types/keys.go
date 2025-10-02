@@ -192,11 +192,11 @@ func GetValidatorQueueKey(timestamp time.Time, height int64) []byte {
 }
 
 func GetCacheValidatorQueueKey(time time.Time, height int64) string {
-	return fmt.Sprintf("%s-%d", time.Format(types.SortableTimeFormat), height)
+	return fmt.Sprintf("%s/%d", time.Format(types.SortableTimeFormat), height)
 }
 
 func ParseCacheValidatorQueueKey(key string) (time.Time, int64, error) {
-	parts := strings.Split(key, "-")
+	parts := strings.Split(key, "/")
 	t, err := types.ParseTime(parts[0])
 	if err != nil {
 		return time.Time{}, 0, err
