@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"time"
 
 	gogotypes "github.com/cosmos/gogoproto/types"
 
@@ -34,25 +33,17 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		return nil, err
 	}
 
-	start := time.Now()
-	k.Logger(ctx).Info("xxx UnbondAllMatureValidators starting", "start_time", start)
 	err = k.UnbondAllMatureValidators(ctx)
 	if err != nil {
 		return nil, err
 	}
-	elapsed := time.Since(start)
-	k.Logger(ctx).Info("xxx UnbondAllMatureValidators completed", "duration", elapsed)
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
-	start = time.Now()
-	k.Logger(ctx).Info("xxx DequeueAllMatureUBDQueue starting", "start_time", start)
 	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, sdkCtx.BlockTime())
 	if err != nil {
 		return nil, err
 	}
-	elapsed = time.Since(start)
-	k.Logger(ctx).Info("xxx DequeueAllMatureUBDQueue completed", "duration", elapsed)
 
 	for _, dvPair := range matureUnbonds {
 		addr, err := k.validatorAddressCodec.StringToBytes(dvPair.ValidatorAddress)
@@ -79,14 +70,10 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		)
 	}
 
-	start = time.Now()
-	k.Logger(ctx).Info("xxx DequeueAllMatureRedelegationQueue starting", "start_time", start)
 	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, sdkCtx.BlockTime())
 	if err != nil {
 		return nil, err
 	}
-	elapsed = time.Since(start)
-	k.Logger(ctx).Info("xxx DequeueAllMatureRedelegationQueue completed", "duration", elapsed)
 
 	for _, dvvTriplet := range matureRedelegations {
 		valSrcAddr, err := k.validatorAddressCodec.StringToBytes(dvvTriplet.ValidatorSrcAddress)

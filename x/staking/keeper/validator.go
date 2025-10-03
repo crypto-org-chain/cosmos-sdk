@@ -584,14 +584,10 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	blockTime := sdkCtx.BlockTime()
 	blockHeight := sdkCtx.BlockHeight()
 
-	start := time.Now()
-	k.Logger(ctx).Info("xxx GetAllUnbondingValidators starting", "start_time", start)
 	unbondingValidators, err := k.GetAllUnbondingValidators(ctx)
 	if err != nil {
 		return err
 	}
-	elapsed := time.Since(start)
-	k.Logger(ctx).Info("xxx GetAllUnbondingValidators completed", "duration", elapsed)
 
 	keys := make([]string, 0, len(unbondingValidators))
 	for k := range unbondingValidators {
@@ -651,10 +647,8 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 
 func (k *Keeper) GetAllUnbondingValidators(ctx context.Context) (map[string][]string, error) {
 	if unbondingValidators := k.GetUnbondingValidatorsCache(ctx); unbondingValidators != nil {
-		k.Logger(ctx).Info("xxx unbondingValidators cache hit", "data", unbondingValidators)
 		return unbondingValidators, nil
 	}
-	k.Logger(ctx).Info("xxx unbondingValidators cache miss, initializing cache")
 	return k.InitUnbondingValidatorsCache(ctx)
 }
 
@@ -688,7 +682,6 @@ func (k *Keeper) InitUnbondingValidatorsCache(ctx context.Context) (map[string][
 	}
 
 	k.SetUnbondingValidatorsCache(unbondingValidators)
-	k.Logger(ctx).Info("xxx setting unbondingValidators cache", "data", unbondingValidators)
 	return unbondingValidators, nil
 }
 
