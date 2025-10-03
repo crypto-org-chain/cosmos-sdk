@@ -463,9 +463,10 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 
 func (k *Keeper) GetUBDs(ctx context.Context, timestamp time.Time) (map[string][]types.DVPair, error) {
 	if unbondingDelegations := k.GetUnbondingDelegationCache(ctx); unbondingDelegations != nil {
+		k.Logger(ctx).Info("xxx unbondingDelegations cache hit", "data", unbondingDelegations)
 		return unbondingDelegations, nil
 	}
-
+	k.Logger(ctx).Info("xxx unbondingDelegations cache miss, initializing cache")
 	return k.InitUBDsCache(ctx)
 }
 
@@ -497,6 +498,7 @@ func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, 
 	}
 
 	k.SetUnbondingDelegationCache(unbondingDelegations)
+	k.Logger(ctx).Info("xxx setting unbondingDelegations cache", "data", unbondingDelegations)
 	return unbondingDelegations, nil
 }
 
@@ -1346,10 +1348,14 @@ func (k Keeper) ValidateUnbondAmount(
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
 // currTime, and deletes the timeslices from the queue.
 func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
+	start := time.Now()
+	k.Logger(ctx).Info("xxx GetUBDs starting", "start_time", start)
 	unbondingDelegations, err := k.GetUBDs(ctx, currTime)
 	if err != nil {
 		return matureUnbonds, err
 	}
+	elapsed := time.Since(start)
+	k.Logger(ctx).Info("xxx GetUBDs completed", "duration", elapsed)
 
 	keys := make([]string, 0, len(unbondingDelegations))
 
@@ -1410,10 +1416,14 @@ func (k *Keeper) InsertUBDQueueCache(ctx context.Context, t time.Time, keys []ty
 // the queue.
 func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	start := time.Now()
+	k.Logger(ctx).Info("xxx GetPendingRedelegations starting", "start_time", start)
 	redelegations, err := k.GetPendingRedelegations(ctx, sdkCtx.BlockTime())
 	if err != nil {
 		return matureRedelegations, err
 	}
+	elapsed := time.Since(start)
+	k.Logger(ctx).Info("xxx GetPendingRedelegations completed", "duration", elapsed)
 
 	keys := make([]string, 0, len(redelegations))
 
@@ -1471,9 +1481,10 @@ func (k *Keeper) InsertRedelegationQueueCache(ctx context.Context, t time.Time, 
 
 func (k *Keeper) GetPendingRedelegations(ctx context.Context, timestamp time.Time) (map[string][]types.DVVTriplet, error) {
 	if redelegations := k.GetRedelegationCache(ctx); redelegations != nil {
+		k.Logger(ctx).Info("xxx redelegations cache hit", "data", redelegations)
 		return redelegations, nil
 	}
-
+	k.Logger(ctx).Info("xxx redelegations cache miss, initializing cache")
 	return k.InitRedelegationsCache(ctx)
 }
 
@@ -1504,5 +1515,6 @@ func (k *Keeper) InitRedelegationsCache(ctx context.Context) (map[string][]types
 		redelegations[sdk.FormatTimeString(t)] = triplets
 	}
 	k.SetRedelegationCache(redelegations)
+	k.Logger(ctx).Info("xxx setting redelegations cache", "data", redelegations)
 	return redelegations, nil
 }

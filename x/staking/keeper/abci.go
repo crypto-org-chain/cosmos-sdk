@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 
@@ -19,5 +20,12 @@ func (k *Keeper) BeginBlocker(ctx context.Context) error {
 // EndBlocker called at every block, update validator set
 func (k *Keeper) EndBlocker(ctx context.Context) ([]abci.ValidatorUpdate, error) {
 	defer telemetry.ModuleMeasureSince(types.ModuleName, telemetry.Now(), telemetry.MetricKeyEndBlocker)
-	return k.BlockValidatorUpdates(ctx)
+	start := time.Now()
+	k.Logger(ctx).Info("xxx staking EndBlocker starting", "start_time", start)
+	
+	result, err := k.BlockValidatorUpdates(ctx)
+	
+	elapsed := time.Since(start)
+	k.Logger(ctx).Info("xxx staking EndBlocker completed", "duration", elapsed)
+	return result, err
 }
