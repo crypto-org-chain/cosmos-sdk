@@ -2,7 +2,6 @@ package keeper_test
 
 import (
 	"time"
-
 	"github.com/golang/mock/gomock"
 
 	"cosmossdk.io/math"
@@ -574,10 +573,7 @@ func (s *KeeperTestSuite) TestUndelegateFromUnbondedValidator() {
 
 	// unbond the validator
 	ctx = ctx.WithBlockTime(validator.UnbondingTime)
-	t := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	iterator, err := keeper.ValidatorQueueIterator(ctx, t, 0, ctx.BlockTime(), ctx.BlockHeight())
-	require.NoError(err)
-	err = keeper.UnbondAllMatureValidators(ctx, iterator)
+	err = keeper.UnbondAllMatureValidators(ctx)
 	require.NoError(err)
 
 	// Make sure validator is still in state because there is still an outstanding delegation
@@ -661,10 +657,7 @@ func (s *KeeperTestSuite) TestUnbondingAllDelegationFromValidator() {
 
 	// unbond the validator
 	ctx = ctx.WithBlockTime(validator.UnbondingTime)
-	t := keeper.GetLastProcessedTimestamp(stakingkeeper.ValidatorQueue)
-	iterator, err := keeper.ValidatorQueueIterator(ctx, t, 0, ctx.BlockTime(), ctx.BlockHeight())
-	require.NoError(err)
-	err = keeper.UnbondAllMatureValidators(ctx, iterator)
+	err = keeper.UnbondAllMatureValidators(ctx)
 	require.NoError(err)
 
 	// validator should now be deleted from state
@@ -1165,4 +1158,441 @@ func (s *KeeperTestSuite) TestSetUnbondingDelegationEntry() {
 	require.NotEqual(resUnbonding.Entries[0], resUnbonding.Entries[1])
 	require.Equal(creationHeight, resUnbonding.Entries[0].CreationHeight)
 	require.Equal(newCreationHeight, resUnbonding.Entries[1].CreationHeight)
+}
+
+func (s *KeeperTestSuite) TestInitUBDsCache() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
+
+	// add unbonding delegation directly to store
+	delAddrs, valAddrs := createValAddrs(2)
+	dvPair := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[0].String(),
+		ValidatorAddress: valAddrs[0].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetUBDQueueStore(ctx, t, []stakingtypes.DVPair{dvPair}))
+
+	// add another unbonding delegation directly to store
+	dvPair1 := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[1].String(),
+		ValidatorAddress: valAddrs[1].String(),
+	}
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.SetUBDQueueStore(ctx, t1, []stakingtypes.DVPair{dvPair1}))
+
+	// init unbonding delegations cache should return the inserted unbonding delegations
+	cache, err := keeper.InitUBDsCache(ctx)
+
+	require.NoError(err)
+	require.Equal(2, len(cache))
+	require.Equal(dvPair.DelegatorAddress, cache[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(dvPair.ValidatorAddress, cache[sdk.FormatTimeString(t)][0].ValidatorAddress)
+	require.Equal(dvPair1.DelegatorAddress, cache[sdk.FormatTimeString(t1)][0].DelegatorAddress)
+	require.Equal(dvPair1.ValidatorAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorAddress)
+}
+
+func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
+
+	delAddrs, valAddrs := createValAddrs(2)
+
+	// insert unbonding delegation
+	ubd := stakingtypes.NewUnbondingDelegation(
+		delAddrs[0],
+		valAddrs[0],
+		blockHeight,
+		blockTime,
+		math.NewInt(10),
+		address.NewBech32Codec("cosmosvaloper"),
+		address.NewBech32Codec("cosmos"),
+	)
+
+	t := blockTime
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd, t))
+
+	// add another unbonding delegation
+	ubd1 := stakingtypes.NewUnbondingDelegation(
+		delAddrs[1],
+		valAddrs[1],
+		blockHeight,
+		blockTime,
+		math.NewInt(10),
+		address.NewBech32Codec("cosmosvaloper"),
+		address.NewBech32Codec("cosmos"),
+	)
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd1, t1))
+
+	// get all unbonding delegations should return the inserted unbonding delegations
+	unbondingDelegations, err := keeper.GetUBDs(ctx, blockTime)
+	require.NoError(err)
+	require.Equal(2, len(unbondingDelegations))
+	require.Equal(ubd.DelegatorAddress, unbondingDelegations[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(ubd.ValidatorAddress, unbondingDelegations[sdk.FormatTimeString(t)][0].ValidatorAddress)
+	require.Equal(ubd1.DelegatorAddress, unbondingDelegations[sdk.FormatTimeString(t1)][0].DelegatorAddress)
+	require.Equal(ubd1.ValidatorAddress, unbondingDelegations[sdk.FormatTimeString(t1)][0].ValidatorAddress)
+}
+
+func (s *KeeperTestSuite) TestGetUnbondingDelegationCache() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
+
+	// add unbonding delegation
+	delAddrs, valAddrs := createValAddrs(2)
+	dvPair := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[0].String(),
+		ValidatorAddress: valAddrs[0].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{dvPair}))
+
+	// add another unbonding delegation
+	dvPair1 := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[1].String(),
+		ValidatorAddress: valAddrs[1].String(),
+	}
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.SetUBDQueueTimeSlice(ctx, t1, []stakingtypes.DVPair{dvPair1}))
+
+	// get unbonding delegations should return the inserted unbonding delegations
+	cache := keeper.GetUnbondingDelegationCache(ctx)
+	require.Equal(2, len(cache))
+	require.Equal(dvPair.DelegatorAddress, cache[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(dvPair.ValidatorAddress, cache[sdk.FormatTimeString(t)][0].ValidatorAddress)
+	require.Equal(dvPair1.DelegatorAddress, cache[sdk.FormatTimeString(t1)][0].DelegatorAddress)
+	require.Equal(dvPair1.ValidatorAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorAddress)
+}
+
+
+func (s *KeeperTestSuite) TestSetUBDQueueCache() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
+
+	// add unbonding delegation
+	delAddrs, valAddrs := createValAddrs(1)
+	dvPair := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[0].String(),
+		ValidatorAddress: valAddrs[0].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetUBDQueueCache(ctx, t, []stakingtypes.DVPair{dvPair}))
+
+	// cache should be populated with unbonding validator
+	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx)))
+	require.Equal(dvPair.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
+	require.Equal(dvPair.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
+
+}
+
+func (s *KeeperTestSuite) TestSetUBDQueueStore() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	// no unbonding delegations in the queue initally
+	require.Equal(0, count)
+
+	// add unbonding delegation directly to store
+	delAddrs, valAddrs := createValAddrs(2)
+	dvPair := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[0].String(),
+		ValidatorAddress: valAddrs[0].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetUBDQueueStore(ctx, t, []stakingtypes.DVPair{dvPair}))
+
+	// add another unbonding delegation directly to store
+	dvPair1 := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[1].String(),
+		ValidatorAddress: valAddrs[1].String(),
+	}
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.SetUBDQueueStore(ctx, t1, []stakingtypes.DVPair{dvPair1}))
+
+	iterator1, err := keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator1.Close()
+	count1 := 0
+	for ; iterator1.Valid(); iterator1.Next() {
+		count1++
+	}
+
+	// unbonding delegations should be retrieved
+	require.Equal(2, count1)
+
+}
+
+func (s *KeeperTestSuite) TestInsertUBDQueue() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	// no unbonding delegations in the queue initally
+	require.Equal(0, count)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
+
+	delAddrs, valAddrs := createValAddrs(2)
+
+	// insert unbonding delegation
+	ubd := stakingtypes.NewUnbondingDelegation(
+		delAddrs[0],
+		valAddrs[0],
+		blockHeight,
+		blockTime,
+		math.NewInt(10),
+		address.NewBech32Codec("cosmosvaloper"),
+		address.NewBech32Codec("cosmos"),
+	)
+
+	t := blockTime
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd, t))
+
+	iterator1, err := keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator1.Close()
+	count1 := 0
+	for ; iterator1.Valid(); iterator1.Next() {
+		count1++
+	}
+
+	// unbonding delegation should be retrieved
+	// count 1 due to same unbonding time
+	require.Equal(1, count1)
+
+	// cache should be populated with unbonding validators
+	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx))) // length 1 due to same unbonding time
+	require.Equal(ubd.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(ubd.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
+
+	// insert unbonding delegation with different unbonding time and height
+	ubd1 := stakingtypes.NewUnbondingDelegation(
+		delAddrs[0],
+		valAddrs[0],
+		blockHeight,
+		blockTime,
+		math.NewInt(10),
+		address.NewBech32Codec("cosmosvaloper"),
+		address.NewBech32Codec("cosmos"),
+	)
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd1, t1))
+
+	iterator2, err := keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator2.Close()
+	count2 := 0
+	for ; iterator2.Valid(); iterator2.Next() {
+		count2++
+	}
+
+	// unbonding delegation should be retrieved
+	require.Equal(2, count2)
+
+	// cache should be populated with unbonding validators
+	require.Equal(2, len(keeper.GetUnbondingDelegationCache(ctx)))
+	require.Equal(ubd.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(ubd.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
+	require.Equal(ubd1.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].DelegatorAddress)
+	require.Equal(ubd1.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].ValidatorAddress)
+
+}
+
+func (s *KeeperTestSuite) TestDeleteMatureUBDsCache() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
+
+	// add unbonding delegation directly to cache
+	delAddrs, valAddrs := createValAddrs(1)
+	dvPair := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[0].String(),
+		ValidatorAddress: valAddrs[0].String(),
+	}
+	require.NoError(keeper.SetUBDQueueCache(ctx, blockTime, []stakingtypes.DVPair{dvPair}))
+
+	// cache should be populated with unbonding delegation
+	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx)))
+	require.Equal(dvPair.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].DelegatorAddress)
+	require.Equal(dvPair.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].ValidatorAddress)
+
+	keeper.DeleteMatureUBDsCache(ctx, sdk.FormatTimeString(blockTime))
+
+	// cache should also remove the removed unbonding delegation
+	require.Equal(0, len(keeper.GetUnbondingValidatorsCache(ctx)))
+
+}
+
+func (s *KeeperTestSuite) TestDeleteMatureUBDsStore() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// add unbonding delegation directly to store
+	delAddrs, valAddrs := createValAddrs(2)
+	dvPair := stakingtypes.DVPair{
+		DelegatorAddress: delAddrs[0].String(),
+		ValidatorAddress: valAddrs[0].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetUBDQueueStore(ctx, t, []stakingtypes.DVPair{dvPair}))
+
+	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+
+	// unbonding delegation in the queue
+	require.Equal(1, count)
+	require.NoError(keeper.DeleteMatureUBDsStore(ctx, sdk.FormatTimeString(blockTime)))
+
+	iterator, err = keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count = 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+
+	// unbonding delegation should be removed
+	require.Equal(0, count)
+}
+
+func (s *KeeperTestSuite) TestGetAndParseUnbondingDelegationTimeKey() {
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	key := stakingtypes.GetUnbondingDelegationTimeKey(blockTime)
+	time, err := stakingtypes.ParseUnbondingDelegationTimeKey(key)
+	require.NoError(err)
+	require.Equal(blockTime, time)
+
+}
+
+func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
+
+	delAddrs, valAddrs := createValAddrs(2)
+
+	// insert unbonding delegation
+	ubd := stakingtypes.NewUnbondingDelegation(
+		delAddrs[0],
+		valAddrs[0],
+		blockHeight,
+		blockTime,
+		math.NewInt(10),
+		address.NewBech32Codec("cosmosvaloper"),
+		address.NewBech32Codec("cosmos"),
+	)
+
+	t := blockTime
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd, t))
+
+	// add another unbonding delegation
+	ubd1 := stakingtypes.NewUnbondingDelegation(
+		delAddrs[1],
+		valAddrs[1],
+		blockHeight,
+		blockTime,
+		math.NewInt(10),
+		address.NewBech32Codec("cosmosvaloper"),
+		address.NewBech32Codec("cosmos"),
+	)
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd1, t1))
+
+	// cache should be populated with unbonding delegations
+	require.Equal(2, len(keeper.GetUnbondingDelegationCache(ctx)))
+
+
+	matureUnbonds, err := keeper.DequeueAllMatureUBDQueue(ctx, blockTime)
+
+	require.NoError(err)
+	require.Equal(2, len(matureUnbonds))
+
+	// all unbonding delegations should be removed
+	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	require.Equal(0, count)
 }
