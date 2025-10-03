@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"time"
+
 	"github.com/golang/mock/gomock"
 
 	"cosmossdk.io/math"
@@ -1286,7 +1287,6 @@ func (s *KeeperTestSuite) TestGetUnbondingDelegationCache() {
 	require.Equal(dvPair1.ValidatorAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorAddress)
 }
 
-
 func (s *KeeperTestSuite) TestSetUBDQueueCache() {
 
 	ctx, keeper := s.ctx, s.stakingKeeper
@@ -1386,7 +1386,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	// cache should be empty initially
 	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
 
-	delAddrs, valAddrs := createValAddrs(2)
+	delAddrs, valAddrs := createValAddrs(3)
 
 	// insert unbonding delegation
 	ubd := stakingtypes.NewUnbondingDelegation(
@@ -1401,6 +1401,19 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 
 	t := blockTime
 	require.NoError(keeper.InsertUBDQueue(ctx, ubd, t))
+
+	// insert another unbonding delegation
+	ubd1 := stakingtypes.NewUnbondingDelegation(
+		delAddrs[1],
+		valAddrs[1],
+		blockHeight,
+		blockTime,
+		math.NewInt(10),
+		address.NewBech32Codec("cosmosvaloper"),
+		address.NewBech32Codec("cosmos"),
+	)
+
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd1, t))
 
 	iterator1, err := keeper.UBDQueueIterator(ctx, blockTime)
 	require.NoError(err)
@@ -1418,11 +1431,13 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx))) // length 1 due to same unbonding time
 	require.Equal(ubd.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
 	require.Equal(ubd.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
+	require.Equal(ubd1.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].DelegatorAddress)
+	require.Equal(ubd1.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorAddress)
 
 	// insert unbonding delegation with different unbonding time and height
-	ubd1 := stakingtypes.NewUnbondingDelegation(
-		delAddrs[0],
-		valAddrs[0],
+	ubd2 := stakingtypes.NewUnbondingDelegation(
+		delAddrs[2],
+		valAddrs[2],
 		blockHeight,
 		blockTime,
 		math.NewInt(10),
@@ -1430,7 +1445,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 		address.NewBech32Codec("cosmos"),
 	)
 	t1 := blockTime.Add(-1 * time.Minute)
-	require.NoError(keeper.InsertUBDQueue(ctx, ubd1, t1))
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd2, t1))
 
 	iterator2, err := keeper.UBDQueueIterator(ctx, blockTime)
 	require.NoError(err)
@@ -1447,8 +1462,10 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	require.Equal(2, len(keeper.GetUnbondingDelegationCache(ctx)))
 	require.Equal(ubd.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
 	require.Equal(ubd.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
-	require.Equal(ubd1.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].DelegatorAddress)
-	require.Equal(ubd1.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].ValidatorAddress)
+	require.Equal(ubd1.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].DelegatorAddress)
+	require.Equal(ubd1.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorAddress)
+	require.Equal(ubd2.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].DelegatorAddress)
+	require.Equal(ubd2.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].ValidatorAddress)
 
 }
 
@@ -1580,13 +1597,444 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	// cache should be populated with unbonding delegations
 	require.Equal(2, len(keeper.GetUnbondingDelegationCache(ctx)))
 
-
 	matureUnbonds, err := keeper.DequeueAllMatureUBDQueue(ctx, blockTime)
 
 	require.NoError(err)
 	require.Equal(2, len(matureUnbonds))
 
 	// all unbonding delegations should be removed
+	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	require.Equal(0, count)
+}
+
+func (s *KeeperTestSuite) TestInitRedelegationsCache() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetRedelegationCache(ctx))
+
+	// add redelegation directly to store
+	delAddrs, valAddrs := createValAddrs(2)
+	dvvTriplet := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[0].String(),
+		ValidatorSrcAddress: valAddrs[0].String(),
+		ValidatorDstAddress: valAddrs[1].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetRedelegationQueueStore(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
+
+	// add another redelegation directly to store
+	dvvTriplet1 := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[1].String(),
+		ValidatorSrcAddress: valAddrs[1].String(),
+		ValidatorDstAddress: valAddrs[0].String(),
+	}
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.SetRedelegationQueueStore(ctx, t1, []stakingtypes.DVVTriplet{dvvTriplet1}))
+
+	// init redelegations cache should return the inserted redelegations
+	cache, err := keeper.InitRedelegationsCache(ctx)
+
+	require.NoError(err)
+	require.Equal(2, len(cache))
+	require.Equal(dvvTriplet.DelegatorAddress, cache[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(dvvTriplet.ValidatorSrcAddress, cache[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
+	require.Equal(dvvTriplet1.DelegatorAddress, cache[sdk.FormatTimeString(t1)][0].DelegatorAddress)
+	require.Equal(dvvTriplet1.ValidatorSrcAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorSrcAddress)
+}
+
+func (s *KeeperTestSuite) TestGetPendingRedelegations() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetRedelegationCache(ctx))
+
+	delAddrs, valAddrs := createValAddrs(2)
+
+	// insert redelegation
+	red := stakingtypes.Redelegation{
+		DelegatorAddress:    delAddrs[0].String(),
+		ValidatorSrcAddress: valAddrs[0].String(),
+		ValidatorDstAddress: valAddrs[1].String(),
+	}
+
+	t := blockTime
+	require.NoError(keeper.InsertRedelegationQueue(ctx, red, t))
+
+	// add another redelegation
+	red1 := stakingtypes.Redelegation{
+		DelegatorAddress:    delAddrs[1].String(),
+		ValidatorSrcAddress: valAddrs[1].String(),
+		ValidatorDstAddress: valAddrs[0].String(),
+	}
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.InsertRedelegationQueue(ctx, red1, t1))
+
+	// get all redelegations should return the inserted redelegations
+	redelegations, err := keeper.GetPendingRedelegations(ctx, blockTime)
+	require.NoError(err)
+	require.Equal(2, len(redelegations))
+	require.Equal(red.DelegatorAddress, redelegations[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(red.ValidatorSrcAddress, redelegations[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
+	require.Equal(red.ValidatorDstAddress, redelegations[sdk.FormatTimeString(t)][0].ValidatorDstAddress)
+	require.Equal(red1.DelegatorAddress, redelegations[sdk.FormatTimeString(t1)][0].DelegatorAddress)
+	require.Equal(red1.ValidatorSrcAddress, redelegations[sdk.FormatTimeString(t1)][0].ValidatorSrcAddress)
+	require.Equal(red1.ValidatorDstAddress, redelegations[sdk.FormatTimeString(t1)][0].ValidatorDstAddress)
+}
+
+func (s *KeeperTestSuite) TestGetRedelegationCache() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetRedelegationCache(ctx))
+
+	// add redelegation
+	delAddrs, valAddrs := createValAddrs(2)
+	dvvTriplet := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[0].String(),
+		ValidatorSrcAddress: valAddrs[0].String(),
+		ValidatorDstAddress: valAddrs[1].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
+
+	// add another redelegation
+	dvvTriplet1 := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[1].String(),
+		ValidatorSrcAddress: valAddrs[1].String(),
+		ValidatorDstAddress: valAddrs[0].String(),
+	}
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.SetRedelegationQueueTimeSlice(ctx, t1, []stakingtypes.DVVTriplet{dvvTriplet1}))
+
+	// get redelegations should return the inserted redelegations
+	cache := keeper.GetRedelegationCache(ctx)
+	require.Equal(2, len(cache))
+	require.Equal(dvvTriplet.DelegatorAddress, cache[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(dvvTriplet.ValidatorSrcAddress, cache[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
+	require.Equal(dvvTriplet1.DelegatorAddress, cache[sdk.FormatTimeString(t1)][0].DelegatorAddress)
+	require.Equal(dvvTriplet1.ValidatorSrcAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorSrcAddress)
+}
+
+func (s *KeeperTestSuite) TestSetRedelegationQueueCache() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetRedelegationCache(ctx))
+
+	// add redelegation
+	delAddrs, valAddrs := createValAddrs(2)
+	dvvTriplet := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[0].String(),
+		ValidatorSrcAddress: valAddrs[0].String(),
+		ValidatorDstAddress: valAddrs[1].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetRedelegationQueueCache(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
+
+	// cache should be populated with unbonding validator
+	require.Equal(1, len(keeper.GetRedelegationCache(ctx)))
+	require.Equal(dvvTriplet.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
+	require.Equal(dvvTriplet.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorDstAddress)
+	require.Equal(dvvTriplet.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
+
+}
+
+func (s *KeeperTestSuite) TestSetRedelegationQueueStore() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	iterator, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	// no redelegations in the queue initally
+	require.Equal(0, count)
+
+	// add redelegation directly to store
+	delAddrs, valAddrs := createValAddrs(2)
+	dvvTriplet := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[0].String(),
+		ValidatorSrcAddress: valAddrs[0].String(),
+		ValidatorDstAddress: valAddrs[1].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetRedelegationQueueStore(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
+
+	// add another redelegation directly to store
+	dvvTriplet1 := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[1].String(),
+		ValidatorSrcAddress: valAddrs[1].String(),
+		ValidatorDstAddress: valAddrs[0].String(),
+	}
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.SetRedelegationQueueStore(ctx, t1, []stakingtypes.DVVTriplet{dvvTriplet1}))
+
+	iterator1, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator1.Close()
+	count1 := 0
+	for ; iterator1.Valid(); iterator1.Next() {
+		count1++
+	}
+
+	// redelegations should be retrieved
+	require.Equal(2, count1)
+
+}
+
+func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	iterator, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	// no redelegations in the queue initally
+	require.Equal(0, count)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetRedelegationCache(ctx))
+
+	delAddrs, valAddrs := createValAddrs(3)
+
+	// insert redelegation
+	red := stakingtypes.NewRedelegation(delAddrs[0], valAddrs[0], valAddrs[1], 0,
+		time.Unix(0, 0), math.NewInt(5),
+		math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+
+	t := blockTime
+	require.NoError(keeper.InsertRedelegationQueue(ctx, red, t))
+
+	// insert another redelegation
+	red1 := stakingtypes.NewRedelegation(delAddrs[1], valAddrs[1], valAddrs[0], 0,
+		time.Unix(0, 0), math.NewInt(5),
+		math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+
+	require.NoError(keeper.InsertRedelegationQueue(ctx, red1, t))
+
+	iterator1, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator1.Close()
+	count1 := 0
+	for ; iterator1.Valid(); iterator1.Next() {
+		count1++
+	}
+
+	// redelegation should be retrieved
+	// count 1 due to same redelegation time
+	require.Equal(1, count1)
+
+	// cache should be populated with redelegations
+	require.Equal(1, len(keeper.GetRedelegationCache(ctx))) // length 1 due to same redelegation time
+	require.Equal(red.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(red.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
+	require.Equal(red.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorDstAddress)
+	require.Equal(red1.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].DelegatorAddress)
+	require.Equal(red1.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorSrcAddress)
+	require.Equal(red1.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorDstAddress)
+
+	// insert another redelegation with different redelegation time and height
+	red2 := stakingtypes.NewRedelegation(delAddrs[2], valAddrs[2], valAddrs[0], 0,
+		time.Unix(0, 0), math.NewInt(5),
+		math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+	t2 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.InsertRedelegationQueue(ctx, red2, t2))
+
+	iterator2, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator2.Close()
+	count2 := 0
+	for ; iterator2.Valid(); iterator2.Next() {
+		count2++
+	}
+
+	// redelegation should be retrieved
+	require.Equal(2, count2)
+
+	// cache should be populated with redelegations
+	require.Equal(2, len(keeper.GetRedelegationCache(ctx)))
+	require.Equal(red.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
+	require.Equal(red.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
+	require.Equal(red.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorDstAddress)
+	require.Equal(red1.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].DelegatorAddress)
+	require.Equal(red1.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorSrcAddress)
+	require.Equal(red1.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorDstAddress)
+	require.Equal(red2.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t2)][0].DelegatorAddress)
+	require.Equal(red2.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t2)][0].ValidatorSrcAddress)
+	require.Equal(red2.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t2)][0].ValidatorDstAddress)
+}
+
+func (s *KeeperTestSuite) TestDeleteMatureRedelegationsCache() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetRedelegationCache(ctx))
+
+	// add redelegation directly to cache
+	delAddrs, valAddrs := createValAddrs(2)
+	dvvTriplet := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[0].String(),
+		ValidatorSrcAddress: valAddrs[0].String(),
+		ValidatorDstAddress: valAddrs[1].String(),
+	}
+	require.NoError(keeper.SetRedelegationQueueCache(ctx, blockTime, []stakingtypes.DVVTriplet{dvvTriplet}))
+
+	// cache should be populated with unbonding delegation
+	require.Equal(1, len(keeper.GetRedelegationCache(ctx)))
+	require.Equal(dvvTriplet.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].DelegatorAddress)
+	require.Equal(dvvTriplet.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].ValidatorSrcAddress)
+	require.Equal(dvvTriplet.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].ValidatorDstAddress)
+
+	keeper.DeleteMatureRedelegationsCache(ctx, sdk.FormatTimeString(blockTime))
+
+	// cache should also remove the removed unbonding delegation
+	require.Equal(0, len(keeper.GetRedelegationCache(ctx)))
+
+}
+
+func (s *KeeperTestSuite) TestDeleteMatureRedelegationsStore() {
+
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// add redelegation directly to store
+	delAddrs, valAddrs := createValAddrs(2)
+	dvvTriplet := stakingtypes.DVVTriplet{
+		DelegatorAddress:    delAddrs[0].String(),
+		ValidatorSrcAddress: valAddrs[0].String(),
+		ValidatorDstAddress: valAddrs[1].String(),
+	}
+	t := blockTime
+	require.NoError(keeper.SetRedelegationQueueStore(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
+
+	iterator, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+
+	// redelegation in the queue
+	require.Equal(1, count)
+	require.NoError(keeper.DeleteMatureRedelegationsStore(ctx, sdk.FormatTimeString(blockTime)))
+
+	iterator, err = keeper.RedelegationQueueIterator(ctx, blockTime)
+	require.NoError(err)
+	defer iterator.Close()
+	count = 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+
+	// redelegation should be removed
+	require.Equal(0, count)
+}
+
+func (s *KeeperTestSuite) TestGetAndParseRedelegationTimeKey() {
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	key := stakingtypes.GetRedelegationTimeKey(blockTime)
+	time, err := stakingtypes.ParseRedelegationTimeKey(key)
+	require.NoError(err)
+	require.Equal(blockTime, time)
+
+}
+
+func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
+	ctx, keeper := s.ctx, s.stakingKeeper
+	require := s.Require()
+
+	blockTime := time.Now().UTC()
+	blockHeight := int64(1000)
+	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+	// cache should be empty initially
+	require.Empty(keeper.GetRedelegationCache(ctx))
+
+	delAddrs, valAddrs := createValAddrs(2)
+
+	// insert redelegation
+	red := stakingtypes.NewRedelegation(delAddrs[0], valAddrs[0], valAddrs[1], 0,
+		time.Unix(0, 0), math.NewInt(5),
+		math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+
+	t := blockTime
+	require.NoError(keeper.InsertRedelegationQueue(ctx, red, t))
+
+	// insert another redelegation
+	red1 := stakingtypes.NewRedelegation(delAddrs[1], valAddrs[1], valAddrs[0], 0,
+		time.Unix(0, 0), math.NewInt(5),
+		math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+
+	t1 := blockTime.Add(-1 * time.Minute)
+	require.NoError(keeper.InsertRedelegationQueue(ctx, red1, t1))
+
+	// cache should be populated with redelegations
+	require.Equal(2, len(keeper.GetRedelegationCache(ctx)))
+
+	matureRedelegations, err := keeper.DequeueAllMatureRedelegationQueue(ctx, blockTime)
+
+	require.NoError(err)
+	require.Equal(2, len(matureRedelegations))
+
+	// all redelegations should be removed
 	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
 	require.NoError(err)
 	defer iterator.Close()
