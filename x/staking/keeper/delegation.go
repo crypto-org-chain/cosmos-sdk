@@ -479,7 +479,6 @@ func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, 
 	defer iterator.Close()
 
 	unbondingDelegations := make(map[string][]types.DVPair)
-
 	for ; iterator.Valid(); iterator.Next() {
 		pairs := make([]types.DVPair, 0)
 		timeslice := types.DVPairs{}
@@ -501,8 +500,8 @@ func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, 
 }
 
 // SetUBDQueueTimeSlice sets a specific unbonding queue timeslice in cache and store.
-func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
-	err := k.InsertUBDQueueCache(ctx, timestamp, keys)
+func (k *Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
+	err := k.SetUBDQueueCache(ctx, timestamp, keys)
 	if err != nil {
 		return err
 	}
@@ -521,7 +520,7 @@ func (k *Keeper) SetUBDQueueStore(ctx context.Context, timestamp time.Time, keys
 
 // InsertUBDQueue inserts an unbonding delegation to the appropriate timeslice
 // in the unbonding queue.
-func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegation, completionTime time.Time) error {
+func (k *Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegation, completionTime time.Time) error {
 	dvPair := types.DVPair{DelegatorAddress: ubd.DelegatorAddress, ValidatorAddress: ubd.ValidatorAddress}
 
 	timeSlice, err := k.GetUBDQueueTimeSlice(ctx, completionTime)
@@ -1064,7 +1063,7 @@ func (k Keeper) getBeginInfo(
 // are not exceeded and unbond the staked tokens (based on shares) by creating
 // an unbonding object and inserting it into the unbonding queue which will be
 // processed during the staking EndBlocker.
-func (k Keeper) Undelegate(
+func (k *Keeper) Undelegate(
 	ctx context.Context, delAddr sdk.AccAddress, valAddr sdk.ValAddress, sharesAmount math.LegacyDec,
 ) (time.Time, math.Int, error) {
 	validator, err := k.GetValidator(ctx, valAddr)
@@ -1391,7 +1390,7 @@ func (k *Keeper) DeleteMatureUBDsCache(ctx context.Context, key string) {
 	}
 }
 
-func (k *Keeper) InsertUBDQueueCache(ctx context.Context, t time.Time, keys []types.DVPair) error {
+func (k *Keeper) SetUBDQueueCache(ctx context.Context, t time.Time, keys []types.DVPair) error {
 	unbondingDelegations := k.GetUnbondingDelegationCache(ctx)
 	if unbondingDelegations == nil {
 		cache, err := k.InitUBDsCache(ctx)
