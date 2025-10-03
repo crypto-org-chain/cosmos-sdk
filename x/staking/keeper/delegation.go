@@ -776,7 +776,7 @@ func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 
 // SetRedelegationQueueTimeSlice sets a specific redelegation queue timeslice.
 func (k *Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVVTriplet) error {
-	err := k.InsertRedelegationQueueCache(ctx, timestamp, keys)
+	err := k.SetRedelegationQueueCache(ctx, timestamp, keys)
 	if err != nil {
 		return err
 	}
@@ -1454,7 +1454,7 @@ func (k *Keeper) DeleteMatureRedelegationsCache(ctx context.Context, key string)
 	}
 }
 
-func (k *Keeper) InsertRedelegationQueueCache(ctx context.Context, t time.Time, keys []types.DVVTriplet) error {
+func (k *Keeper) SetRedelegationQueueCache(ctx context.Context, t time.Time, keys []types.DVVTriplet) error {
 	redelegations := k.GetRedelegationCache(ctx)
 	if redelegations == nil {
 		cache, err := k.InitRedelegationsCache(ctx)
