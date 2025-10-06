@@ -565,7 +565,7 @@ func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueStore() {
 	for ; iterator.Valid(); iterator.Next() {
 		count++
 	}
-	// no unbonding validator in the queue initally
+	// no unbonding validator in the queue initially
 	require.Equal(0, count)
 
 	// add ready to unbond validator directly to store
@@ -607,7 +607,7 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 	for ; iterator.Valid(); iterator.Next() {
 		count++
 	}
-	// no unbonding validator in the queue initally
+	// no unbonding validator in the queue initially
 	require.Equal(0, count)
 
 	// cache should be empty initially
@@ -803,7 +803,6 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 
 	// cache should be populated with unbonding validators
 	require.Equal(2, len(keeper.GetUnbondingValidatorsCache(ctx)))
-
 
 	err := keeper.UnbondAllMatureValidators(ctx)
 	require.NoError(err)

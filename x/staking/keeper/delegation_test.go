@@ -1331,7 +1331,7 @@ func (s *KeeperTestSuite) TestSetUBDQueueStore() {
 	for ; iterator.Valid(); iterator.Next() {
 		count++
 	}
-	// no unbonding delegations in the queue initally
+	// no unbonding delegations in the queue initially
 	require.Equal(0, count)
 
 	// add unbonding delegation directly to store
@@ -1380,7 +1380,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	for ; iterator.Valid(); iterator.Next() {
 		count++
 	}
-	// no unbonding delegations in the queue initally
+	// no unbonding delegations in the queue initially
 	require.Equal(0, count)
 
 	// cache should be empty initially
@@ -1783,7 +1783,7 @@ func (s *KeeperTestSuite) TestSetRedelegationQueueStore() {
 	for ; iterator.Valid(); iterator.Next() {
 		count++
 	}
-	// no redelegations in the queue initally
+	// no redelegations in the queue initially
 	require.Equal(0, count)
 
 	// add redelegation directly to store
@@ -1834,7 +1834,7 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	for ; iterator.Valid(); iterator.Next() {
 		count++
 	}
-	// no redelegations in the queue initally
+	// no redelegations in the queue initially
 	require.Equal(0, count)
 
 	// cache should be empty initially

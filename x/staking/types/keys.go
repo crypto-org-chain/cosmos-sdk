@@ -11,7 +11,6 @@ import (
 	addresscodec "cosmossdk.io/core/address"
 	"cosmossdk.io/math"
 
-	"github.com/cosmos/cosmos-sdk/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"
 	"github.com/cosmos/cosmos-sdk/types/kv"
@@ -192,12 +191,12 @@ func GetValidatorQueueKey(timestamp time.Time, height int64) []byte {
 }
 
 func GetCacheValidatorQueueKey(time time.Time, height int64) string {
-	return fmt.Sprintf("%s/%d", time.Format(types.SortableTimeFormat), height)
+	return fmt.Sprintf("%s/%d", time.Format(sdk.SortableTimeFormat), height)
 }
 
 func ParseCacheValidatorQueueKey(key string) (time.Time, int64, error) {
 	parts := strings.Split(key, "/")
-	t, err := types.ParseTime(parts[0])
+	t, err := sdk.ParseTime(parts[0])
 	if err != nil {
 		return time.Time{}, 0, err
 	}
