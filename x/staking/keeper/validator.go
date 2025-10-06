@@ -503,8 +503,12 @@ func (k *Keeper) InsertUnbondingValidatorQueue(ctx context.Context, val types.Va
 // DeleteValidatorQueueTimeSlice deletes all entries in the queue indexed by a
 // given height and time.
 func (k *Keeper) DeleteValidatorQueueTimeSlice(ctx context.Context, endTime time.Time, endHeight int64) error {
+	err := k.DeleteValidatorQueueStore(ctx, endTime, endHeight)
+	if err != nil {
+		return err
+	}
 	k.DeleteFromValidatorQueueCache(ctx, endTime, endHeight)
-	return k.DeleteValidatorQueueStore(ctx, endTime, endHeight)
+	return nil
 }
 
 func (k *Keeper) DeleteValidatorQueueStore(ctx context.Context, endTime time.Time, endHeight int64) error {
