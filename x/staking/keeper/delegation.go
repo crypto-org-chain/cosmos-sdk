@@ -501,11 +501,12 @@ func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, 
 
 // SetUBDQueueTimeSlice sets a specific unbonding queue timeslice in cache and store.
 func (k *Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
-	err := k.SetUBDQueueCache(ctx, timestamp, keys)
+	// Update store before cache to prevent the need to rollback should persistence fail
+	err := k.SetUBDQueueStore(ctx, timestamp, keys)
 	if err != nil {
 		return err
 	}
-	return k.SetUBDQueueStore(ctx, timestamp, keys)
+	return k.SetUBDQueueCache(ctx, timestamp, keys)
 }
 
 // SetUBDQueueStore sets a specific unbonding queue timeslice in store.
@@ -776,11 +777,12 @@ func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 
 // SetRedelegationQueueTimeSlice sets a specific redelegation queue timeslice.
 func (k *Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVVTriplet) error {
-	err := k.SetRedelegationQueueCache(ctx, timestamp, keys)
+	// Update store before cache to prevent the need to rollback should persistence fail
+	err := k.SetRedelegationQueueStore(ctx, timestamp, keys)
 	if err != nil {
 		return err
 	}
-	return k.SetRedelegationQueueStore(ctx, timestamp, keys)
+	return k.SetRedelegationQueueCache(ctx, timestamp, keys)
 }
 
 func (k *Keeper) SetRedelegationQueueStore(ctx context.Context, timestamp time.Time, keys []types.DVVTriplet) error {

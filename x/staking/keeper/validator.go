@@ -470,11 +470,12 @@ func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, e
 // SetUnbondingValidatorsQueue sets a given slice of validator addresses into
 // the unbonding validator queue by a given height and time into the cache and the store.
 func (k *Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Time, endHeight int64, addrs []string) error {
-	err := k.SetUnbondingValidatorQueueCache(ctx, endTime, endHeight, addrs)
+	// Update store before cache to prevent the need to rollback should persistence fail
+	err := k.SetUnbondingValidatorQueueStore(ctx, endTime, endHeight, addrs)
 	if err != nil {
 		return err
 	}
-	return k.SetUnbondingValidatorQueueStore(ctx, endTime, endHeight, addrs)
+	return k.SetUnbondingValidatorQueueCache(ctx, endTime, endHeight, addrs)
 }
 
 // SetUnbondingValidatorQueueStore sets a given slice of validator addresses into
