@@ -1385,8 +1385,8 @@ func (k *Keeper) DeleteMatureUBDs(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-	 k.DeleteMatureUBDsCache(ctx, key)
-	 return nil
+	k.DeleteMatureUBDsCache(ctx, key)
+	return nil
 }
 
 func (k *Keeper) DeleteMatureUBDsStore(ctx context.Context, key string) error {
@@ -1430,7 +1430,7 @@ func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime
 
 	keys := make([]string, 0, len(redelegations))
 
-	for key, _ := range redelegations {
+	for key := range redelegations {
 		keys = append(keys, key)
 	}
 

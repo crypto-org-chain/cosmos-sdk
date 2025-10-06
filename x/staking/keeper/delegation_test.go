@@ -1288,7 +1288,6 @@ func (s *KeeperTestSuite) TestGetUnbondingDelegationCache() {
 }
 
 func (s *KeeperTestSuite) TestSetUBDQueueCache() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1312,11 +1311,9 @@ func (s *KeeperTestSuite) TestSetUBDQueueCache() {
 	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx)))
 	require.Equal(dvPair.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
 	require.Equal(dvPair.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
-
 }
 
 func (s *KeeperTestSuite) TestSetUBDQueueStore() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1361,11 +1358,9 @@ func (s *KeeperTestSuite) TestSetUBDQueueStore() {
 
 	// unbonding delegations should be retrieved
 	require.Equal(2, count1)
-
 }
 
 func (s *KeeperTestSuite) TestInsertUBDQueue() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1466,11 +1461,9 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	require.Equal(ubd1.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorAddress)
 	require.Equal(ubd2.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].DelegatorAddress)
 	require.Equal(ubd2.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].ValidatorAddress)
-
 }
 
 func (s *KeeperTestSuite) TestDeleteMatureUBDsCache() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1498,11 +1491,9 @@ func (s *KeeperTestSuite) TestDeleteMatureUBDsCache() {
 
 	// cache should also remove the removed unbonding delegation
 	require.Equal(0, len(keeper.GetUnbondingValidatorsCache(ctx)))
-
 }
 
 func (s *KeeperTestSuite) TestDeleteMatureUBDsStore() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1551,7 +1542,6 @@ func (s *KeeperTestSuite) TestGetAndParseUnbondingDelegationTimeKey() {
 	time, err := stakingtypes.ParseUnbondingDelegationTimeKey(key)
 	require.NoError(err)
 	require.Equal(blockTime, time)
-
 }
 
 func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
@@ -1738,7 +1728,6 @@ func (s *KeeperTestSuite) TestGetRedelegationCache() {
 }
 
 func (s *KeeperTestSuite) TestSetRedelegationQueueCache() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1764,11 +1753,9 @@ func (s *KeeperTestSuite) TestSetRedelegationQueueCache() {
 	require.Equal(dvvTriplet.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
 	require.Equal(dvvTriplet.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorDstAddress)
 	require.Equal(dvvTriplet.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
-
 }
 
 func (s *KeeperTestSuite) TestSetRedelegationQueueStore() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1815,11 +1802,9 @@ func (s *KeeperTestSuite) TestSetRedelegationQueueStore() {
 
 	// redelegations should be retrieved
 	require.Equal(2, count1)
-
 }
 
 func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1910,7 +1895,6 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 }
 
 func (s *KeeperTestSuite) TestDeleteMatureRedelegationsCache() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1940,11 +1924,9 @@ func (s *KeeperTestSuite) TestDeleteMatureRedelegationsCache() {
 
 	// cache should also remove the removed unbonding delegation
 	require.Equal(0, len(keeper.GetRedelegationCache(ctx)))
-
 }
 
 func (s *KeeperTestSuite) TestDeleteMatureRedelegationsStore() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -1994,7 +1976,6 @@ func (s *KeeperTestSuite) TestGetAndParseRedelegationTimeKey() {
 	time, err := stakingtypes.ParseRedelegationTimeKey(key)
 	require.NoError(err)
 	require.Equal(blockTime, time)
-
 }
 
 func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {

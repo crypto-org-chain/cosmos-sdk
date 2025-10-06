@@ -522,7 +522,6 @@ func (s *KeeperTestSuite) TestGetAllUnbondingValidators() {
 }
 
 func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueCache() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -546,11 +545,9 @@ func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueCache() {
 	// cache should be populated with unbonding validator
 	require.Equal(1, len(keeper.GetUnbondingValidatorsCache(ctx)))
 	require.Equal(val.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(blockTime, blockHeight)][0])
-
 }
 
 func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueStore() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -588,11 +585,9 @@ func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueStore() {
 
 	// unbonding validator should be retrieved
 	require.Equal(1, count1)
-
 }
 
 func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -678,11 +673,9 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 	require.Equal(val.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(blockTime, blockHeight)][0])
 	require.Equal(validator1.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(validator1.UnbondingTime, validator1.UnbondingHeight)][1])
 	require.Equal(validator2.GetOperator(), keeper.GetUnbondingValidatorsCache(ctx)[stakingtypes.GetCacheValidatorQueueKey(validator2.UnbondingTime, validator2.UnbondingHeight)][0])
-
 }
 
 func (s *KeeperTestSuite) TestDeleteFromValidatorQueueCache() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -711,11 +704,9 @@ func (s *KeeperTestSuite) TestDeleteFromValidatorQueueCache() {
 
 	// cache should also remove the removed unbonding validator
 	require.Equal(0, len(keeper.GetUnbondingValidatorsCache(ctx)))
-
 }
 
 func (s *KeeperTestSuite) TestDeleteValidatorQueueStore() {
-
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
@@ -766,7 +757,6 @@ func (s *KeeperTestSuite) TestGetAndParseCacheValidatorQueueKey() {
 	require.NoError(err)
 	require.Equal(blockTime, time)
 	require.Equal(blockHeight, height)
-
 }
 
 func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
