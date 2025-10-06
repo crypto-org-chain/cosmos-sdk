@@ -1361,6 +1361,14 @@ func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Tim
 	sort.Strings(keys) // for deterministic iteration
 
 	for _, key := range keys {
+		t, err := sdk.ParseTime(key)
+		if err != nil {
+			return matureUnbonds, err
+		}
+
+		if nonMature := t.After(currTime); nonMature {
+			continue
+		}
 		pairs := unbondingDelegations[key]
 		matureUnbonds = append(matureUnbonds, pairs...)
 
@@ -1429,6 +1437,14 @@ func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime
 	sort.Strings(keys) // for deterministic iteration
 
 	for _, key := range keys {
+		t, err := sdk.ParseTime(key)
+		if err != nil {
+			return matureRedelegations, err
+		}
+
+		if nonMature := t.After(currTime); nonMature {
+			continue
+		}
 		triplets := redelegations[key]
 		matureRedelegations = append(matureRedelegations, triplets...)
 
