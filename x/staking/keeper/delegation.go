@@ -1356,7 +1356,7 @@ func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Tim
 
 	keys := make([]string, 0, len(unbondingDelegations))
 
-	for key, _ := range unbondingDelegations {
+	for key := range unbondingDelegations {
 		keys = append(keys, key)
 	}
 
