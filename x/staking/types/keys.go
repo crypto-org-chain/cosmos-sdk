@@ -190,10 +190,12 @@ func GetValidatorQueueKey(timestamp time.Time, height int64) []byte {
 	return bz
 }
 
+// GetCacheValidatorQueueKey returns a key for the cache for unbonding validators for a given time and height.
 func GetCacheValidatorQueueKey(time time.Time, height int64) string {
 	return fmt.Sprintf("%s/%d", time.Format(sdk.SortableTimeFormat), height)
 }
 
+// ParseCacheValidatorQueueKey parses a key for the cache for unbonding validators for a given time and height.
 func ParseCacheValidatorQueueKey(key string) (time.Time, int64, error) {
 	parts := strings.Split(key, "/")
 	t, err := sdk.ParseTime(parts[0])

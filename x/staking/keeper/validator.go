@@ -690,12 +690,14 @@ func (k *Keeper) InitUnbondingValidatorsCache(ctx context.Context) (map[string][
 	return unbondingValidators, nil
 }
 
+// DeleteFromValidatorQueueCache deletes unbonding validators from the cache for a given time and height.
 func (k *Keeper) DeleteFromValidatorQueueCache(ctx context.Context, time time.Time, height int64) {
 	if unbondingValidators := k.GetUnbondingValidatorsCache(ctx); unbondingValidators != nil {
 		delete(unbondingValidators, types.GetCacheValidatorQueueKey(time, height))
 	}
 }
 
+// SetUnbondingValidatorQueueCache sets unbonding validators in the cache for a given time and height.
 func (k *Keeper) SetUnbondingValidatorQueueCache(ctx context.Context, time time.Time, height int64, addrs []string) error {
 	unbondingValidators := k.GetUnbondingValidatorsCache(ctx)
 	if unbondingValidators == nil {
