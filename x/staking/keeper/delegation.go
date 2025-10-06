@@ -501,7 +501,7 @@ func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, 
 	return unbondingDelegations, nil
 }
 
-// SetUBDQueueTimeSlice sets a specific unbonding queue timeslice in cache and store.
+// SetUBDQueueTimeSlice sets a specific unbonding queue timeslice.
 func (k *Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
 	// Update store before cache to prevent the need to rollback should persistence fail
 	err := k.SetUBDQueueStore(ctx, timestamp, keys)
