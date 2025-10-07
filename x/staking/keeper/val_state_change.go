@@ -39,8 +39,9 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	blockTime := sdkCtx.BlockTime()
 
-	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, sdkCtx.BlockTime())
+	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, blockTime)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +71,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		)
 	}
 
-	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, sdkCtx.BlockTime())
+	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, blockTime)
 	if err != nil {
 		return nil, err
 	}
