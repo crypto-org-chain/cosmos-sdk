@@ -555,7 +555,7 @@ func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueStore() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	iterator, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	iterator, err := keeper.ValidatorQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -575,7 +575,7 @@ func (s *KeeperTestSuite) TestSetUnbondingValidatorQueueStore() {
 	require.NoError(keeper.SetValidator(ctx, val))
 	require.NoError(keeper.SetUnbondingValidatorQueueStore(ctx, blockTime, blockHeight, []string{val.GetOperator()}))
 
-	iterator1, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	iterator1, err := keeper.ValidatorQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator1.Close()
 	count1 := 0
@@ -595,7 +595,7 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	iterator, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	iterator, err := keeper.ValidatorQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -629,7 +629,7 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 	require.NoError(keeper.SetValidator(ctx, validator1))
 	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator1))
 
-	iterator1, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	iterator1, err := keeper.ValidatorQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator1.Close()
 	count1 := 0
@@ -657,7 +657,7 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 	require.NoError(keeper.SetValidator(ctx, validator2))
 	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator2))
 
-	iterator2, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	iterator2, err := keeper.ValidatorQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator2.Close()
 	count2 := 0
@@ -724,7 +724,7 @@ func (s *KeeperTestSuite) TestDeleteValidatorQueueStore() {
 	require.NoError(keeper.SetValidator(ctx, val))
 	require.NoError(keeper.SetUnbondingValidatorQueueStore(ctx, blockTime, blockHeight, []string{val.GetOperator()}))
 
-	iterator, err := keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	iterator, err := keeper.ValidatorQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -735,7 +735,7 @@ func (s *KeeperTestSuite) TestDeleteValidatorQueueStore() {
 	require.Equal(1, count)
 	require.NoError(keeper.DeleteValidatorQueueStore(ctx, blockTime, blockHeight))
 
-	iterator, err = keeper.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	iterator, err = keeper.ValidatorQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count = 0

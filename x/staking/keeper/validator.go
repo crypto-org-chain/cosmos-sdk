@@ -549,11 +549,10 @@ func (k *Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) 
 	return k.SetUnbondingValidatorsQueue(ctx, val.UnbondingTime, val.UnbondingHeight, newAddrs)
 }
 
-// ValidatorQueueIterator returns an iterator ranging over validators that are
-// unbonding whose unbonding completion occurs at the given height and time.
-func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, endHeight int64) (corestore.Iterator, error) {
+// ValidatorQueueIterator gets all the validators that are unbonding
+func (k Keeper) ValidatorQueueIterator(ctx context.Context) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.ValidatorQueueKey, storetypes.InclusiveEndBytes(types.GetValidatorQueueKey(endTime, endHeight)))
+	return store.Iterator(types.ValidatorQueueKey, storetypes.PrefixEndBytes(types.ValidatorQueueKey))
 }
 
 // IsValidatorJailed checks and returns boolean of a validator status jailed or not.
@@ -661,11 +660,7 @@ func (k *Keeper) GetAllUnbondingValidators(ctx context.Context) (map[string][]st
 }
 
 func (k *Keeper) InitUnbondingValidatorsCache(ctx context.Context) (map[string][]string, error) {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	blockTime := sdkCtx.BlockTime()
-	blockHeight := sdkCtx.BlockHeight()
-
-	iterator, err := k.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	iterator, err := k.ValidatorQueueIterator(ctx)
 	if err != nil {
 		return nil, err
 	}

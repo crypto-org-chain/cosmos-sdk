@@ -1241,7 +1241,7 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 	require.NoError(keeper.InsertUBDQueue(ctx, ubd1, t1))
 
 	// get all unbonding delegations should return the inserted unbonding delegations
-	unbondingDelegations, err := keeper.GetUBDs(ctx, blockTime)
+	unbondingDelegations, err := keeper.GetUBDs(ctx)
 	require.NoError(err)
 	require.Equal(2, len(unbondingDelegations))
 	require.Equal(ubd.DelegatorAddress, unbondingDelegations[sdk.FormatTimeString(t)][0].DelegatorAddress)
@@ -1321,7 +1321,7 @@ func (s *KeeperTestSuite) TestSetUBDQueueStore() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	iterator, err := keeper.UBDQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -1348,7 +1348,7 @@ func (s *KeeperTestSuite) TestSetUBDQueueStore() {
 	t1 := blockTime.Add(-1 * time.Minute)
 	require.NoError(keeper.SetUBDQueueStore(ctx, t1, []stakingtypes.DVPair{dvPair1}))
 
-	iterator1, err := keeper.UBDQueueIterator(ctx, blockTime)
+	iterator1, err := keeper.UBDQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator1.Close()
 	count1 := 0
@@ -1368,7 +1368,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	iterator, err := keeper.UBDQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -1410,7 +1410,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 
 	require.NoError(keeper.InsertUBDQueue(ctx, ubd1, t))
 
-	iterator1, err := keeper.UBDQueueIterator(ctx, blockTime)
+	iterator1, err := keeper.UBDQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator1.Close()
 	count1 := 0
@@ -1442,7 +1442,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	t1 := blockTime.Add(-1 * time.Minute)
 	require.NoError(keeper.InsertUBDQueue(ctx, ubd2, t1))
 
-	iterator2, err := keeper.UBDQueueIterator(ctx, blockTime)
+	iterator2, err := keeper.UBDQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator2.Close()
 	count2 := 0
@@ -1510,7 +1510,7 @@ func (s *KeeperTestSuite) TestDeleteMatureUBDsStore() {
 	t := blockTime
 	require.NoError(keeper.SetUBDQueueStore(ctx, t, []stakingtypes.DVPair{dvPair}))
 
-	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	iterator, err := keeper.UBDQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -1522,7 +1522,7 @@ func (s *KeeperTestSuite) TestDeleteMatureUBDsStore() {
 	require.Equal(1, count)
 	require.NoError(keeper.DeleteMatureUBDsStore(ctx, sdk.FormatTimeString(blockTime)))
 
-	iterator, err = keeper.UBDQueueIterator(ctx, blockTime)
+	iterator, err = keeper.UBDQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count = 0
@@ -1606,7 +1606,7 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	require.Equal(2, len(matureUnbonds))
 
 	// all ready to unbond unbonding delegations should be removed
-	iterator, err := keeper.UBDQueueIterator(ctx, t2)
+	iterator, err := keeper.UBDQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -1693,7 +1693,7 @@ func (s *KeeperTestSuite) TestGetPendingRedelegations() {
 	require.NoError(keeper.InsertRedelegationQueue(ctx, red1, t1))
 
 	// get all redelegations should return the inserted redelegations
-	redelegations, err := keeper.GetPendingRedelegations(ctx, blockTime)
+	redelegations, err := keeper.GetPendingRedelegations(ctx)
 	require.NoError(err)
 	require.Equal(2, len(redelegations))
 	require.Equal(red.DelegatorAddress, redelegations[sdk.FormatTimeString(t)][0].DelegatorAddress)
@@ -1779,7 +1779,7 @@ func (s *KeeperTestSuite) TestSetRedelegationQueueStore() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	iterator, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	iterator, err := keeper.RedelegationQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -1808,7 +1808,7 @@ func (s *KeeperTestSuite) TestSetRedelegationQueueStore() {
 	t1 := blockTime.Add(-1 * time.Minute)
 	require.NoError(keeper.SetRedelegationQueueStore(ctx, t1, []stakingtypes.DVVTriplet{dvvTriplet1}))
 
-	iterator1, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	iterator1, err := keeper.RedelegationQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator1.Close()
 	count1 := 0
@@ -1828,7 +1828,7 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	iterator, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	iterator, err := keeper.RedelegationQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -1858,7 +1858,7 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 
 	require.NoError(keeper.InsertRedelegationQueue(ctx, red1, t))
 
-	iterator1, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	iterator1, err := keeper.RedelegationQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator1.Close()
 	count1 := 0
@@ -1886,7 +1886,7 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	t2 := blockTime.Add(-1 * time.Minute)
 	require.NoError(keeper.InsertRedelegationQueue(ctx, red2, t2))
 
-	iterator2, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	iterator2, err := keeper.RedelegationQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator2.Close()
 	count2 := 0
@@ -1960,7 +1960,7 @@ func (s *KeeperTestSuite) TestDeleteMatureRedelegationsStore() {
 	t := blockTime
 	require.NoError(keeper.SetRedelegationQueueStore(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
 
-	iterator, err := keeper.RedelegationQueueIterator(ctx, blockTime)
+	iterator, err := keeper.RedelegationQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
@@ -1972,7 +1972,7 @@ func (s *KeeperTestSuite) TestDeleteMatureRedelegationsStore() {
 	require.Equal(1, count)
 	require.NoError(keeper.DeleteMatureRedelegationsStore(ctx, sdk.FormatTimeString(blockTime)))
 
-	iterator, err = keeper.RedelegationQueueIterator(ctx, blockTime)
+	iterator, err = keeper.RedelegationQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count = 0
@@ -2039,7 +2039,7 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 	require.Equal(2, len(matureRedelegations))
 
 	// all ready to redelegate redelegations should be removed
-	iterator, err := keeper.RedelegationQueueIterator(ctx, t2)
+	iterator, err := keeper.RedelegationQueueIterator(ctx)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0

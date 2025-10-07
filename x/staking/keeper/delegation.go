@@ -461,7 +461,7 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 }
 
 // GetUBDs returns all unbonding delegations, initializing the cache from the store if needed.
-func (k *Keeper) GetUBDs(ctx context.Context, timestamp time.Time) (map[string][]types.DVPair, error) {
+func (k *Keeper) GetUBDs(ctx context.Context) (map[string][]types.DVPair, error) {
 	if unbondingDelegations := k.GetUnbondingDelegationCache(ctx); unbondingDelegations != nil {
 		return unbondingDelegations, nil
 	}
@@ -471,8 +471,7 @@ func (k *Keeper) GetUBDs(ctx context.Context, timestamp time.Time) (map[string][
 
 // InitUBDsCache initializes the cache from the store.
 func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, error) {
-	c := sdk.UnwrapSDKContext(ctx)
-	iterator, err := k.UBDQueueIterator(ctx, c.BlockTime())
+	iterator, err := k.UBDQueueIterator(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -539,11 +538,10 @@ func (k *Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegati
 	return k.SetUBDQueueTimeSlice(ctx, completionTime, timeSlice)
 }
 
-// UBDQueueIterator returns all the unbonding queue timeslices from time 0 until endTime.
-func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corestore.Iterator, error) {
+// UBDQueueIterator returns all the unbonding queue timeslices
+func (k Keeper) UBDQueueIterator(ctx context.Context) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.UnbondingQueueKey,
-		storetypes.InclusiveEndBytes(types.GetUnbondingDelegationTimeKey(endTime)))
+	return store.Iterator(types.UnbondingQueueKey, storetypes.PrefixEndBytes(types.UnbondingQueueKey))
 }
 
 // GetRedelegations returns a given amount of all the delegator redelegations.
@@ -814,11 +812,10 @@ func (k *Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelega
 	return k.SetRedelegationQueueTimeSlice(ctx, completionTime, timeSlice)
 }
 
-// RedelegationQueueIterator returns all the redelegation queue timeslices from
-// time 0 until endTime.
-func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time) (storetypes.Iterator, error) {
+// RedelegationQueueIterator returns all the redelegation queue timeslices
+func (k Keeper) RedelegationQueueIterator(ctx context.Context) (storetypes.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.RedelegationQueueKey, storetypes.InclusiveEndBytes(types.GetRedelegationTimeKey(endTime)))
+	return store.Iterator(types.RedelegationQueueKey, storetypes.PrefixEndBytes(types.RedelegationQueueKey))
 }
 
 // Delegate performs a delegation, set/update everything necessary within the store.
@@ -1343,10 +1340,9 @@ func (k Keeper) ValidateUnbondAmount(
 	return shares, nil
 }
 
-// DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
-// currTime, and deletes the timeslices from the queue.
+// DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices, and deletes the matured timeslices from the queue.
 func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
-	unbondingDelegations, err := k.GetUBDs(ctx, currTime)
+	unbondingDelegations, err := k.GetUBDs(ctx)
 	if err != nil {
 		return matureUnbonds, err
 	}
@@ -1422,11 +1418,10 @@ func (k *Keeper) SetUBDQueueCache(ctx context.Context, t time.Time, keys []types
 }
 
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
-// timeslices inclusively previous to currTime, and deletes the timeslices from
+// timeslices, and deletes the matured timeslices from the queue.
 // the queue.
 func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	redelegations, err := k.GetPendingRedelegations(ctx, sdkCtx.BlockTime())
+	redelegations, err := k.GetPendingRedelegations(ctx)
 	if err != nil {
 		return matureRedelegations, err
 	}
@@ -1502,7 +1497,7 @@ func (k *Keeper) SetRedelegationQueueCache(ctx context.Context, t time.Time, key
 }
 
 // GetPendingRedelegations returns all pending redelegations, initializing the cache from the store if needed.
-func (k *Keeper) GetPendingRedelegations(ctx context.Context, timestamp time.Time) (map[string][]types.DVVTriplet, error) {
+func (k *Keeper) GetPendingRedelegations(ctx context.Context) (map[string][]types.DVVTriplet, error) {
 	if redelegations := k.GetRedelegationCache(ctx); redelegations != nil {
 		return redelegations, nil
 	}
@@ -1512,8 +1507,7 @@ func (k *Keeper) GetPendingRedelegations(ctx context.Context, timestamp time.Tim
 
 // InitRedelegationsCache initializes the cache from the store.
 func (k *Keeper) InitRedelegationsCache(ctx context.Context) (map[string][]types.DVVTriplet, error) {
-	c := sdk.UnwrapSDKContext(ctx)
-	iterator, err := k.RedelegationQueueIterator(ctx, c.BlockTime())
+	iterator, err := k.RedelegationQueueIterator(ctx)
 	if err != nil {
 		return nil, err
 	}
