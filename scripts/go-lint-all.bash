@@ -30,7 +30,7 @@ else
 
   for f in $(dirname $(echo "$GIT_DIFF" | tr -d "'") | uniq); do
     echo "linting $f [$(date -Iseconds -u)]" &&
-    cd $f &&
+    cd "${REPO_ROOT}/$f" &&
     golangci-lint run ./... -c "${REPO_ROOT}/.golangci.yml" "$@" &&
     cd $REPO_ROOT
   done
