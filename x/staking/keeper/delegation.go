@@ -482,19 +482,17 @@ func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, 
 
 	unbondingDelegations := make(map[string][]types.DVPair)
 	for ; iterator.Valid(); iterator.Next() {
-		pairs := make([]types.DVPair, 0)
 		timeslice := types.DVPairs{}
 		value := iterator.Value()
 		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
 			return nil, err
 		}
 
-		pairs = append(pairs, timeslice.Pairs...)
 		t, err := types.ParseUnbondingDelegationTimeKey(iterator.Key())
 		if err != nil {
 			return nil, err
 		}
-		unbondingDelegations[sdk.FormatTimeString(t)] = pairs
+		unbondingDelegations[sdk.FormatTimeString(t)] = timeslice.Pairs
 	}
 
 	k.SetUnbondingDelegationCache(unbondingDelegations)
@@ -1526,19 +1524,17 @@ func (k *Keeper) InitRedelegationsCache(ctx context.Context) (map[string][]types
 	redelegations := make(map[string][]types.DVVTriplet)
 
 	for ; iterator.Valid(); iterator.Next() {
-		triplets := make([]types.DVVTriplet, 0)
 		timeslice := types.DVVTriplets{}
 		value := iterator.Value()
 		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
 			return nil, err
 		}
 
-		triplets = append(triplets, timeslice.Triplets...)
 		t, err := types.ParseRedelegationTimeKey(iterator.Key())
 		if err != nil {
 			return nil, err
 		}
-		redelegations[sdk.FormatTimeString(t)] = triplets
+		redelegations[sdk.FormatTimeString(t)] = timeslice.Triplets
 	}
 	k.SetRedelegationCache(redelegations)
 	return redelegations, nil
