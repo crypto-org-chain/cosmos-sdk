@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/staking/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -851,7 +852,7 @@ func (s *KeeperTestSuite) TestMsgCancelUnbondingDelegation() {
 	require.NoError(err)
 	require.Equal(del, resDel)
 
-	ubd := stakingtypes.NewUnbondingDelegation(Addr, ValAddr, 10, ctx.BlockTime().Add(time.Minute*10), shares.RoundInt(), 0, keeper.ValidatorAddressCodec(), ak.AddressCodec())
+	ubd := types.NewUnbondingDelegation(Addr, ValAddr, 10, ctx.HeaderInfo().Time.Add(time.Minute*10), shares.RoundInt(), keeper.ValidatorAddressCodec(), ak.AddressCodec())
 	require.NoError(keeper.SetUnbondingDelegation(ctx, ubd))
 	resUnbond, err := keeper.GetUnbondingDelegation(ctx, Addr, ValAddr)
 	require.NoError(err)
