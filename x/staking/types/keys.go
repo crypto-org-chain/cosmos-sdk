@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -475,4 +476,20 @@ func GetHistoricalInfoKey(height int64) []byte {
 	heightBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(heightBytes, uint64(height))
 	return append(HistoricalInfoKey, heightBytes...)
+}
+
+func SortTimestampsByAscendingOrder(keys []string) {
+	sort.Slice(keys, func(i, j int) bool {
+		t1, _ := sdk.ParseTime(keys[i])
+		t2, _ := sdk.ParseTime(keys[j])
+		return t1.Before(t2)
+	})
+}
+
+func SortValidatorQueueKeysByAscendingOrder(keys []string) {
+	sort.Slice(keys, func(i, j int) bool {
+		t1, _ , _:= ParseCacheValidatorQueueKey(keys[i])
+		t2, _ ,_:= ParseCacheValidatorQueueKey(keys[j])
+		return t1.Before(t2)
+	})
 }

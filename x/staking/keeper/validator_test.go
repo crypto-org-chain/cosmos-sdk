@@ -780,7 +780,7 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 	require.NoError(keeper.SetValidator(ctx, val))
 	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, val))
 
-	// add another unbonding validator
+	// add another unbonding validator - ready to unbond
 	valAddr1 := sdk.ValAddress(PKs[1].Address().Bytes())
 	validator1 := testutil.NewValidator(s.T(), valAddr1, PKs[1])
 	valUnbondingHeight1 := blockHeight - 10
@@ -791,17 +791,78 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 	require.NoError(keeper.SetValidator(ctx, validator1))
 	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator1))
 
+	// add another unbonding validator - timestamp > blockTime but height < blockHeight (not ready to unbond)
+	valAddr2 := sdk.ValAddress(PKs[2].Address().Bytes())
+	validator2 := testutil.NewValidator(s.T(), valAddr2, PKs[2])
+	valUnbondingHeight2 := blockHeight - 10
+	valUnbondingTime2 := blockTime.Add(1 * time.Minute)
+	validator2.UnbondingHeight = valUnbondingHeight2
+	validator2.UnbondingTime = valUnbondingTime2
+	validator2.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, validator2))
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator2))
+
+	// add another unbonding validator - timestamp < blockTime but height > blockHeight (not ready to unbond)
+	valAddr3 := sdk.ValAddress(PKs[3].Address().Bytes())
+	validator3 := testutil.NewValidator(s.T(), valAddr3, PKs[3])
+	valUnbondingHeight3 := blockHeight + 10
+	valUnbondingTime3 := blockTime.Add(-1 * time.Minute)
+	validator3.UnbondingHeight = valUnbondingHeight3
+	validator3.UnbondingTime = valUnbondingTime3
+	validator2.Status = stakingtypes.Unbonding
+	require.NoError(keeper.SetValidator(ctx, validator3))
+	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator3))
+
 	// cache should be populated with unbonding validators
-	require.Equal(2, len(keeper.GetUnbondingValidatorsCache(ctx)))
+	require.Equal(4, len(keeper.GetUnbondingValidatorsCache(ctx)))
 
 	err := keeper.UnbondAllMatureValidators(ctx)
 	require.NoError(err)
 
-	// all unbonding validators should be removed
+	// all ready to unbond validators should be removed, leaving 2
 	v, err := keeper.GetAllValidators(ctx)
 	require.NoError(err)
-	require.Equal(0, len(v))
+	require.Equal(2, len(v))
 
-	// cache should be empty after unbonding all mature validators
-	require.Empty(keeper.GetUnbondingValidatorsCache(ctx))
+	// cache should be populated with the pending to unbond validators
+	require.Equal(2, len(keeper.GetUnbondingValidatorsCache(ctx)))
+}
+
+func (s *KeeperTestSuite) TestSortValidatorQueueKeysByAscendingOrder() {
+	require := s.Require()
+
+	currentTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	oneHourLater := currentTime.Add(1 * time.Hour)  
+	oneHourBefore := currentTime.Add(-1 * time.Hour) 
+
+
+	keys := []string{
+		stakingtypes.GetCacheValidatorQueueKey(oneHourLater, 1000), 
+		stakingtypes.GetCacheValidatorQueueKey(oneHourBefore, 500),  
+		stakingtypes.GetCacheValidatorQueueKey(currentTime, 750), 
+		stakingtypes.GetCacheValidatorQueueKey(oneHourBefore, 600), 
+		stakingtypes.GetCacheValidatorQueueKey(oneHourLater, 900), 
+	}
+
+	stakingtypes.SortValidatorQueueKeysByAscendingOrder(keys)
+
+	// Verify sorting is correct - should be sorted by timestamp ascending order
+	for i := 0; i < len(keys)-1; i++ {
+		t1, _, err := stakingtypes.ParseCacheValidatorQueueKey(keys[i])
+		require.NoError(err)
+		t2, _, err := stakingtypes.ParseCacheValidatorQueueKey(keys[i+1])
+		require.NoError(err)
+
+		// Current entry should be before or equal to next entry
+		require.True(t1.Before(t2) || t1.Equal(t2), "timestamps should be in ascending order")
+
+	}
+
+	firstTime, _, err := stakingtypes.ParseCacheValidatorQueueKey(keys[0])
+	require.NoError(err)
+	require.Equal(oneHourBefore, firstTime)
+
+	lastTime, _, err := stakingtypes.ParseCacheValidatorQueueKey(keys[len(keys)-1])
+	require.NoError(err)
+	require.Equal(oneHourLater, lastTime)
 }

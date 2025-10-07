@@ -1557,7 +1557,7 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 
 	delAddrs, valAddrs := createValAddrs(2)
 
-	// insert unbonding delegation
+	// insert unbonding delegation - ready to unbond
 	ubd := stakingtypes.NewUnbondingDelegation(
 		delAddrs[0],
 		valAddrs[0],
@@ -1571,7 +1571,7 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	t := blockTime
 	require.NoError(keeper.InsertUBDQueue(ctx, ubd, t))
 
-	// add another unbonding delegation
+	// add another unbonding delegation - ready to unbond
 	ubd1 := stakingtypes.NewUnbondingDelegation(
 		delAddrs[1],
 		valAddrs[1],
@@ -1584,23 +1584,39 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	t1 := blockTime.Add(-1 * time.Minute)
 	require.NoError(keeper.InsertUBDQueue(ctx, ubd1, t1))
 
+	// add another unbonding delegation - not ready to unbond
+	ubd2 := stakingtypes.NewUnbondingDelegation(
+		delAddrs[1],
+		valAddrs[1],
+		blockHeight,
+		blockTime,
+		math.NewInt(10),
+		address.NewBech32Codec("cosmosvaloper"),
+		address.NewBech32Codec("cosmos"),
+	)
+	t2 := blockTime.Add(1 * time.Minute)
+	require.NoError(keeper.InsertUBDQueue(ctx, ubd2, t2))
+
 	// cache should be populated with unbonding delegations
-	require.Equal(2, len(keeper.GetUnbondingDelegationCache(ctx)))
+	require.Equal(3, len(keeper.GetUnbondingDelegationCache(ctx)))
 
 	matureUnbonds, err := keeper.DequeueAllMatureUBDQueue(ctx, blockTime)
 
 	require.NoError(err)
 	require.Equal(2, len(matureUnbonds))
 
-	// all unbonding delegations should be removed
-	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	// all ready to unbond unbonding delegations should be removed
+	iterator, err := keeper.UBDQueueIterator(ctx, t2)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
 	for ; iterator.Valid(); iterator.Next() {
 		count++
 	}
-	require.Equal(0, count)
+	require.Equal(1, count)
+
+	// cache should be populated with the pending to unbond unbonding delegations
+	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx)))
 }
 
 func (s *KeeperTestSuite) TestInitRedelegationsCache() {
@@ -1989,7 +2005,7 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 	// cache should be empty initially
 	require.Empty(keeper.GetRedelegationCache(ctx))
 
-	delAddrs, valAddrs := createValAddrs(2)
+	delAddrs, valAddrs := createValAddrs(3)
 
 	// insert redelegation
 	red := stakingtypes.NewRedelegation(delAddrs[0], valAddrs[0], valAddrs[1], 0,
@@ -2007,21 +2023,67 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 	t1 := blockTime.Add(-1 * time.Minute)
 	require.NoError(keeper.InsertRedelegationQueue(ctx, red1, t1))
 
+	// insert another redelegation - not ready to redelegate
+	red2 := stakingtypes.NewRedelegation(delAddrs[2], valAddrs[2], valAddrs[0], 0,
+		time.Unix(0, 0), math.NewInt(5),
+		math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+	t2 := blockTime.Add(1 * time.Minute)
+	require.NoError(keeper.InsertRedelegationQueue(ctx, red2, t2))
+
 	// cache should be populated with redelegations
-	require.Equal(2, len(keeper.GetRedelegationCache(ctx)))
+	require.Equal(3, len(keeper.GetRedelegationCache(ctx)))
 
 	matureRedelegations, err := keeper.DequeueAllMatureRedelegationQueue(ctx, blockTime)
 
 	require.NoError(err)
 	require.Equal(2, len(matureRedelegations))
 
-	// all redelegations should be removed
-	iterator, err := keeper.UBDQueueIterator(ctx, blockTime)
+	// all ready to redelegate redelegations should be removed
+	iterator, err := keeper.RedelegationQueueIterator(ctx, t2)
 	require.NoError(err)
 	defer iterator.Close()
 	count := 0
 	for ; iterator.Valid(); iterator.Next() {
 		count++
 	}
-	require.Equal(0, count)
+	require.Equal(1, count)
+
+	// cache should be populated with the pending to redelegate redelegations
+	require.Equal(1, len(keeper.GetRedelegationCache(ctx)))
+}
+
+func (s *KeeperTestSuite) TestSortRedelegationQueueKeysByAscendingOrder() {
+	require := s.Require()
+
+	currentTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	oneHourLater := currentTime.Add(1 * time.Hour)
+	oneHourBefore := currentTime.Add(-1 * time.Hour)
+
+	keys := []string{
+		sdk.FormatTimeString(oneHourLater),
+		sdk.FormatTimeString(oneHourBefore),
+		sdk.FormatTimeString(currentTime),
+	}
+
+	stakingtypes.SortTimestampsByAscendingOrder(keys)
+
+	// Verify sorting is correct - should be sorted by timestamp ascending order
+	for i := 0; i < len(keys)-1; i++ {
+		t1, err := sdk.ParseTime(keys[i])
+		require.NoError(err)
+		t2, err := sdk.ParseTime(keys[i+1])
+		require.NoError(err)
+
+		// Current entry should be before or equal to next entry
+		require.True(t1.Before(t2) || t1.Equal(t2), "timestamps should be in ascending order")
+
+	}
+
+	firstTime, err := sdk.ParseTime(keys[0])
+	require.NoError(err)
+	require.Equal(oneHourBefore, firstTime)
+
+	lastTime, err := sdk.ParseTime(keys[len(keys)-1])
+	require.NoError(err)
+	require.Equal(oneHourLater, lastTime)
 }

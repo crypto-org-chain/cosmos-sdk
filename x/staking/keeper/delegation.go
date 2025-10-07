@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 
 	corestore "cosmossdk.io/core/store"
@@ -1358,7 +1357,7 @@ func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Tim
 		keys = append(keys, key)
 	}
 
-	sort.Strings(keys) // for deterministic iteration
+	types.SortTimestampsByAscendingOrder(keys)
 
 	for _, key := range keys {
 		t, err := sdk.ParseTime(key)
@@ -1367,7 +1366,7 @@ func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Tim
 		}
 
 		if nonMature := t.After(currTime); nonMature {
-			continue
+			return matureUnbonds, nil
 		}
 		pairs := unbondingDelegations[key]
 		matureUnbonds = append(matureUnbonds, pairs...)
@@ -1438,7 +1437,7 @@ func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime
 		keys = append(keys, key)
 	}
 
-	sort.Strings(keys) // for deterministic iteration
+	types.SortTimestampsByAscendingOrder(keys)
 
 	for _, key := range keys {
 		t, err := sdk.ParseTime(key)
@@ -1447,7 +1446,7 @@ func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime
 		}
 
 		if nonMature := t.After(currTime); nonMature {
-			continue
+			return matureRedelegations, nil
 		}
 		triplets := redelegations[key]
 		matureRedelegations = append(matureRedelegations, triplets...)

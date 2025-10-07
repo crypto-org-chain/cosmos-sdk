@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 
 	cmtprotocrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
@@ -599,12 +598,16 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 		keys = append(keys, k)
 	}
 
-	sort.Strings(keys) // for deterministic iteration
+	types.SortValidatorQueueKeysByAscendingOrder(keys)
 
 	for _, key := range keys {
 		time, height, err := types.ParseCacheValidatorQueueKey(key)
 		if err != nil {
 			return fmt.Errorf("failed to parse unbonding key: %w", err)
+		}
+
+		if nonMature := time.After(blockTime); nonMature {
+			return nil
 		}
 
 		// All addresses for the given key have the same unbonding height and time.
