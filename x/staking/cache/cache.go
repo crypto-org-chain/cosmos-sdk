@@ -6,25 +6,21 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-type CacheConfig struct {
-	// MaxCacheSize defines the maximum number of entries in each cache map
-	// to prevent OOM attacks.
-	// - if maxCacheSize == 0, there is no cap on the number of entries in the cache
-	// - if maxCacheSize > 0, the cache will cap the number of entries it stores
-	// - if maxCacheSize < 0, the cache is a no-op cache.
-	MaxCacheSize int
-}
-
 type cacheEntry[K comparable, V any] struct {
 	mu         sync.RWMutex
 	data       map[K]V
 	overflowed bool
-	config     *CacheConfig
+	// max defines the maximum number of entries in each cache map
+	// to prevent OOM attacks.
+	// - if max == 0, there is no cap on the number of entries in the cache
+	// - if max > 0, the cache will cap the number of entries it stores
+	// - if max < 0, the cache is a no-op cache.
+	max int
 }
 
-func newCacheEntry[K comparable, V any](config *CacheConfig) *cacheEntry[K, V] {
+func newCacheEntry[K comparable, V any](max int) *cacheEntry[K, V] {
 	return &cacheEntry[K, V]{
-		config: config,
+		max: max,
 	}
 }
 
@@ -35,14 +31,14 @@ func (e *cacheEntry[K, V]) get() map[K]V {
 }
 
 func (e *cacheEntry[K, V]) set(data map[K]V) {
-	if e.config.MaxCacheSize < 0 {
+	if e.max < 0 {
 		return
 	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.config.MaxCacheSize > 0 && len(data) > e.config.MaxCacheSize {
+	if e.max > 0 && len(data) > e.max {
 		e.overflowed = true
 		return
 	}
@@ -52,14 +48,14 @@ func (e *cacheEntry[K, V]) set(data map[K]V) {
 }
 
 func (e *cacheEntry[K, V]) setEntry(key K, value V) {
-	if e.config.MaxCacheSize < 0 {
+	if e.max < 0 {
 		return
 	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.config.MaxCacheSize > 0 && len(e.data) >= e.config.MaxCacheSize {
+	if e.max > 0 && len(e.data) >= e.max {
 		if _, exists := e.data[key]; !exists {
 			e.overflowed = true
 			return
@@ -74,7 +70,7 @@ func (e *cacheEntry[K, V]) setEntry(key K, value V) {
 }
 
 func (e *cacheEntry[K, V]) deleteEntry(key K) {
-	if e.config.MaxCacheSize < 0 {
+	if e.max < 0 {
 		return
 	}
 
@@ -98,11 +94,11 @@ type Cache struct {
 	redelegations        *cacheEntry[string, []types.DVVTriplet]
 }
 
-func NewCache(config CacheConfig) *Cache {
+func NewCache(max int) *Cache {
 	return &Cache{
-		unbondingValidators:  newCacheEntry[string, []string](&config),
-		unbondingDelegations: newCacheEntry[string, []types.DVPair](&config),
-		redelegations:        newCacheEntry[string, []types.DVVTriplet](&config),
+		unbondingValidators:  newCacheEntry[string, []string](max),
+		unbondingDelegations: newCacheEntry[string, []types.DVPair](max),
+		redelegations:        newCacheEntry[string, []types.DVVTriplet](max),
 	}
 }
 

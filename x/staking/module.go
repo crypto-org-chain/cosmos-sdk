@@ -30,7 +30,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	"github.com/cosmos/cosmos-sdk/x/staking/simulation"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/cosmos/cosmos-sdk/x/staking/cache"
 )
 
 const (
@@ -206,6 +205,7 @@ type ModuleInputs struct {
 	BankKeeper            types.BankKeeper
 	Cdc                   codec.Codec
 	StoreService          store.KVStoreService
+	MaxCacheSize          int
 
 	// LegacySubspace is used solely for migration of x/params managed parameters
 	LegacySubspace exported.Subspace `optional:"true"`
@@ -234,7 +234,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 		authority.String(),
 		in.ValidatorAddressCodec,
 		in.ConsensusAddressCodec,
-		cache.NewCache(cache.CacheConfig{}),
+		in.MaxCacheSize,
 	)
 	m := NewAppModule(in.Cdc, k, in.AccountKeeper, in.BankKeeper, in.LegacySubspace)
 	return ModuleOutputs{StakingKeeper: k, Module: m}
