@@ -125,4 +125,43 @@ func (c *Cache) DeleteUnbondingValidatorEntry(key string) {
 func (c *Cache) HasUnbondingValidatorsOverflowed() bool {
 	return c.unbondingValidators.hasOverflowed()
 }
+
+func (c *Cache) GetUnbondingDelegations() map[string][]types.DVPair {
+	return c.unbondingDelegations.get()
+}
+
+func (c *Cache) SetUnbondingDelegations(delegations map[string][]types.DVPair) {
+	c.unbondingDelegations.set(delegations)
+}
+
+func (c *Cache) SetUnbondingDelegationEntry(key string, pairs []types.DVPair) {
+	c.unbondingDelegations.setEntry(key, pairs)
+}
+
+func (c *Cache) DeleteUnbondingDelegationEntry(key string) {
+	c.unbondingDelegations.deleteEntry(key)
+}
+
+func (c *Cache) HasUnbondingDelegationsOverflowed() bool {
+	return c.unbondingDelegations.hasOverflowed()
+}
+
+func (c *Cache) GetRedelegations() map[string][]types.DVVTriplet {
+	return c.redelegations.get()
+}
+
+func (c *Cache) SetRedelegations(reds map[string][]types.DVVTriplet) {
+	c.redelegations.set(reds)
+}
+
+func (c *Cache) SetRedelegationEntry(key string, triplets []types.DVVTriplet) {
+	c.redelegations.setEntry(key, triplets)
+}
+
+func (c *Cache) DeleteRedelegationEntry(key string) {
+	c.redelegations.deleteEntry(key)
+}
+
+func (c *Cache) HasRedelegationsOverflowed() bool {
+	return c.redelegations.hasOverflowed()
 }

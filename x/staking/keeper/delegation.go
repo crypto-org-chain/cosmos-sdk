@@ -447,6 +447,16 @@ func (k Keeper) SetUnbondingDelegationEntry(
 // is a slice of DVPairs corresponding to unbonding delegations that expire at a
 // certain time.
 func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvPairs []types.DVPair, err error) {
+
+	overflow := k.cache.HasUnbondingDelegationsOverflowed()
+	unbondingDelegations := k.cache.GetUnbondingDelegations()
+
+	cacheIsValid := !overflow && unbondingDelegations != nil
+
+	if cacheIsValid {
+		return unbondingDelegations[sdk.FormatTimeString(timestamp)], nil
+	}
+
 	store := k.storeService.OpenKVStore(ctx)
 
 	bz, err := store.Get(types.GetUnbondingDelegationTimeKey(timestamp))
@@ -462,7 +472,13 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 
 // GetUBDs returns all unbonding delegations, initializing the cache from the store if needed.
 func (k *Keeper) GetUBDs(ctx context.Context) (map[string][]types.DVPair, error) {
-	if unbondingDelegations := k.GetUnbondingDelegationCache(ctx); unbondingDelegations != nil {
+
+	overflow := k.cache.HasUnbondingDelegationsOverflowed()
+	unbondingDelegations := k.cache.GetUnbondingDelegations()
+
+	cacheIsValid := !overflow && unbondingDelegations != nil
+
+	if cacheIsValid {
 		return unbondingDelegations, nil
 	}
 
@@ -475,7 +491,6 @@ func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, 
 	if err != nil {
 		return nil, err
 	}
-
 	defer iterator.Close()
 
 	unbondingDelegations := make(map[string][]types.DVPair)
@@ -493,28 +508,33 @@ func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, 
 		unbondingDelegations[sdk.FormatTimeString(t)] = timeslice.Pairs
 	}
 
-	k.SetUnbondingDelegationCache(unbondingDelegations)
+	k.cache.SetUnbondingDelegations(unbondingDelegations)
+
 	return unbondingDelegations, nil
 }
 
 // SetUBDQueueTimeSlice sets a specific unbonding queue timeslice.
 func (k *Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
-	// Update store before cache to prevent the need to rollback should persistence fail
-	err := k.SetUBDQueueStore(ctx, timestamp, keys)
-	if err != nil {
-		return err
-	}
-	return k.SetUBDQueueCache(ctx, timestamp, keys)
-}
-
-// SetUBDQueueStore sets a specific unbonding queue timeslice in store.
-func (k *Keeper) SetUBDQueueStore(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := k.cdc.Marshal(&types.DVPairs{Pairs: keys})
 	if err != nil {
 		return err
 	}
-	return store.Set(types.GetUnbondingDelegationTimeKey(timestamp), bz)
+	err = store.Set(types.GetUnbondingDelegationTimeKey(timestamp), bz)
+	if err != nil {
+		return err
+	}
+
+	unbondingDelegations := k.cache.GetUnbondingDelegations()
+	if unbondingDelegations == nil {
+		_, err := k.InitUBDsCache(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	k.cache.SetUnbondingDelegationEntry(sdk.FormatTimeString(timestamp), keys)
+	return nil
 }
 
 // InsertUBDQueue inserts an unbonding delegation to the appropriate timeslice
@@ -542,6 +562,56 @@ func (k *Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegati
 func (k Keeper) UBDQueueIterator(ctx context.Context) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
 	return store.Iterator(types.UnbondingQueueKey, storetypes.PrefixEndBytes(types.UnbondingQueueKey))
+}
+
+// DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices, and deletes the matured timeslices from the queue.
+func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
+	unbondingDelegations, err := k.GetUBDs(ctx)
+	if err != nil {
+		return matureUnbonds, err
+	}
+
+	keys := make([]string, 0, len(unbondingDelegations))
+
+	for key := range unbondingDelegations {
+		keys = append(keys, key)
+	}
+
+	types.SortTimestampsByAscendingOrder(keys)
+
+	for _, key := range keys {
+		t, err := sdk.ParseTime(key)
+		if err != nil {
+			return matureUnbonds, err
+		}
+
+		if nonMature := t.After(currTime); nonMature {
+			return matureUnbonds, nil
+		}
+		pairs := unbondingDelegations[key]
+		matureUnbonds = append(matureUnbonds, pairs...)
+
+		if err = k.DeleteMatureUBDs(ctx, key); err != nil {
+			return matureUnbonds, err
+		}
+	}
+
+	return matureUnbonds, nil
+}
+
+// DeleteMatureUBDs deletes unbonding delegations from the store and cache for a given key.
+func (k *Keeper) DeleteMatureUBDs(ctx context.Context, key string) error {
+	store := k.storeService.OpenKVStore(ctx)
+	t, err := sdk.ParseTime(key)
+	if err != nil {
+		return err
+	}
+	err = store.Delete(types.GetUnbondingDelegationTimeKey(t))
+	if err != nil {
+		return err
+	}
+	k.cache.DeleteUnbondingDelegationEntry(key)
+	return nil
 }
 
 // GetRedelegations returns a given amount of all the delegator redelegations.
@@ -753,6 +823,15 @@ func (k Keeper) RemoveRedelegation(ctx context.Context, red types.Redelegation) 
 // timeslice is a slice of DVVTriplets corresponding to redelegations that
 // expire at a certain time.
 func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvvTriplets []types.DVVTriplet, err error) {
+	overflow := k.cache.HasRedelegationsOverflowed()
+	redelegations := k.cache.GetRedelegations()
+
+	cacheIsValid := !overflow && redelegations != nil
+
+	if cacheIsValid {
+		return redelegations[sdk.FormatTimeString(timestamp)], nil
+	}
+
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.GetRedelegationTimeKey(timestamp))
 	if err != nil {
@@ -774,21 +853,17 @@ func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 
 // SetRedelegationQueueTimeSlice sets a specific redelegation queue timeslice.
 func (k *Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVVTriplet) error {
-	// Update store before cache to prevent the need to rollback should persistence fail
-	err := k.SetRedelegationQueueStore(ctx, timestamp, keys)
-	if err != nil {
-		return err
-	}
-	return k.SetRedelegationQueueCache(ctx, timestamp, keys)
-}
-
-func (k *Keeper) SetRedelegationQueueStore(ctx context.Context, timestamp time.Time, keys []types.DVVTriplet) error {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := k.cdc.Marshal(&types.DVVTriplets{Triplets: keys})
 	if err != nil {
 		return err
 	}
-	return store.Set(types.GetRedelegationTimeKey(timestamp), bz)
+	err = store.Set(types.GetRedelegationTimeKey(timestamp), bz)
+	if err != nil {
+		return err
+	}
+	k.cache.SetRedelegationEntry(sdk.FormatTimeString(timestamp), keys)
+	return nil
 }
 
 // InsertRedelegationQueue insert an redelegation delegation to the appropriate
@@ -1340,83 +1415,6 @@ func (k Keeper) ValidateUnbondAmount(
 	return shares, nil
 }
 
-// DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices, and deletes the matured timeslices from the queue.
-func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
-	unbondingDelegations, err := k.GetUBDs(ctx)
-	if err != nil {
-		return matureUnbonds, err
-	}
-
-	keys := make([]string, 0, len(unbondingDelegations))
-
-	for key := range unbondingDelegations {
-		keys = append(keys, key)
-	}
-
-	types.SortTimestampsByAscendingOrder(keys)
-
-	for _, key := range keys {
-		t, err := sdk.ParseTime(key)
-		if err != nil {
-			return matureUnbonds, err
-		}
-
-		if nonMature := t.After(currTime); nonMature {
-			return matureUnbonds, nil
-		}
-		pairs := unbondingDelegations[key]
-		matureUnbonds = append(matureUnbonds, pairs...)
-
-		if err = k.DeleteMatureUBDs(ctx, key); err != nil {
-			return matureUnbonds, err
-		}
-	}
-
-	return matureUnbonds, nil
-}
-
-// DeleteMatureUBDs deletes unbonding delegations from the store and cache for a given key.
-func (k *Keeper) DeleteMatureUBDs(ctx context.Context, key string) error {
-	err := k.DeleteMatureUBDsStore(ctx, key)
-	if err != nil {
-		return err
-	}
-	k.DeleteMatureUBDsCache(ctx, key)
-	return nil
-}
-
-// DeleteMatureUBDsStore deletes unbonding delegations from the store for a given key.
-func (k *Keeper) DeleteMatureUBDsStore(ctx context.Context, key string) error {
-	store := k.storeService.OpenKVStore(ctx)
-	t, err := sdk.ParseTime(key)
-	if err != nil {
-		return err
-	}
-	return store.Delete(types.GetUnbondingDelegationTimeKey(t))
-}
-
-// DeleteMatureUBDsCache deletes unbonding delegations from the cache for a given key.
-func (k *Keeper) DeleteMatureUBDsCache(ctx context.Context, key string) {
-	if unbondingDelegations := k.GetUnbondingDelegationCache(ctx); unbondingDelegations != nil {
-		delete(unbondingDelegations, key)
-	}
-}
-
-// SetUBDQueueCache sets unbonding delegations in the cache for a given time.
-func (k *Keeper) SetUBDQueueCache(ctx context.Context, t time.Time, keys []types.DVPair) error {
-	unbondingDelegations := k.GetUnbondingDelegationCache(ctx)
-	if unbondingDelegations == nil {
-		cache, err := k.InitUBDsCache(ctx)
-		if err != nil {
-			return err
-		}
-		unbondingDelegations = cache
-	}
-	unbondingDelegations[sdk.FormatTimeString(t)] = keys
-	k.SetUnbondingDelegationCache(unbondingDelegations)
-	return nil
-}
-
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
 // timeslices, and deletes the matured timeslices from the queue.
 // the queue.
@@ -1456,49 +1454,27 @@ func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime
 
 // DeleteMatureRedelegations deletes matured redelegation from the store and cache for a given key.
 func (k *Keeper) DeleteMatureRedelegations(ctx context.Context, key string) error {
-	err := k.DeleteMatureRedelegationsStore(ctx, key)
-	if err != nil {
-		return err
-	}
-	k.DeleteMatureRedelegationsCache(ctx, key)
-	return nil
-}
-
-// DeleteMatureRedelegationsStore deletes matured redelegations from the store for a given key.
-func (k *Keeper) DeleteMatureRedelegationsStore(ctx context.Context, key string) error {
 	store := k.storeService.OpenKVStore(ctx)
 	t, err := sdk.ParseTime(key)
 	if err != nil {
 		return err
 	}
-	return store.Delete(types.GetRedelegationTimeKey(t))
-}
-
-// DeleteMatureRedelegationsCache deletes matured redelegations from the cache for a given key.
-func (k *Keeper) DeleteMatureRedelegationsCache(ctx context.Context, key string) {
-	if redelegations := k.GetRedelegationCache(ctx); redelegations != nil {
-		delete(redelegations, key)
+	err = store.Delete(types.GetRedelegationTimeKey(t))
+	if err != nil {
+		return err
 	}
-}
-
-// SetRedelegationQueueCache sets redelegations in the cache for a given time.
-func (k *Keeper) SetRedelegationQueueCache(ctx context.Context, t time.Time, keys []types.DVVTriplet) error {
-	redelegations := k.GetRedelegationCache(ctx)
-	if redelegations == nil {
-		cache, err := k.InitRedelegationsCache(ctx)
-		if err != nil {
-			return err
-		}
-		redelegations = cache
-	}
-	redelegations[sdk.FormatTimeString(t)] = keys
-	k.SetRedelegationCache(redelegations)
+	k.cache.DeleteRedelegationEntry(key)
 	return nil
 }
 
 // GetPendingRedelegations returns all pending redelegations, initializing the cache from the store if needed.
 func (k *Keeper) GetPendingRedelegations(ctx context.Context) (map[string][]types.DVVTriplet, error) {
-	if redelegations := k.GetRedelegationCache(ctx); redelegations != nil {
+	overflow := k.cache.HasRedelegationsOverflowed()
+	redelegations := k.cache.GetRedelegations()
+
+	cacheIsValid := !overflow && redelegations != nil
+
+	if cacheIsValid {
 		return redelegations, nil
 	}
 
@@ -1511,7 +1487,6 @@ func (k *Keeper) InitRedelegationsCache(ctx context.Context) (map[string][]types
 	if err != nil {
 		return nil, err
 	}
-
 	defer iterator.Close()
 
 	redelegations := make(map[string][]types.DVVTriplet)
@@ -1529,6 +1504,8 @@ func (k *Keeper) InitRedelegationsCache(ctx context.Context) (map[string][]types
 		}
 		redelegations[sdk.FormatTimeString(t)] = timeslice.Triplets
 	}
-	k.SetRedelegationCache(redelegations)
+
+	k.cache.SetRedelegations(redelegations)
+
 	return redelegations, nil
 }

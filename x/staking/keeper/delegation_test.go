@@ -1161,44 +1161,6 @@ func (s *KeeperTestSuite) TestSetUnbondingDelegationEntry() {
 	require.Equal(newCreationHeight, resUnbonding.Entries[1].CreationHeight)
 }
 
-func (s *KeeperTestSuite) TestInitUBDsCache() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// cache should be empty initially
-	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
-
-	// add unbonding delegation directly to store
-	delAddrs, valAddrs := createValAddrs(2)
-	dvPair := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[0].String(),
-		ValidatorAddress: valAddrs[0].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetUBDQueueStore(ctx, t, []stakingtypes.DVPair{dvPair}))
-
-	// add another unbonding delegation directly to store
-	dvPair1 := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[1].String(),
-		ValidatorAddress: valAddrs[1].String(),
-	}
-	t1 := blockTime.Add(-1 * time.Minute)
-	require.NoError(keeper.SetUBDQueueStore(ctx, t1, []stakingtypes.DVPair{dvPair1}))
-
-	// init unbonding delegations cache should return the inserted unbonding delegations
-	cache, err := keeper.InitUBDsCache(ctx)
-
-	require.NoError(err)
-	require.Equal(2, len(cache))
-	require.Equal(dvPair.DelegatorAddress, cache[sdk.FormatTimeString(t)][0].DelegatorAddress)
-	require.Equal(dvPair.ValidatorAddress, cache[sdk.FormatTimeString(t)][0].ValidatorAddress)
-	require.Equal(dvPair1.DelegatorAddress, cache[sdk.FormatTimeString(t1)][0].DelegatorAddress)
-	require.Equal(dvPair1.ValidatorAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorAddress)
-}
 
 func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 	ctx, keeper := s.ctx, s.stakingKeeper
@@ -1208,8 +1170,6 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	// cache should be empty initially
-	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
 
 	delAddrs, valAddrs := createValAddrs(2)
 
@@ -1250,116 +1210,6 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 	require.Equal(ubd1.ValidatorAddress, unbondingDelegations[sdk.FormatTimeString(t1)][0].ValidatorAddress)
 }
 
-func (s *KeeperTestSuite) TestGetUnbondingDelegationCache() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// cache should be empty initially
-	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
-
-	// add unbonding delegation
-	delAddrs, valAddrs := createValAddrs(2)
-	dvPair := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[0].String(),
-		ValidatorAddress: valAddrs[0].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{dvPair}))
-
-	// add another unbonding delegation
-	dvPair1 := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[1].String(),
-		ValidatorAddress: valAddrs[1].String(),
-	}
-	t1 := blockTime.Add(-1 * time.Minute)
-	require.NoError(keeper.SetUBDQueueTimeSlice(ctx, t1, []stakingtypes.DVPair{dvPair1}))
-
-	// get unbonding delegations should return the inserted unbonding delegations
-	cache := keeper.GetUnbondingDelegationCache(ctx)
-	require.Equal(2, len(cache))
-	require.Equal(dvPair.DelegatorAddress, cache[sdk.FormatTimeString(t)][0].DelegatorAddress)
-	require.Equal(dvPair.ValidatorAddress, cache[sdk.FormatTimeString(t)][0].ValidatorAddress)
-	require.Equal(dvPair1.DelegatorAddress, cache[sdk.FormatTimeString(t1)][0].DelegatorAddress)
-	require.Equal(dvPair1.ValidatorAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorAddress)
-}
-
-func (s *KeeperTestSuite) TestSetUBDQueueCache() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// cache should be empty initially
-	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
-
-	// add unbonding delegation
-	delAddrs, valAddrs := createValAddrs(1)
-	dvPair := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[0].String(),
-		ValidatorAddress: valAddrs[0].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetUBDQueueCache(ctx, t, []stakingtypes.DVPair{dvPair}))
-
-	// cache should be populated with unbonding validator
-	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx)))
-	require.Equal(dvPair.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
-	require.Equal(dvPair.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
-}
-
-func (s *KeeperTestSuite) TestSetUBDQueueStore() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	iterator, err := keeper.UBDQueueIterator(ctx)
-	require.NoError(err)
-	defer iterator.Close()
-	count := 0
-	for ; iterator.Valid(); iterator.Next() {
-		count++
-	}
-	// no unbonding delegations in the queue initially
-	require.Equal(0, count)
-
-	// add unbonding delegation directly to store
-	delAddrs, valAddrs := createValAddrs(2)
-	dvPair := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[0].String(),
-		ValidatorAddress: valAddrs[0].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetUBDQueueStore(ctx, t, []stakingtypes.DVPair{dvPair}))
-
-	// add another unbonding delegation directly to store
-	dvPair1 := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[1].String(),
-		ValidatorAddress: valAddrs[1].String(),
-	}
-	t1 := blockTime.Add(-1 * time.Minute)
-	require.NoError(keeper.SetUBDQueueStore(ctx, t1, []stakingtypes.DVPair{dvPair1}))
-
-	iterator1, err := keeper.UBDQueueIterator(ctx)
-	require.NoError(err)
-	defer iterator1.Close()
-	count1 := 0
-	for ; iterator1.Valid(); iterator1.Next() {
-		count1++
-	}
-
-	// unbonding delegations should be retrieved
-	require.Equal(2, count1)
-}
-
 func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
@@ -1378,8 +1228,6 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	// no unbonding delegations in the queue initially
 	require.Equal(0, count)
 
-	// cache should be empty initially
-	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
 
 	delAddrs, valAddrs := createValAddrs(3)
 
@@ -1422,12 +1270,6 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	// count 1 due to same unbonding time
 	require.Equal(1, count1)
 
-	// cache should be populated with unbonding validators
-	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx))) // length 1 due to same unbonding time
-	require.Equal(ubd.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
-	require.Equal(ubd.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
-	require.Equal(ubd1.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].DelegatorAddress)
-	require.Equal(ubd1.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorAddress)
 
 	// insert unbonding delegation with different unbonding time and height
 	ubd2 := stakingtypes.NewUnbondingDelegation(
@@ -1452,86 +1294,6 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 
 	// unbonding delegation should be retrieved
 	require.Equal(2, count2)
-
-	// cache should be populated with unbonding validators
-	require.Equal(2, len(keeper.GetUnbondingDelegationCache(ctx)))
-	require.Equal(ubd.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
-	require.Equal(ubd.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorAddress)
-	require.Equal(ubd1.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].DelegatorAddress)
-	require.Equal(ubd1.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorAddress)
-	require.Equal(ubd2.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].DelegatorAddress)
-	require.Equal(ubd2.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(t1)][0].ValidatorAddress)
-}
-
-func (s *KeeperTestSuite) TestDeleteMatureUBDsCache() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// cache should be empty initially
-	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
-
-	// add unbonding delegation directly to cache
-	delAddrs, valAddrs := createValAddrs(1)
-	dvPair := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[0].String(),
-		ValidatorAddress: valAddrs[0].String(),
-	}
-	require.NoError(keeper.SetUBDQueueCache(ctx, blockTime, []stakingtypes.DVPair{dvPair}))
-
-	// cache should be populated with unbonding delegation
-	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx)))
-	require.Equal(dvPair.DelegatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].DelegatorAddress)
-	require.Equal(dvPair.ValidatorAddress, keeper.GetUnbondingDelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].ValidatorAddress)
-
-	keeper.DeleteMatureUBDsCache(ctx, sdk.FormatTimeString(blockTime))
-
-	// cache should also remove the removed unbonding delegation
-	require.Equal(0, len(keeper.GetUnbondingValidatorsCache(ctx)))
-}
-
-func (s *KeeperTestSuite) TestDeleteMatureUBDsStore() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// add unbonding delegation directly to store
-	delAddrs, valAddrs := createValAddrs(2)
-	dvPair := stakingtypes.DVPair{
-		DelegatorAddress: delAddrs[0].String(),
-		ValidatorAddress: valAddrs[0].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetUBDQueueStore(ctx, t, []stakingtypes.DVPair{dvPair}))
-
-	iterator, err := keeper.UBDQueueIterator(ctx)
-	require.NoError(err)
-	defer iterator.Close()
-	count := 0
-	for ; iterator.Valid(); iterator.Next() {
-		count++
-	}
-
-	// unbonding delegation in the queue
-	require.Equal(1, count)
-	require.NoError(keeper.DeleteMatureUBDsStore(ctx, sdk.FormatTimeString(blockTime)))
-
-	iterator, err = keeper.UBDQueueIterator(ctx)
-	require.NoError(err)
-	defer iterator.Close()
-	count = 0
-	for ; iterator.Valid(); iterator.Next() {
-		count++
-	}
-
-	// unbonding delegation should be removed
-	require.Equal(0, count)
 }
 
 func (s *KeeperTestSuite) TestGetAndParseUnbondingDelegationTimeKey() {
@@ -1552,8 +1314,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	// cache should be empty initially
-	require.Empty(keeper.GetUnbondingDelegationCache(ctx))
 
 	delAddrs, valAddrs := createValAddrs(2)
 
@@ -1597,8 +1357,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	t2 := blockTime.Add(1 * time.Minute)
 	require.NoError(keeper.InsertUBDQueue(ctx, ubd2, t2))
 
-	// cache should be populated with unbonding delegations
-	require.Equal(3, len(keeper.GetUnbondingDelegationCache(ctx)))
 
 	matureUnbonds, err := keeper.DequeueAllMatureUBDQueue(ctx, blockTime)
 
@@ -1614,50 +1372,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 		count++
 	}
 	require.Equal(1, count)
-
-	// cache should be populated with the pending to unbond unbonding delegations
-	require.Equal(1, len(keeper.GetUnbondingDelegationCache(ctx)))
-}
-
-func (s *KeeperTestSuite) TestInitRedelegationsCache() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// cache should be empty initially
-	require.Empty(keeper.GetRedelegationCache(ctx))
-
-	// add redelegation directly to store
-	delAddrs, valAddrs := createValAddrs(2)
-	dvvTriplet := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[0].String(),
-		ValidatorSrcAddress: valAddrs[0].String(),
-		ValidatorDstAddress: valAddrs[1].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetRedelegationQueueStore(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
-
-	// add another redelegation directly to store
-	dvvTriplet1 := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[1].String(),
-		ValidatorSrcAddress: valAddrs[1].String(),
-		ValidatorDstAddress: valAddrs[0].String(),
-	}
-	t1 := blockTime.Add(-1 * time.Minute)
-	require.NoError(keeper.SetRedelegationQueueStore(ctx, t1, []stakingtypes.DVVTriplet{dvvTriplet1}))
-
-	// init redelegations cache should return the inserted redelegations
-	cache, err := keeper.InitRedelegationsCache(ctx)
-
-	require.NoError(err)
-	require.Equal(2, len(cache))
-	require.Equal(dvvTriplet.DelegatorAddress, cache[sdk.FormatTimeString(t)][0].DelegatorAddress)
-	require.Equal(dvvTriplet.ValidatorSrcAddress, cache[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
-	require.Equal(dvvTriplet1.DelegatorAddress, cache[sdk.FormatTimeString(t1)][0].DelegatorAddress)
-	require.Equal(dvvTriplet1.ValidatorSrcAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorSrcAddress)
 }
 
 func (s *KeeperTestSuite) TestGetPendingRedelegations() {
@@ -1668,8 +1382,6 @@ func (s *KeeperTestSuite) TestGetPendingRedelegations() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	// cache should be empty initially
-	require.Empty(keeper.GetRedelegationCache(ctx))
 
 	delAddrs, valAddrs := createValAddrs(2)
 
@@ -1704,122 +1416,6 @@ func (s *KeeperTestSuite) TestGetPendingRedelegations() {
 	require.Equal(red1.ValidatorDstAddress, redelegations[sdk.FormatTimeString(t1)][0].ValidatorDstAddress)
 }
 
-func (s *KeeperTestSuite) TestGetRedelegationCache() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// cache should be empty initially
-	require.Empty(keeper.GetRedelegationCache(ctx))
-
-	// add redelegation
-	delAddrs, valAddrs := createValAddrs(2)
-	dvvTriplet := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[0].String(),
-		ValidatorSrcAddress: valAddrs[0].String(),
-		ValidatorDstAddress: valAddrs[1].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
-
-	// add another redelegation
-	dvvTriplet1 := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[1].String(),
-		ValidatorSrcAddress: valAddrs[1].String(),
-		ValidatorDstAddress: valAddrs[0].String(),
-	}
-	t1 := blockTime.Add(-1 * time.Minute)
-	require.NoError(keeper.SetRedelegationQueueTimeSlice(ctx, t1, []stakingtypes.DVVTriplet{dvvTriplet1}))
-
-	// get redelegations should return the inserted redelegations
-	cache := keeper.GetRedelegationCache(ctx)
-	require.Equal(2, len(cache))
-	require.Equal(dvvTriplet.DelegatorAddress, cache[sdk.FormatTimeString(t)][0].DelegatorAddress)
-	require.Equal(dvvTriplet.ValidatorSrcAddress, cache[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
-	require.Equal(dvvTriplet1.DelegatorAddress, cache[sdk.FormatTimeString(t1)][0].DelegatorAddress)
-	require.Equal(dvvTriplet1.ValidatorSrcAddress, cache[sdk.FormatTimeString(t1)][0].ValidatorSrcAddress)
-}
-
-func (s *KeeperTestSuite) TestSetRedelegationQueueCache() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// cache should be empty initially
-	require.Empty(keeper.GetRedelegationCache(ctx))
-
-	// add redelegation
-	delAddrs, valAddrs := createValAddrs(2)
-	dvvTriplet := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[0].String(),
-		ValidatorSrcAddress: valAddrs[0].String(),
-		ValidatorDstAddress: valAddrs[1].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetRedelegationQueueCache(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
-
-	// cache should be populated with unbonding validator
-	require.Equal(1, len(keeper.GetRedelegationCache(ctx)))
-	require.Equal(dvvTriplet.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
-	require.Equal(dvvTriplet.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorDstAddress)
-	require.Equal(dvvTriplet.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
-}
-
-func (s *KeeperTestSuite) TestSetRedelegationQueueStore() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	iterator, err := keeper.RedelegationQueueIterator(ctx)
-	require.NoError(err)
-	defer iterator.Close()
-	count := 0
-	for ; iterator.Valid(); iterator.Next() {
-		count++
-	}
-	// no redelegations in the queue initially
-	require.Equal(0, count)
-
-	// add redelegation directly to store
-	delAddrs, valAddrs := createValAddrs(2)
-	dvvTriplet := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[0].String(),
-		ValidatorSrcAddress: valAddrs[0].String(),
-		ValidatorDstAddress: valAddrs[1].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetRedelegationQueueStore(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
-
-	// add another redelegation directly to store
-	dvvTriplet1 := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[1].String(),
-		ValidatorSrcAddress: valAddrs[1].String(),
-		ValidatorDstAddress: valAddrs[0].String(),
-	}
-	t1 := blockTime.Add(-1 * time.Minute)
-	require.NoError(keeper.SetRedelegationQueueStore(ctx, t1, []stakingtypes.DVVTriplet{dvvTriplet1}))
-
-	iterator1, err := keeper.RedelegationQueueIterator(ctx)
-	require.NoError(err)
-	defer iterator1.Close()
-	count1 := 0
-	for ; iterator1.Valid(); iterator1.Next() {
-		count1++
-	}
-
-	// redelegations should be retrieved
-	require.Equal(2, count1)
-}
-
 func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
@@ -1838,8 +1434,6 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	// no redelegations in the queue initially
 	require.Equal(0, count)
 
-	// cache should be empty initially
-	require.Empty(keeper.GetRedelegationCache(ctx))
 
 	delAddrs, valAddrs := createValAddrs(3)
 
@@ -1870,14 +1464,6 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	// count 1 due to same redelegation time
 	require.Equal(1, count1)
 
-	// cache should be populated with redelegations
-	require.Equal(1, len(keeper.GetRedelegationCache(ctx))) // length 1 due to same redelegation time
-	require.Equal(red.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
-	require.Equal(red.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
-	require.Equal(red.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorDstAddress)
-	require.Equal(red1.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].DelegatorAddress)
-	require.Equal(red1.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorSrcAddress)
-	require.Equal(red1.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorDstAddress)
 
 	// insert another redelegation with different redelegation time and height
 	red2 := stakingtypes.NewRedelegation(delAddrs[2], valAddrs[2], valAddrs[0], 0,
@@ -1896,92 +1482,6 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 
 	// redelegation should be retrieved
 	require.Equal(2, count2)
-
-	// cache should be populated with redelegations
-	require.Equal(2, len(keeper.GetRedelegationCache(ctx)))
-	require.Equal(red.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].DelegatorAddress)
-	require.Equal(red.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorSrcAddress)
-	require.Equal(red.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][0].ValidatorDstAddress)
-	require.Equal(red1.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].DelegatorAddress)
-	require.Equal(red1.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorSrcAddress)
-	require.Equal(red1.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t)][1].ValidatorDstAddress)
-	require.Equal(red2.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t2)][0].DelegatorAddress)
-	require.Equal(red2.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t2)][0].ValidatorSrcAddress)
-	require.Equal(red2.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(t2)][0].ValidatorDstAddress)
-}
-
-func (s *KeeperTestSuite) TestDeleteMatureRedelegationsCache() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// cache should be empty initially
-	require.Empty(keeper.GetRedelegationCache(ctx))
-
-	// add redelegation directly to cache
-	delAddrs, valAddrs := createValAddrs(2)
-	dvvTriplet := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[0].String(),
-		ValidatorSrcAddress: valAddrs[0].String(),
-		ValidatorDstAddress: valAddrs[1].String(),
-	}
-	require.NoError(keeper.SetRedelegationQueueCache(ctx, blockTime, []stakingtypes.DVVTriplet{dvvTriplet}))
-
-	// cache should be populated with unbonding delegation
-	require.Equal(1, len(keeper.GetRedelegationCache(ctx)))
-	require.Equal(dvvTriplet.DelegatorAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].DelegatorAddress)
-	require.Equal(dvvTriplet.ValidatorSrcAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].ValidatorSrcAddress)
-	require.Equal(dvvTriplet.ValidatorDstAddress, keeper.GetRedelegationCache(ctx)[sdk.FormatTimeString(blockTime)][0].ValidatorDstAddress)
-
-	keeper.DeleteMatureRedelegationsCache(ctx, sdk.FormatTimeString(blockTime))
-
-	// cache should also remove the removed unbonding delegation
-	require.Equal(0, len(keeper.GetRedelegationCache(ctx)))
-}
-
-func (s *KeeperTestSuite) TestDeleteMatureRedelegationsStore() {
-	ctx, keeper := s.ctx, s.stakingKeeper
-	require := s.Require()
-
-	blockTime := time.Now().UTC()
-	blockHeight := int64(1000)
-	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
-	// add redelegation directly to store
-	delAddrs, valAddrs := createValAddrs(2)
-	dvvTriplet := stakingtypes.DVVTriplet{
-		DelegatorAddress:    delAddrs[0].String(),
-		ValidatorSrcAddress: valAddrs[0].String(),
-		ValidatorDstAddress: valAddrs[1].String(),
-	}
-	t := blockTime
-	require.NoError(keeper.SetRedelegationQueueStore(ctx, t, []stakingtypes.DVVTriplet{dvvTriplet}))
-
-	iterator, err := keeper.RedelegationQueueIterator(ctx)
-	require.NoError(err)
-	defer iterator.Close()
-	count := 0
-	for ; iterator.Valid(); iterator.Next() {
-		count++
-	}
-
-	// redelegation in the queue
-	require.Equal(1, count)
-	require.NoError(keeper.DeleteMatureRedelegationsStore(ctx, sdk.FormatTimeString(blockTime)))
-
-	iterator, err = keeper.RedelegationQueueIterator(ctx)
-	require.NoError(err)
-	defer iterator.Close()
-	count = 0
-	for ; iterator.Valid(); iterator.Next() {
-		count++
-	}
-
-	// redelegation should be removed
-	require.Equal(0, count)
 }
 
 func (s *KeeperTestSuite) TestGetAndParseRedelegationTimeKey() {
@@ -2002,8 +1502,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-	// cache should be empty initially
-	require.Empty(keeper.GetRedelegationCache(ctx))
 
 	delAddrs, valAddrs := createValAddrs(3)
 
@@ -2030,8 +1528,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 	t2 := blockTime.Add(1 * time.Minute)
 	require.NoError(keeper.InsertRedelegationQueue(ctx, red2, t2))
 
-	// cache should be populated with redelegations
-	require.Equal(3, len(keeper.GetRedelegationCache(ctx)))
 
 	matureRedelegations, err := keeper.DequeueAllMatureRedelegationQueue(ctx, blockTime)
 
@@ -2048,8 +1544,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 	}
 	require.Equal(1, count)
 
-	// cache should be populated with the pending to redelegate redelegations
-	require.Equal(1, len(keeper.GetRedelegationCache(ctx)))
 }
 
 func (s *KeeperTestSuite) TestSortRedelegationQueueKeysByAscendingOrder() {
