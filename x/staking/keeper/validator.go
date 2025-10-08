@@ -661,6 +661,7 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	return nil
 }
 
+// GetAllUnbondingValidators returns all unbonding validators, initializing the cache from the store if needed.
 func (k *Keeper) GetAllUnbondingValidators(ctx context.Context) (map[string][]string, error) {
 	overflow := k.cache.HasUnbondingValidatorsOverflowed()
 	unbondingValidators := k.cache.GetUnbondingValidators()
@@ -674,6 +675,7 @@ func (k *Keeper) GetAllUnbondingValidators(ctx context.Context) (map[string][]st
 	return k.InitUnbondingValidatorsCache(ctx)
 }
 
+// InitUnbondingValidatorsCache initializes the cache from the store.
 func (k *Keeper) InitUnbondingValidatorsCache(ctx context.Context) (map[string][]string, error) {
 	iterator, err := k.ValidatorQueueIterator(ctx)
 	if err != nil {
