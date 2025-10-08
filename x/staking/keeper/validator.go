@@ -500,7 +500,6 @@ func (k *Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.T
 	return nil
 }
 
-
 // InsertUnbondingValidatorQueue inserts a given unbonding validator address into
 // the unbonding validator queue for a given height and time.
 func (k *Keeper) InsertUnbondingValidatorQueue(ctx context.Context, val types.Validator) error {
@@ -606,7 +605,7 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 		keys = append(keys, k)
 	}
 
-	types.SortValidatorQueueKeysByAscendingOrder(keys)
+	types.SortValidatorQueueKeysByAscendingTimestampOrder(keys)
 
 	for _, key := range keys {
 		time, height, err := types.ParseCacheValidatorQueueKey(key)
@@ -704,5 +703,3 @@ func (k *Keeper) InitUnbondingValidatorsCache(ctx context.Context) (map[string][
 
 	return unbondingValidators, nil
 }
-
-

@@ -449,7 +449,6 @@ func (s *KeeperTestSuite) TestGetAllUnbondingValidators() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-
 	// add ready to unbond validator
 	valPubKey := PKs[0]
 	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
@@ -497,7 +496,6 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 	// no unbonding validator in the queue initially
 	require.Equal(0, count)
 
-
 	// add ready to unbond validator
 	valPubKey := PKs[0]
 	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
@@ -530,7 +528,6 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 	// unbonding validator should be retrieved
 	// count 1 due to same unbonding time and height
 	require.Equal(1, count1)
-
 
 	// add another unbonding validator with different unbonding time and height
 	valAddr2 := sdk.ValAddress(PKs[1].Address().Bytes())
@@ -576,7 +573,6 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-
 	// add unbonding validator - ready to unbond
 	valPubKey := PKs[0]
 	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
@@ -620,7 +616,6 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 	require.NoError(keeper.SetValidator(ctx, validator3))
 	require.NoError(keeper.InsertUnbondingValidatorQueue(ctx, validator3))
 
-
 	err := keeper.UnbondAllMatureValidators(ctx)
 	require.NoError(err)
 
@@ -631,7 +626,7 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 
 }
 
-func (s *KeeperTestSuite) TestSortValidatorQueueKeysByAscendingOrder() {
+func (s *KeeperTestSuite) TestSortValidatorQueueKeysByAscendingTimestampOrder() {
 	require := s.Require()
 
 	currentTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -646,7 +641,7 @@ func (s *KeeperTestSuite) TestSortValidatorQueueKeysByAscendingOrder() {
 		stakingtypes.GetCacheValidatorQueueKey(oneHourLater, 900),
 	}
 
-	stakingtypes.SortValidatorQueueKeysByAscendingOrder(keys)
+	stakingtypes.SortValidatorQueueKeysByAscendingTimestampOrder(keys)
 
 	// Verify sorting is correct - should be sorted by timestamp ascending order
 	for i := 0; i < len(keys)-1; i++ {

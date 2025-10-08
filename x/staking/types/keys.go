@@ -468,10 +468,10 @@ func SortTimestampsByAscendingOrder(keys []string) {
 	})
 }
 
-func SortValidatorQueueKeysByAscendingOrder(keys []string) {
+func SortValidatorQueueKeysByAscendingTimestampOrder(keys []string) {
 	sort.Slice(keys, func(i, j int) bool {
-		t1, _ , _:= ParseCacheValidatorQueueKey(keys[i])
-		t2, _ ,_:= ParseCacheValidatorQueueKey(keys[j])
+		t1, _, _ := ParseCacheValidatorQueueKey(keys[i])
+		t2, _, _ := ParseCacheValidatorQueueKey(keys[j])
 		return t1.Before(t2)
 	})
 }
