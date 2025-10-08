@@ -13,6 +13,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/staking/cache"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -32,9 +33,8 @@ type Keeper struct {
 	authority             string
 	validatorAddressCodec addresscodec.Codec
 	consensusAddressCodec addresscodec.Codec
-	unbondingValidators   map[string][]string
-	unbondingDelegations  map[string][]types.DVPair
-	redelegations         map[string][]types.DVVTriplet
+
+	cache *cache.Cache
 }
 
 // NewKeeper creates a new staking Keeper instance
@@ -46,6 +46,7 @@ func NewKeeper(
 	authority string,
 	validatorAddressCodec addresscodec.Codec,
 	consensusAddressCodec addresscodec.Codec,
+	c *cache.Cache,
 ) *Keeper {
 	// ensure bonded and not bonded module accounts are set
 	if addr := ak.GetModuleAddress(types.BondedPoolName); addr == nil {
@@ -74,6 +75,7 @@ func NewKeeper(
 		authority:             authority,
 		validatorAddressCodec: validatorAddressCodec,
 		consensusAddressCodec: consensusAddressCodec,
+		cache:                 c,
 	}
 }
 
@@ -174,28 +176,4 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 	}
 
 	return valUpdates.Updates, nil
-}
-
-func (k Keeper) GetUnbondingValidatorsCache(ctx context.Context) map[string][]string {
-	return k.unbondingValidators
-}
-
-func (k *Keeper) SetUnbondingValidatorsCache(unbondingValidators map[string][]string) {
-	k.unbondingValidators = unbondingValidators
-}
-
-func (k Keeper) GetUnbondingDelegationCache(ctx context.Context) map[string][]types.DVPair {
-	return k.unbondingDelegations
-}
-
-func (k *Keeper) SetUnbondingDelegationCache(unbondingDelegations map[string][]types.DVPair) {
-	k.unbondingDelegations = unbondingDelegations
-}
-
-func (k Keeper) GetRedelegationCache(ctx context.Context) map[string][]types.DVVTriplet {
-	return k.redelegations
-}
-
-func (k *Keeper) SetRedelegationCache(redelegations map[string][]types.DVVTriplet) {
-	k.redelegations = redelegations
 }
