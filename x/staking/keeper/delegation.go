@@ -842,6 +842,10 @@ func (k *Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp ti
 	if err != nil {
 		return err
 	}
+	_, err = k.GetPendingRedelegations(ctx)
+	if err != nil {
+		return err
+	}
 	k.cache.SetRedelegationEntry(sdk.FormatTimeString(timestamp), keys)
 	return nil
 }
