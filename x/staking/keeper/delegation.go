@@ -448,13 +448,13 @@ func (k Keeper) SetUnbondingDelegationEntry(
 // certain time.
 func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvPairs []types.DVPair, err error) {
 
-	overflow := k.cache.HasUnbondingDelegationsOverflowed()
-	unbondingDelegations := k.cache.GetUnbondingDelegations()
-
-	cacheIsValid := !overflow && unbondingDelegations != nil
-
-	if cacheIsValid {
-		return unbondingDelegations[sdk.FormatTimeString(timestamp)], nil
+	if !k.cache.HasUnbondingDelegationsOverflowed() {
+		if ubds := k.cache.GetUnbondingDelegations(); ubds != nil {
+			if pairs, ok := ubds[sdk.FormatTimeString(timestamp)]; ok {
+				return pairs, nil
+			}
+			return []types.DVPair{}, nil
+		}
 	}
 
 	store := k.storeService.OpenKVStore(ctx)
@@ -473,13 +473,10 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 // GetUBDs returns all unbonding delegations, initializing the cache from the store if needed.
 func (k *Keeper) GetUBDs(ctx context.Context) (map[string][]types.DVPair, error) {
 
-	overflow := k.cache.HasUnbondingDelegationsOverflowed()
-	unbondingDelegations := k.cache.GetUnbondingDelegations()
-
-	cacheIsValid := !overflow && unbondingDelegations != nil
-
-	if cacheIsValid {
-		return unbondingDelegations, nil
+	if !k.cache.HasUnbondingDelegationsOverflowed() {
+		if ubds := k.cache.GetUnbondingDelegations(); ubds != nil {
+			return ubds, nil
+		}
 	}
 
 	return k.InitUBDsCache(ctx)
@@ -823,13 +820,13 @@ func (k Keeper) RemoveRedelegation(ctx context.Context, red types.Redelegation) 
 // timeslice is a slice of DVVTriplets corresponding to redelegations that
 // expire at a certain time.
 func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvvTriplets []types.DVVTriplet, err error) {
-	overflow := k.cache.HasRedelegationsOverflowed()
-	redelegations := k.cache.GetRedelegations()
-
-	cacheIsValid := !overflow && redelegations != nil
-
-	if cacheIsValid {
-		return redelegations[sdk.FormatTimeString(timestamp)], nil
+	if !k.cache.HasRedelegationsOverflowed() {
+		if reds := k.cache.GetRedelegations(); reds != nil {
+			if triplets, ok := reds[sdk.FormatTimeString(timestamp)]; ok {
+				return triplets, nil
+			}
+			return []types.DVVTriplet{}, nil
+		}
 	}
 
 	store := k.storeService.OpenKVStore(ctx)
@@ -1469,13 +1466,10 @@ func (k *Keeper) DeleteMatureRedelegations(ctx context.Context, key string) erro
 
 // GetPendingRedelegations returns all pending redelegations, initializing the cache from the store if needed.
 func (k *Keeper) GetPendingRedelegations(ctx context.Context) (map[string][]types.DVVTriplet, error) {
-	overflow := k.cache.HasRedelegationsOverflowed()
-	redelegations := k.cache.GetRedelegations()
-
-	cacheIsValid := !overflow && redelegations != nil
-
-	if cacheIsValid {
-		return redelegations, nil
+	if !k.cache.HasRedelegationsOverflowed() {
+		if reds := k.cache.GetRedelegations(); reds != nil {
+			return reds, nil
+		}
 	}
 
 	return k.InitRedelegationsCache(ctx)
