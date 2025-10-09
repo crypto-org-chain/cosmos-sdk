@@ -11,9 +11,10 @@ type slice[T any] interface {
 }
 
 type cacheEntry[K comparable, V slice[T], T any] struct {
-	mu         sync.RWMutex
-	data       map[K]V
-	overflowed bool
+	mu   sync.RWMutex
+	data map[K]V
+	// cache would be invalidated if inserted data is greater than max
+	invalidated bool
 	// max defines the maximum number of entries in each cache map
 	// to prevent OOM attacks.
 	// - if max == 0, there is no cap on the number of entries in the cache
@@ -31,7 +32,7 @@ func (e *cacheEntry[K, V, T]) get() (map[K]V, bool) {
 	defer e.mu.RUnlock()
 
 	if e.data == nil {
-		return nil, e.overflowed
+		return nil, e.invalidated
 	}
 
 	copied := make(map[K]V, len(e.data))
@@ -39,7 +40,7 @@ func (e *cacheEntry[K, V, T]) get() (map[K]V, bool) {
 		copied[k] = append([]T(nil), v...)
 	}
 
-	return copied, e.overflowed
+	return copied, e.invalidated
 }
 
 func (e *cacheEntry[K, V, T]) set(data map[K]V) {
@@ -56,7 +57,7 @@ func (e *cacheEntry[K, V, T]) set(data map[K]V) {
 	}
 
 	if e.max > 0 && totalElements > e.max {
-		e.overflowed = true
+		e.invalidated = true
 		return
 	}
 
@@ -70,7 +71,7 @@ func (e *cacheEntry[K, V, T]) set(data map[K]V) {
 	}
 
 	e.data = copied
-	e.overflowed = false
+	e.invalidated = false
 }
 
 func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
@@ -98,13 +99,13 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	newTotal := currentTotal + len(value)
 
 	if e.max > 0 && newTotal > e.max {
-		e.overflowed = true
+		e.invalidated = true
 		return
 	}
 
 	sliceCopy := append([]T(nil), value...)
 	e.data[key] = sliceCopy
-	e.overflowed = false
+	e.invalidated = false
 }
 
 func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
@@ -150,7 +151,6 @@ func (c *ValidatorsCache) DeleteUnbondingValidatorEntry(key string) {
 	c.unbondingValidators.deleteEntry(key)
 }
 
-
 func (c *ValidatorsCache) GetUnbondingDelegations() (map[string][]types.DVPair, bool) {
 	return c.unbondingDelegations.get()
 }
@@ -167,7 +167,6 @@ func (c *ValidatorsCache) DeleteUnbondingDelegationEntry(key string) {
 	c.unbondingDelegations.deleteEntry(key)
 }
 
-
 func (c *ValidatorsCache) GetRedelegations() (map[string][]types.DVVTriplet, bool) {
 	return c.redelegations.get()
 }
@@ -183,4 +182,3 @@ func (c *ValidatorsCache) SetRedelegationEntry(key string, triplets []types.DVVT
 func (c *ValidatorsCache) DeleteRedelegationEntry(key string) {
 	c.redelegations.deleteEntry(key)
 }
-

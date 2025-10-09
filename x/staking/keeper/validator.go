@@ -448,7 +448,7 @@ func (k Keeper) GetLastValidators(ctx context.Context) (validators []types.Valid
 // complete their unbonding at a given time and height.
 func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
 
-	if validators, overflow := k.cache.GetUnbondingValidators(); !overflow && validators != nil {
+	if validators, invalidated := k.cache.GetUnbondingValidators(); !invalidated && validators != nil {
 		if addrs, ok := validators[types.GetCacheValidatorQueueKey(endTime, endHeight)]; ok {
 			return addrs, nil
 		}
@@ -660,7 +660,7 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 
 // GetAllUnbondingValidators returns all unbonding validators, initializing the cache from the store if needed.
 func (k *Keeper) GetAllUnbondingValidators(ctx context.Context) (map[string][]string, error) {
-	if addrs, overflow := k.cache.GetUnbondingValidators(); !overflow && addrs != nil {
+	if addrs, invalidated := k.cache.GetUnbondingValidators(); !invalidated && addrs != nil {
 		return addrs, nil
 	}
 
