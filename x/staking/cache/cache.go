@@ -40,12 +40,26 @@ func (e *cacheEntry[K, V, T]) set(data map[K]V) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.max > 0 && len(data) > e.max {
+	totalElements := 0
+	for _, v := range data {
+		totalElements += len(v)
+	}
+
+	if e.max > 0 && totalElements > e.max {
 		e.overflowed = true
 		return
 	}
 
-	e.data = data
+	copied := make(map[K]V, len(data))
+	for k, v := range data {
+		if len(v) == 0 {
+			continue
+		}
+		sliceCopy := append([]T(nil), v...)
+		copied[k] = sliceCopy
+	}
+
+	e.data = copied
 	e.overflowed = false
 }
 
@@ -57,18 +71,30 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.max > 0 && len(e.data) >= e.max {
-		if _, exists := e.data[key]; !exists {
-			e.overflowed = true
-			return
-		}
-	}
-
 	if e.data == nil {
 		e.data = make(map[K]V)
 	}
 
-	e.data[key] = value
+	currentTotal := 0
+	for _, v := range e.data {
+		currentTotal += len(v)
+	}
+
+	// Subtract old value length if key exists (replacement)
+	if old, exists := e.data[key]; exists {
+		currentTotal -= len(old)
+	}
+
+	newTotal := currentTotal + len(value)
+
+	if e.max > 0 && newTotal > e.max {
+		e.overflowed = true
+		return
+	}
+
+	sliceCopy := append([]T(nil), value...)
+	e.data[key] = sliceCopy
+	e.overflowed = false
 }
 
 func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
@@ -104,7 +130,6 @@ func NewCache(max int) *Cache {
 	}
 }
 
-
 func (c *Cache) GetUnbondingValidators() map[string][]string {
 	return c.unbondingValidators.get()
 }
@@ -125,7 +150,6 @@ func (c *Cache) HasUnbondingValidatorsOverflowed() bool {
 	return c.unbondingValidators.hasOverflowed()
 }
 
-
 func (c *Cache) GetUnbondingDelegations() map[string][]types.DVPair {
 	return c.unbondingDelegations.get()
 }
@@ -145,7 +169,6 @@ func (c *Cache) DeleteUnbondingDelegationEntry(key string) {
 func (c *Cache) HasUnbondingDelegationsOverflowed() bool {
 	return c.unbondingDelegations.hasOverflowed()
 }
-
 
 func (c *Cache) GetRedelegations() map[string][]types.DVVTriplet {
 	return c.redelegations.get()
