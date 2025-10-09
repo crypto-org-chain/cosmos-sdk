@@ -29,7 +29,17 @@ func newCacheEntry[K comparable, V Slice[T], T any](max int) *cacheEntry[K, V, T
 func (e *cacheEntry[K, V, T]) get() map[K]V {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.data
+
+	if e.data == nil {
+		return nil
+	}
+
+	copied := make(map[K]V, len(e.data))
+	for k, v := range e.data {
+		copied[k] = append([]T(nil), v...)
+	}
+
+	return copied
 }
 
 func (e *cacheEntry[K, V, T]) set(data map[K]V) {
