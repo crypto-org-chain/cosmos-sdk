@@ -448,13 +448,11 @@ func (k Keeper) GetLastValidators(ctx context.Context) (validators []types.Valid
 // complete their unbonding at a given time and height.
 func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
 
-	if !k.cache.HasUnbondingValidatorsOverflowed() {
-		if addrs := k.cache.GetUnbondingValidators(); addrs != nil {
-			if addrs, ok := addrs[types.GetCacheValidatorQueueKey(endTime, endHeight)]; ok {
-				return addrs, nil
-			}
-			return []string{}, nil
+	if validators, overflow := k.cache.GetUnbondingValidators(); !overflow && validators != nil {
+		if addrs, ok := validators[types.GetCacheValidatorQueueKey(endTime, endHeight)]; ok {
+			return addrs, nil
 		}
+		return []string{}, nil
 	}
 
 	store := k.storeService.OpenKVStore(ctx)
@@ -489,7 +487,7 @@ func (k *Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.T
 		return err
 	}
 
-	unbondingValidators := k.cache.GetUnbondingValidators()
+	unbondingValidators, _ := k.cache.GetUnbondingValidators()
 	if unbondingValidators == nil {
 		_, err := k.InitUnbondingValidatorsCache(ctx)
 		if err != nil {
@@ -662,10 +660,8 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 
 // GetAllUnbondingValidators returns all unbonding validators, initializing the cache from the store if needed.
 func (k *Keeper) GetAllUnbondingValidators(ctx context.Context) (map[string][]string, error) {
-	if !k.cache.HasUnbondingValidatorsOverflowed() {
-		if addrs := k.cache.GetUnbondingValidators(); addrs != nil {
-			return addrs, nil
-		}
+	if addrs, overflow := k.cache.GetUnbondingValidators(); !overflow && addrs != nil {
+		return addrs, nil
 	}
 
 	return k.InitUnbondingValidatorsCache(ctx)
