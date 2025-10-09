@@ -576,6 +576,8 @@ func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Tim
 
 	types.SortTimestampsByAscendingOrder(keys)
 
+	store := k.storeService.OpenKVStore(ctx)
+
 	for _, key := range keys {
 		t, err := sdk.ParseTime(key)
 		if err != nil {
@@ -588,27 +590,14 @@ func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Tim
 		pairs := unbondingDelegations[key]
 		matureUnbonds = append(matureUnbonds, pairs...)
 
-		if err = k.DeleteMatureUBDs(ctx, key); err != nil {
+		err = store.Delete(types.GetUnbondingDelegationTimeKey(t))
+		if err != nil {
 			return matureUnbonds, err
 		}
+		k.cache.DeleteUnbondingDelegationEntry(key)
 	}
 
 	return matureUnbonds, nil
-}
-
-// DeleteMatureUBDs deletes unbonding delegations from the store and cache for a given key.
-func (k *Keeper) DeleteMatureUBDs(ctx context.Context, key string) error {
-	store := k.storeService.OpenKVStore(ctx)
-	t, err := sdk.ParseTime(key)
-	if err != nil {
-		return err
-	}
-	err = store.Delete(types.GetUnbondingDelegationTimeKey(t))
-	if err != nil {
-		return err
-	}
-	k.cache.DeleteUnbondingDelegationEntry(key)
-	return nil
 }
 
 // GetRedelegations returns a given amount of all the delegator redelegations.
@@ -1429,6 +1418,8 @@ func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime
 
 	types.SortTimestampsByAscendingOrder(keys)
 
+	store := k.storeService.OpenKVStore(ctx)
+
 	for _, key := range keys {
 		t, err := sdk.ParseTime(key)
 		if err != nil {
@@ -1441,27 +1432,15 @@ func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime
 		triplets := redelegations[key]
 		matureRedelegations = append(matureRedelegations, triplets...)
 
-		if err = k.DeleteMatureRedelegations(ctx, key); err != nil {
+		err = store.Delete(types.GetRedelegationTimeKey(t))
+		if err != nil {
 			return matureRedelegations, err
 		}
+
+		k.cache.DeleteRedelegationEntry(key)
 	}
 
 	return matureRedelegations, nil
-}
-
-// DeleteMatureRedelegations deletes matured redelegation from the store and cache for a given key.
-func (k *Keeper) DeleteMatureRedelegations(ctx context.Context, key string) error {
-	store := k.storeService.OpenKVStore(ctx)
-	t, err := sdk.ParseTime(key)
-	if err != nil {
-		return err
-	}
-	err = store.Delete(types.GetRedelegationTimeKey(t))
-	if err != nil {
-		return err
-	}
-	k.cache.DeleteRedelegationEntry(key)
-	return nil
 }
 
 // GetPendingRedelegations returns all pending redelegations, initializing the cache from the store if needed.
