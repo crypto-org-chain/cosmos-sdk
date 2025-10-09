@@ -6,11 +6,11 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-type Slice[T any] interface {
+type slice[T any] interface {
 	~[]T
 }
 
-type cacheEntry[K comparable, V Slice[T], T any] struct {
+type cacheEntry[K comparable, V slice[T], T any] struct {
 	mu         sync.RWMutex
 	data       map[K]V
 	overflowed bool
@@ -22,7 +22,7 @@ type cacheEntry[K comparable, V Slice[T], T any] struct {
 	max int
 }
 
-func newCacheEntry[K comparable, V Slice[T], T any](max int) *cacheEntry[K, V, T] {
+func newCacheEntry[K comparable, V slice[T], T any](max int) *cacheEntry[K, V, T] {
 	return &cacheEntry[K, V, T]{max: max}
 }
 
