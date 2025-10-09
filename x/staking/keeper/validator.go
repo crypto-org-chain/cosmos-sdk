@@ -448,7 +448,7 @@ func (k Keeper) GetLastValidators(ctx context.Context) (validators []types.Valid
 // complete their unbonding at a given time and height.
 func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
 
-	if validators, invalidated := k.cache.GetUnbondingValidators(); !invalidated && validators != nil {
+	if validators, full := k.cache.GetUnbondingValidators(); !full && validators != nil {
 		if addrs, ok := validators[types.GetCacheValidatorQueueKey(endTime, endHeight)]; ok {
 			return addrs, nil
 		}
@@ -657,7 +657,7 @@ func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (
 
 // GetAllUnbondingValidators returns all unbonding validators, initializing the cache from the store if needed.
 func (k *Keeper) GetAllUnbondingValidators(ctx context.Context) (map[string][]string, error) {
-	if addrs, invalidated := k.cache.GetUnbondingValidators(); !invalidated && addrs != nil {
+	if addrs, full := k.cache.GetUnbondingValidators(); !full && addrs != nil {
 		return addrs, nil
 	}
 

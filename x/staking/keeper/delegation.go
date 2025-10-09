@@ -448,7 +448,7 @@ func (k Keeper) SetUnbondingDelegationEntry(
 // certain time.
 func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvPairs []types.DVPair, err error) {
 
-	if ubds, invalidated := k.cache.GetUnbondingDelegations(); !invalidated && ubds != nil {
+	if ubds, full := k.cache.GetUnbondingDelegations(); !full && ubds != nil {
 		if pairs, ok := ubds[sdk.FormatTimeString(timestamp)]; ok {
 			return pairs, nil
 		}
@@ -471,7 +471,7 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 // GetUBDs returns all unbonding delegations, initializing the cache from the store if needed.
 func (k *Keeper) GetUBDs(ctx context.Context) (map[string][]types.DVPair, error) {
 
-	if ubds, invalidated := k.cache.GetUnbondingDelegations(); !invalidated && ubds != nil {
+	if ubds, full := k.cache.GetUnbondingDelegations(); !full && ubds != nil {
 		return ubds, nil
 	}
 
@@ -802,7 +802,7 @@ func (k Keeper) RemoveRedelegation(ctx context.Context, red types.Redelegation) 
 // timeslice is a slice of DVVTriplets corresponding to redelegations that
 // expire at a certain time.
 func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvvTriplets []types.DVVTriplet, err error) {
-	if reds, invalidated := k.cache.GetRedelegations(); !invalidated && reds != nil {
+	if reds, full := k.cache.GetRedelegations(); !full && reds != nil {
 		if triplets, ok := reds[sdk.FormatTimeString(timestamp)]; ok {
 			return triplets, nil
 		}
@@ -1439,7 +1439,7 @@ func (k Keeper) ValidateUnbondAmount(
 
 // GetPendingRedelegations returns all pending redelegations, initializing the cache from the store if needed.
 func (k *Keeper) GetPendingRedelegations(ctx context.Context) (map[string][]types.DVVTriplet, error) {
-	if reds, invalidated := k.cache.GetRedelegations(); !invalidated && reds != nil {
+	if reds, full := k.cache.GetRedelegations(); !full && reds != nil {
 		return reds, nil
 	}
 
