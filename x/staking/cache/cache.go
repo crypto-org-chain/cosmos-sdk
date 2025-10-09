@@ -6,7 +6,11 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-type cacheEntry[K comparable, V any] struct {
+type Slice[T any] interface {
+	~[]T
+}
+
+type cacheEntry[K comparable, V Slice[T], T any] struct {
 	mu         sync.RWMutex
 	data       map[K]V
 	overflowed bool
@@ -18,19 +22,17 @@ type cacheEntry[K comparable, V any] struct {
 	max int
 }
 
-func newCacheEntry[K comparable, V any](max int) *cacheEntry[K, V] {
-	return &cacheEntry[K, V]{
-		max: max,
-	}
+func newCacheEntry[K comparable, V Slice[T], T any](max int) *cacheEntry[K, V, T] {
+	return &cacheEntry[K, V, T]{max: max}
 }
 
-func (e *cacheEntry[K, V]) get() map[K]V {
+func (e *cacheEntry[K, V, T]) get() map[K]V {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.data
 }
 
-func (e *cacheEntry[K, V]) set(data map[K]V) {
+func (e *cacheEntry[K, V, T]) set(data map[K]V) {
 	if e.max < 0 {
 		return
 	}
@@ -47,7 +49,7 @@ func (e *cacheEntry[K, V]) set(data map[K]V) {
 	e.overflowed = false
 }
 
-func (e *cacheEntry[K, V]) setEntry(key K, value V) {
+func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	if e.max < 0 {
 		return
 	}
@@ -69,7 +71,7 @@ func (e *cacheEntry[K, V]) setEntry(key K, value V) {
 	e.data[key] = value
 }
 
-func (e *cacheEntry[K, V]) deleteEntry(key K) {
+func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
 	if e.max < 0 {
 		return
 	}
@@ -82,25 +84,26 @@ func (e *cacheEntry[K, V]) deleteEntry(key K) {
 	}
 }
 
-func (e *cacheEntry[K, V]) hasOverflowed() bool {
+func (e *cacheEntry[K, V, T]) hasOverflowed() bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.overflowed
 }
 
 type Cache struct {
-	unbondingValidators  *cacheEntry[string, []string]
-	unbondingDelegations *cacheEntry[string, []types.DVPair]
-	redelegations        *cacheEntry[string, []types.DVVTriplet]
+	unbondingValidators  *cacheEntry[string, []string, string]
+	unbondingDelegations *cacheEntry[string, []types.DVPair, types.DVPair]
+	redelegations        *cacheEntry[string, []types.DVVTriplet, types.DVVTriplet]
 }
 
 func NewCache(max int) *Cache {
 	return &Cache{
-		unbondingValidators:  newCacheEntry[string, []string](max),
-		unbondingDelegations: newCacheEntry[string, []types.DVPair](max),
-		redelegations:        newCacheEntry[string, []types.DVVTriplet](max),
+		unbondingValidators:  newCacheEntry[string, []string, string](max),
+		unbondingDelegations: newCacheEntry[string, []types.DVPair, types.DVPair](max),
+		redelegations:        newCacheEntry[string, []types.DVVTriplet, types.DVVTriplet](max),
 	}
 }
+
 
 func (c *Cache) GetUnbondingValidators() map[string][]string {
 	return c.unbondingValidators.get()
@@ -122,6 +125,7 @@ func (c *Cache) HasUnbondingValidatorsOverflowed() bool {
 	return c.unbondingValidators.hasOverflowed()
 }
 
+
 func (c *Cache) GetUnbondingDelegations() map[string][]types.DVPair {
 	return c.unbondingDelegations.get()
 }
@@ -141,6 +145,7 @@ func (c *Cache) DeleteUnbondingDelegationEntry(key string) {
 func (c *Cache) HasUnbondingDelegationsOverflowed() bool {
 	return c.unbondingDelegations.hasOverflowed()
 }
+
 
 func (c *Cache) GetRedelegations() map[string][]types.DVVTriplet {
 	return c.redelegations.get()
