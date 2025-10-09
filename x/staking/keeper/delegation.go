@@ -518,12 +518,9 @@ func (k *Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, 
 		return err
 	}
 
-	unbondingDelegations, _ := k.cache.GetUnbondingDelegations()
-	if unbondingDelegations == nil {
-		_, err := k.InitUBDsCache(ctx)
-		if err != nil {
-			return err
-		}
+	_, err = k.GetUBDs(ctx)
+	if err != nil {
+		return err
 	}
 
 	k.cache.SetUnbondingDelegationEntry(sdk.FormatTimeString(timestamp), keys)

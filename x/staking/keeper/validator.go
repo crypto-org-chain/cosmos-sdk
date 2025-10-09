@@ -487,12 +487,9 @@ func (k *Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.T
 		return err
 	}
 
-	unbondingValidators, _ := k.cache.GetUnbondingValidators()
-	if unbondingValidators == nil {
-		_, err := k.InitUnbondingValidatorsCache(ctx)
-		if err != nil {
-			return err
-		}
+	_, err = k.GetAllUnbondingValidators(ctx)
+	if err != nil {
+		return err
 	}
 	k.cache.SetUnbondingValidatorEntry(types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
 	return nil
