@@ -33,6 +33,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 		return nil, err
 	}
 
+	// unbond all mature validators from the unbonding queue
 	err = k.UnbondAllMatureValidators(ctx)
 	if err != nil {
 		return nil, err
@@ -41,6 +42,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	blockTime := sdkCtx.BlockTime()
 
+	// Remove all mature unbonding delegations from the ubd queue.
 	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, blockTime)
 	if err != nil {
 		return nil, err
@@ -70,7 +72,7 @@ func (k *Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpd
 			),
 		)
 	}
-
+	// Remove all mature redelegations from the red queue.
 	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, blockTime)
 	if err != nil {
 		return nil, err
@@ -143,7 +145,8 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 	if err != nil {
 		return nil, err
 	}
-
+	
+	// Iterate over validators, highest power to lowest.
 	iterator, err := k.ValidatorsPowerStoreIterator(ctx)
 	if err != nil {
 		return nil, err

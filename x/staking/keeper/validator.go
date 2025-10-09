@@ -558,31 +558,6 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context) (corestore.Iterator,
 	return store.Iterator(types.ValidatorQueueKey, storetypes.PrefixEndBytes(types.ValidatorQueueKey))
 }
 
-// IsValidatorJailed checks and returns boolean of a validator status jailed or not.
-func (k Keeper) IsValidatorJailed(ctx context.Context, addr sdk.ConsAddress) (bool, error) {
-	v, err := k.GetValidatorByConsAddr(ctx, addr)
-	if err != nil {
-		return false, err
-	}
-
-	return v.Jailed, nil
-}
-
-// GetPubKeyByConsAddr returns the consensus public key by consensus address.
-func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (cmtprotocrypto.PublicKey, error) {
-	v, err := k.GetValidatorByConsAddr(ctx, addr)
-	if err != nil {
-		return cmtprotocrypto.PublicKey{}, err
-	}
-
-	pubkey, err := v.CmtConsPublicKey()
-	if err != nil {
-		return cmtprotocrypto.PublicKey{}, err
-	}
-
-	return pubkey, nil
-}
-
 // UnbondAllMatureValidators unbonds all the mature unbonding validators that
 // have finished their unbonding period.
 func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
@@ -653,6 +628,31 @@ func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// IsValidatorJailed checks and returns boolean of a validator status jailed or not.
+func (k Keeper) IsValidatorJailed(ctx context.Context, addr sdk.ConsAddress) (bool, error) {
+	v, err := k.GetValidatorByConsAddr(ctx, addr)
+	if err != nil {
+		return false, err
+	}
+
+	return v.Jailed, nil
+}
+
+// GetPubKeyByConsAddr returns the consensus public key by consensus address.
+func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (cmtprotocrypto.PublicKey, error) {
+	v, err := k.GetValidatorByConsAddr(ctx, addr)
+	if err != nil {
+		return cmtprotocrypto.PublicKey{}, err
+	}
+
+	pubkey, err := v.CmtConsPublicKey()
+	if err != nil {
+		return cmtprotocrypto.PublicKey{}, err
+	}
+
+	return pubkey, nil
 }
 
 // GetAllUnbondingValidators returns all unbonding validators, initializing the cache from the store if needed.

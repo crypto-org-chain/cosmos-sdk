@@ -874,6 +874,47 @@ func (k Keeper) RedelegationQueueIterator(ctx context.Context) (storetypes.Itera
 	return store.Iterator(types.RedelegationQueueKey, storetypes.PrefixEndBytes(types.RedelegationQueueKey))
 }
 
+// DequeueAllMatureRedelegationQueue returns a concatenated list of all the
+// timeslices, and deletes the matured timeslices from the queue.
+func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
+	redelegations, err := k.GetPendingRedelegations(ctx)
+	if err != nil {
+		return matureRedelegations, err
+	}
+
+	keys := make([]string, 0, len(redelegations))
+
+	for key := range redelegations {
+		keys = append(keys, key)
+	}
+
+	types.SortTimestampsByAscendingOrder(keys)
+
+	store := k.storeService.OpenKVStore(ctx)
+
+	for _, key := range keys {
+		t, err := sdk.ParseTime(key)
+		if err != nil {
+			return matureRedelegations, err
+		}
+
+		if nonMature := t.After(currTime); nonMature {
+			return matureRedelegations, nil
+		}
+		triplets := redelegations[key]
+		matureRedelegations = append(matureRedelegations, triplets...)
+
+		err = store.Delete(types.GetRedelegationTimeKey(t))
+		if err != nil {
+			return matureRedelegations, err
+		}
+
+		k.cache.DeleteRedelegationEntry(key)
+	}
+
+	return matureRedelegations, nil
+}
+
 // Delegate performs a delegation, set/update everything necessary within the store.
 // tokenSrc indicates the bond status of the incoming funds.
 func (k Keeper) Delegate(
@@ -1396,47 +1437,6 @@ func (k Keeper) ValidateUnbondAmount(
 	return shares, nil
 }
 
-// DequeueAllMatureRedelegationQueue returns a concatenated list of all the
-// timeslices, and deletes the matured timeslices from the queue.
-// the queue.
-func (k *Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
-	redelegations, err := k.GetPendingRedelegations(ctx)
-	if err != nil {
-		return matureRedelegations, err
-	}
-
-	keys := make([]string, 0, len(redelegations))
-
-	for key := range redelegations {
-		keys = append(keys, key)
-	}
-
-	types.SortTimestampsByAscendingOrder(keys)
-
-	store := k.storeService.OpenKVStore(ctx)
-
-	for _, key := range keys {
-		t, err := sdk.ParseTime(key)
-		if err != nil {
-			return matureRedelegations, err
-		}
-
-		if nonMature := t.After(currTime); nonMature {
-			return matureRedelegations, nil
-		}
-		triplets := redelegations[key]
-		matureRedelegations = append(matureRedelegations, triplets...)
-
-		err = store.Delete(types.GetRedelegationTimeKey(t))
-		if err != nil {
-			return matureRedelegations, err
-		}
-
-		k.cache.DeleteRedelegationEntry(key)
-	}
-
-	return matureRedelegations, nil
-}
 
 // GetPendingRedelegations returns all pending redelegations, initializing the cache from the store if needed.
 func (k *Keeper) GetPendingRedelegations(ctx context.Context) (map[string][]types.DVVTriplet, error) {

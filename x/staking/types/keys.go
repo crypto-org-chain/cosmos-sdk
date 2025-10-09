@@ -460,6 +460,7 @@ func GetHistoricalInfoKey(height int64) []byte {
 	return append(HistoricalInfoKey, heightBytes...)
 }
 
+// SortTimestampsByAscendingOrder sorts the timestamps by ascending order.
 func SortTimestampsByAscendingOrder(keys []string) {
 	sort.Slice(keys, func(i, j int) bool {
 		t1, _ := sdk.ParseTime(keys[i])
@@ -467,7 +468,7 @@ func SortTimestampsByAscendingOrder(keys []string) {
 		return t1.Before(t2)
 	})
 }
-
+// SortValidatorQueueKeysByAscendingTimestampOrder sorts the validator queue keys by ascending timestamp.
 func SortValidatorQueueKeysByAscendingTimestampOrder(keys []string) {
 	sort.Slice(keys, func(i, j int) bool {
 		t1, _, _ := ParseCacheValidatorQueueKey(keys[i])
