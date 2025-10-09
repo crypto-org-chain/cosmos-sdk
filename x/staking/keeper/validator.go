@@ -448,7 +448,7 @@ func (k Keeper) GetLastValidators(ctx context.Context) (validators []types.Valid
 // complete their unbonding at a given time and height.
 func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
 
-	if validators, full := k.cache.GetUnbondingValidators(); !full && validators != nil {
+	if validators, full := k.cache.GetUnbondingValidatorsQueue(); !full && validators != nil {
 		if addrs, ok := validators[types.GetCacheValidatorQueueKey(endTime, endHeight)]; ok {
 			return addrs, nil
 		}
@@ -491,7 +491,7 @@ func (k *Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.T
 	if err != nil {
 		return err
 	}
-	k.cache.SetUnbondingValidatorEntry(types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
+	k.cache.SetUnbondingValidatorQueueEntry(types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
 	return nil
 }
 
@@ -514,7 +514,7 @@ func (k *Keeper) DeleteValidatorQueueTimeSlice(ctx context.Context, endTime time
 	if err != nil {
 		return err
 	}
-	k.cache.DeleteUnbondingValidatorEntry(types.GetCacheValidatorQueueKey(endTime, endHeight))
+	k.cache.DeleteUnbondingValidatorQueueEntry(types.GetCacheValidatorQueueKey(endTime, endHeight))
 	return nil
 }
 
@@ -657,7 +657,7 @@ func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (
 
 // GetAllUnbondingValidators returns all unbonding validators, initializing the cache from the store if needed.
 func (k *Keeper) GetAllUnbondingValidators(ctx context.Context) (map[string][]string, error) {
-	if addrs, full := k.cache.GetUnbondingValidators(); !full && addrs != nil {
+	if addrs, full := k.cache.GetUnbondingValidatorsQueue(); !full && addrs != nil {
 		return addrs, nil
 	}
 
@@ -689,7 +689,7 @@ func (k *Keeper) InitUnbondingValidatorsCache(ctx context.Context) (map[string][
 		unbondingValidators[types.GetCacheValidatorQueueKey(keyTime, keyHeight)] = addrs.Addresses
 	}
 
-	k.cache.SetUnbondingValidators(unbondingValidators)
+	k.cache.SetUnbondingValidatorsQueue(unbondingValidators)
 
 	return unbondingValidators, nil
 }

@@ -93,7 +93,7 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 		e.full = true
 		return
 	}
-	
+
 	sliceCopy := append([]T(nil), value...)
 	e.data[key] = sliceCopy
 
@@ -112,64 +112,64 @@ func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
 	}
 }
 
-type ValidatorsCache struct {
-	unbondingValidators  *cacheEntry[string, []string, string]
-	unbondingDelegations *cacheEntry[string, []types.DVPair, types.DVPair]
-	redelegations        *cacheEntry[string, []types.DVVTriplet, types.DVVTriplet]
+type ValidatorsQueueCache struct {
+	unbondingValidatorsQueue  *cacheEntry[string, []string, string]
+	unbondingDelegationsQueue *cacheEntry[string, []types.DVPair, types.DVPair]
+	redelegationsQueue        *cacheEntry[string, []types.DVVTriplet, types.DVVTriplet]
 }
 
-func NewCache(max int) *ValidatorsCache {
-	return &ValidatorsCache{
-		unbondingValidators:  newCacheEntry[string, []string](max),
-		unbondingDelegations: newCacheEntry[string, []types.DVPair](max),
-		redelegations:        newCacheEntry[string, []types.DVVTriplet](max),
+func NewCache(max int) *ValidatorsQueueCache {
+	return &ValidatorsQueueCache{
+		unbondingValidatorsQueue:  newCacheEntry[string, []string](max),
+		unbondingDelegationsQueue: newCacheEntry[string, []types.DVPair](max),
+		redelegationsQueue:        newCacheEntry[string, []types.DVVTriplet](max),
 	}
 }
 
-func (c *ValidatorsCache) GetUnbondingValidators() (map[string][]string, bool) {
-	return c.unbondingValidators.get()
+func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue() (map[string][]string, bool) {
+	return c.unbondingValidatorsQueue.get()
 }
 
-func (c *ValidatorsCache) SetUnbondingValidators(validators map[string][]string) {
-	c.unbondingValidators.set(validators)
+func (c *ValidatorsQueueCache) SetUnbondingValidatorsQueue(validators map[string][]string) {
+	c.unbondingValidatorsQueue.set(validators)
 }
 
-func (c *ValidatorsCache) SetUnbondingValidatorEntry(key string, addrs []string) {
-	c.unbondingValidators.setEntry(key, addrs)
+func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(key string, addrs []string) {
+	c.unbondingValidatorsQueue.setEntry(key, addrs)
 }
 
-func (c *ValidatorsCache) DeleteUnbondingValidatorEntry(key string) {
-	c.unbondingValidators.deleteEntry(key)
+func (c *ValidatorsQueueCache) DeleteUnbondingValidatorQueueEntry(key string) {
+	c.unbondingValidatorsQueue.deleteEntry(key)
 }
 
-func (c *ValidatorsCache) GetUnbondingDelegations() (map[string][]types.DVPair, bool) {
-	return c.unbondingDelegations.get()
+func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue() (map[string][]types.DVPair, bool) {
+	return c.unbondingDelegationsQueue.get()
 }
 
-func (c *ValidatorsCache) SetUnbondingDelegations(delegations map[string][]types.DVPair) {
-	c.unbondingDelegations.set(delegations)
+func (c *ValidatorsQueueCache) SetUnbondingDelegationsQueue(delegations map[string][]types.DVPair) {
+	c.unbondingDelegationsQueue.set(delegations)
 }
 
-func (c *ValidatorsCache) SetUnbondingDelegationEntry(key string, pairs []types.DVPair) {
-	c.unbondingDelegations.setEntry(key, pairs)
+func (c *ValidatorsQueueCache) SetUnbondingDelegationQueueEntry(key string, pairs []types.DVPair) {
+	c.unbondingDelegationsQueue.setEntry(key, pairs)
 }
 
-func (c *ValidatorsCache) DeleteUnbondingDelegationEntry(key string) {
-	c.unbondingDelegations.deleteEntry(key)
+func (c *ValidatorsQueueCache) DeleteUnbondingDelegationQueueEntry(key string) {
+	c.unbondingDelegationsQueue.deleteEntry(key)
 }
 
-func (c *ValidatorsCache) GetRedelegations() (map[string][]types.DVVTriplet, bool) {
-	return c.redelegations.get()
+func (c *ValidatorsQueueCache) GetRedelegationsQueue() (map[string][]types.DVVTriplet, bool) {
+	return c.redelegationsQueue.get()
 }
 
-func (c *ValidatorsCache) SetRedelegations(reds map[string][]types.DVVTriplet) {
-	c.redelegations.set(reds)
+func (c *ValidatorsQueueCache) SetRedelegationsQueue(reds map[string][]types.DVVTriplet) {
+	c.redelegationsQueue.set(reds)
 }
 
-func (c *ValidatorsCache) SetRedelegationEntry(key string, triplets []types.DVVTriplet) {
-	c.redelegations.setEntry(key, triplets)
+func (c *ValidatorsQueueCache) SetRedelegationEntryQueue(key string, triplets []types.DVVTriplet) {
+	c.redelegationsQueue.setEntry(key, triplets)
 }
 
-func (c *ValidatorsCache) DeleteRedelegationEntry(key string) {
-	c.redelegations.deleteEntry(key)
+func (c *ValidatorsQueueCache) DeleteRedelegationEntryQueue(key string) {
+	c.redelegationsQueue.deleteEntry(key)
 }
