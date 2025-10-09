@@ -133,9 +133,9 @@ type ValidatorsCache struct {
 
 func NewCache(max int) *ValidatorsCache {
 	return &ValidatorsCache{
-		unbondingValidators:  newCacheEntry[string, []string, string](max),
-		unbondingDelegations: newCacheEntry[string, []types.DVPair, types.DVPair](max),
-		redelegations:        newCacheEntry[string, []types.DVVTriplet, types.DVVTriplet](max),
+		unbondingValidators:  newCacheEntry[string, []string](max),
+		unbondingDelegations: newCacheEntry[string, []types.DVPair](max),
+		redelegations:        newCacheEntry[string, []types.DVVTriplet](max),
 	}
 }
 

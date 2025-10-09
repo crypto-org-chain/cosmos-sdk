@@ -1437,7 +1437,6 @@ func (k Keeper) ValidateUnbondAmount(
 	return shares, nil
 }
 
-
 // GetPendingRedelegations returns all pending redelegations, initializing the cache from the store if needed.
 func (k *Keeper) GetPendingRedelegations(ctx context.Context) (map[string][]types.DVVTriplet, error) {
 	if reds, invalidated := k.cache.GetRedelegations(); !invalidated && reds != nil {
