@@ -28,6 +28,10 @@ func newCacheEntry[K comparable, V slice[T], T any](max int) *cacheEntry[K, V, T
 }
 
 func (e *cacheEntry[K, V, T]) get() (map[K]V, bool) {
+	if e.max < 0 {
+		return nil, false
+	}
+
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
