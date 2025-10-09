@@ -126,76 +126,76 @@ func (e *cacheEntry[K, V, T]) hasOverflowed() bool {
 	return e.overflowed
 }
 
-type Cache struct {
+type ValidatorsCache struct {
 	unbondingValidators  *cacheEntry[string, []string, string]
 	unbondingDelegations *cacheEntry[string, []types.DVPair, types.DVPair]
 	redelegations        *cacheEntry[string, []types.DVVTriplet, types.DVVTriplet]
 }
 
-func NewCache(max int) *Cache {
-	return &Cache{
+func NewCache(max int) *ValidatorsCache {
+	return &ValidatorsCache{
 		unbondingValidators:  newCacheEntry[string, []string, string](max),
 		unbondingDelegations: newCacheEntry[string, []types.DVPair, types.DVPair](max),
 		redelegations:        newCacheEntry[string, []types.DVVTriplet, types.DVVTriplet](max),
 	}
 }
 
-func (c *Cache) GetUnbondingValidators() map[string][]string {
+func (c *ValidatorsCache) GetUnbondingValidators() map[string][]string {
 	return c.unbondingValidators.get()
 }
 
-func (c *Cache) SetUnbondingValidators(validators map[string][]string) {
+func (c *ValidatorsCache) SetUnbondingValidators(validators map[string][]string) {
 	c.unbondingValidators.set(validators)
 }
 
-func (c *Cache) SetUnbondingValidatorEntry(key string, addrs []string) {
+func (c *ValidatorsCache) SetUnbondingValidatorEntry(key string, addrs []string) {
 	c.unbondingValidators.setEntry(key, addrs)
 }
 
-func (c *Cache) DeleteUnbondingValidatorEntry(key string) {
+func (c *ValidatorsCache) DeleteUnbondingValidatorEntry(key string) {
 	c.unbondingValidators.deleteEntry(key)
 }
 
-func (c *Cache) HasUnbondingValidatorsOverflowed() bool {
+func (c *ValidatorsCache) HasUnbondingValidatorsOverflowed() bool {
 	return c.unbondingValidators.hasOverflowed()
 }
 
-func (c *Cache) GetUnbondingDelegations() map[string][]types.DVPair {
+func (c *ValidatorsCache) GetUnbondingDelegations() map[string][]types.DVPair {
 	return c.unbondingDelegations.get()
 }
 
-func (c *Cache) SetUnbondingDelegations(delegations map[string][]types.DVPair) {
+func (c *ValidatorsCache) SetUnbondingDelegations(delegations map[string][]types.DVPair) {
 	c.unbondingDelegations.set(delegations)
 }
 
-func (c *Cache) SetUnbondingDelegationEntry(key string, pairs []types.DVPair) {
+func (c *ValidatorsCache) SetUnbondingDelegationEntry(key string, pairs []types.DVPair) {
 	c.unbondingDelegations.setEntry(key, pairs)
 }
 
-func (c *Cache) DeleteUnbondingDelegationEntry(key string) {
+func (c *ValidatorsCache) DeleteUnbondingDelegationEntry(key string) {
 	c.unbondingDelegations.deleteEntry(key)
 }
 
-func (c *Cache) HasUnbondingDelegationsOverflowed() bool {
+func (c *ValidatorsCache) HasUnbondingDelegationsOverflowed() bool {
 	return c.unbondingDelegations.hasOverflowed()
 }
 
-func (c *Cache) GetRedelegations() map[string][]types.DVVTriplet {
+func (c *ValidatorsCache) GetRedelegations() map[string][]types.DVVTriplet {
 	return c.redelegations.get()
 }
 
-func (c *Cache) SetRedelegations(reds map[string][]types.DVVTriplet) {
+func (c *ValidatorsCache) SetRedelegations(reds map[string][]types.DVVTriplet) {
 	c.redelegations.set(reds)
 }
 
-func (c *Cache) SetRedelegationEntry(key string, triplets []types.DVVTriplet) {
+func (c *ValidatorsCache) SetRedelegationEntry(key string, triplets []types.DVVTriplet) {
 	c.redelegations.setEntry(key, triplets)
 }
 
-func (c *Cache) DeleteRedelegationEntry(key string) {
+func (c *ValidatorsCache) DeleteRedelegationEntry(key string) {
 	c.redelegations.deleteEntry(key)
 }
 
-func (c *Cache) HasRedelegationsOverflowed() bool {
+func (c *ValidatorsCache) HasRedelegationsOverflowed() bool {
 	return c.redelegations.hasOverflowed()
 }

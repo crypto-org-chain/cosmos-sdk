@@ -34,7 +34,7 @@ type Keeper struct {
 	validatorAddressCodec addresscodec.Codec
 	consensusAddressCodec addresscodec.Codec
 
-	cache *cache.Cache
+	cache *cache.ValidatorsCache
 }
 
 // NewKeeper creates a new staking Keeper instance
