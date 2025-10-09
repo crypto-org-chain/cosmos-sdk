@@ -54,12 +54,7 @@ func (e *cacheEntry[K, V, T]) set(data map[K]V) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	totalElements := 0
-	for _, v := range data {
-		totalElements += len(v)
-	}
-
-	if e.max > 0 && totalElements > e.max {
+	if e.max > 0 && len(data) > e.max {
 		e.full = true
 		return
 	}
@@ -74,7 +69,6 @@ func (e *cacheEntry[K, V, T]) set(data map[K]V) {
 	}
 
 	e.data = copied
-	e.full = false
 }
 
 func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
@@ -89,26 +83,20 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 		e.data = make(map[K]V)
 	}
 
-	currentTotal := 0
-	for _, v := range e.data {
-		currentTotal += len(v)
-	}
-
-	// Subtract old value length if key exists (replacement)
-	if old, exists := e.data[key]; exists {
-		currentTotal -= len(old)
-	}
-
-	newTotal := currentTotal + len(value)
-
-	if e.max > 0 && newTotal > e.max {
-		e.full = true
+	if _, exists := e.data[key]; exists {
+		sliceCopy := append([]T(nil), value...)
+		e.data[key] = sliceCopy
 		return
 	}
 
+	if e.max > 0 && len(e.data) == e.max {
+		e.full = true
+		return
+	}
+	
 	sliceCopy := append([]T(nil), value...)
 	e.data[key] = sliceCopy
-	e.full = false
+
 }
 
 func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
