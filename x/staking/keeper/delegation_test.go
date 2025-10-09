@@ -3,13 +3,21 @@ package keeper_test
 import (
 	"time"
 
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmttime "github.com/cometbft/cometbft/types/time"
 	"github.com/golang/mock/gomock"
 
 	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec/address"
+	"github.com/cosmos/cosmos-sdk/runtime"
+	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	"github.com/cosmos/cosmos-sdk/x/staking/testutil"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -1161,7 +1169,6 @@ func (s *KeeperTestSuite) TestSetUnbondingDelegationEntry() {
 	require.Equal(newCreationHeight, resUnbonding.Entries[1].CreationHeight)
 }
 
-
 func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
@@ -1169,7 +1176,6 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 	blockTime := time.Now().UTC()
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
 
 	delAddrs, valAddrs := createValAddrs(2)
 
@@ -1228,7 +1234,6 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	// no unbonding delegations in the queue initially
 	require.Equal(0, count)
 
-
 	delAddrs, valAddrs := createValAddrs(3)
 
 	// insert unbonding delegation
@@ -1269,7 +1274,6 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	// unbonding delegation should be retrieved
 	// count 1 due to same unbonding time
 	require.Equal(1, count1)
-
 
 	// insert unbonding delegation with different unbonding time and height
 	ubd2 := stakingtypes.NewUnbondingDelegation(
@@ -1314,7 +1318,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-
 	delAddrs, valAddrs := createValAddrs(2)
 
 	// insert unbonding delegation - ready to unbond
@@ -1357,7 +1360,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	t2 := blockTime.Add(1 * time.Minute)
 	require.NoError(keeper.InsertUBDQueue(ctx, ubd2, t2))
 
-
 	matureUnbonds, err := keeper.DequeueAllMatureUBDQueue(ctx, blockTime)
 
 	require.NoError(err)
@@ -1381,7 +1383,6 @@ func (s *KeeperTestSuite) TestGetPendingRedelegations() {
 	blockTime := time.Now().UTC()
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
-
 
 	delAddrs, valAddrs := createValAddrs(2)
 
@@ -1434,7 +1435,6 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	// no redelegations in the queue initially
 	require.Equal(0, count)
 
-
 	delAddrs, valAddrs := createValAddrs(3)
 
 	// insert redelegation
@@ -1463,7 +1463,6 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	// redelegation should be retrieved
 	// count 1 due to same redelegation time
 	require.Equal(1, count1)
-
 
 	// insert another redelegation with different redelegation time and height
 	red2 := stakingtypes.NewRedelegation(delAddrs[2], valAddrs[2], valAddrs[0], 0,
@@ -1502,7 +1501,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 	blockHeight := int64(1000)
 	ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
 
-
 	delAddrs, valAddrs := createValAddrs(3)
 
 	// insert redelegation
@@ -1527,7 +1525,6 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 		math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
 	t2 := blockTime.Add(1 * time.Minute)
 	require.NoError(keeper.InsertRedelegationQueue(ctx, red2, t2))
-
 
 	matureRedelegations, err := keeper.DequeueAllMatureRedelegationQueue(ctx, blockTime)
 
@@ -1580,4 +1577,278 @@ func (s *KeeperTestSuite) TestSortRedelegationQueueKeysByAscendingOrder() {
 	lastTime, err := sdk.ParseTime(keys[len(keys)-1])
 	require.NoError(err)
 	require.Equal(oneHourLater, lastTime)
+}
+
+// TestUnbondingDelegationsWithDifferentCacheSizes tests that unbonding delegations complete correctly even with different cache sizes.
+func (s *KeeperTestSuite) TestUnbondingDelegationsWithDifferentCacheSizes() {
+	testCases := []struct {
+		name                    string
+		maxCacheSize            int
+		numUnbondingDelegations int
+	}{
+		{
+			name:                    "cache size = 0 i.e unlimited",
+			maxCacheSize:            0,
+			numUnbondingDelegations: 3,
+		},
+		{
+			name:                    "cache size < 0 i.e no cache",
+			maxCacheSize:            -1,
+			numUnbondingDelegations: 5,
+		},
+		{
+			name:                    "cache size > unbonding delegations",
+			maxCacheSize:            5,
+			numUnbondingDelegations: 2,
+		},
+		{
+			name:                    "cache size == unbonding delegations",
+			maxCacheSize:            2,
+			numUnbondingDelegations: 2,
+		},
+		{
+			name:                    "cache size < unbonding delegations",
+			maxCacheSize:            1,
+			numUnbondingDelegations: 3,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
+			storeService := runtime.NewKVStoreService(key)
+			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
+			encCfg := moduletestutil.MakeTestEncodingConfig()
+
+			ctrl := gomock.NewController(s.T())
+			accountKeeper := testutil.NewMockAccountKeeper(ctrl)
+			accountKeeper.EXPECT().GetModuleAddress(stakingtypes.BondedPoolName).Return(bondedAcc.GetAddress()).AnyTimes()
+			accountKeeper.EXPECT().GetModuleAddress(stakingtypes.NotBondedPoolName).Return(notBondedAcc.GetAddress()).AnyTimes()
+			accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec("cosmos")).AnyTimes()
+
+			bankKeeper := testutil.NewMockBankKeeper(ctrl)
+			bankKeeper.EXPECT().DelegateCoinsFromAccountToModule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			bankKeeper.EXPECT().SendCoinsFromModuleToModule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			bankKeeper.EXPECT().UndelegateCoinsFromModuleToAccount(gomock.Any(), stakingtypes.NotBondedPoolName, gomock.Any(), gomock.Any()).AnyTimes()
+
+			// Initialize keeper with specific cache size
+			keeper := stakingkeeper.NewKeeper(
+				encCfg.Codec,
+				storeService,
+				accountKeeper,
+				bankKeeper,
+				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				address.NewBech32Codec("cosmosvaloper"),
+				address.NewBech32Codec("cosmosvalcons"),
+				tc.maxCacheSize,
+			)
+			params := stakingtypes.DefaultParams()
+			params.UnbondingTime = 1 * time.Second
+			s.Require().NoError(keeper.SetParams(ctx, params))
+
+			blockTime := time.Now().UTC()
+			ctx = ctx.WithBlockTime(blockTime)
+
+			// Create validator
+			valAddr := sdk.ValAddress(PKs[0].Address())
+			validator := testutil.NewValidator(s.T(), valAddr, PKs[0])
+			validator, _ = validator.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 100))
+			validator = stakingkeeper.TestingUpdateValidator(keeper, ctx, validator, true)
+
+			// Create multiple unbonding delegations
+			delAddrs, _ := createValAddrs(tc.numUnbondingDelegations)
+			for i := 0; i < tc.numUnbondingDelegations; i++ {
+				// Delegate
+				bondAmt := keeper.TokensFromConsensusPower(ctx, 10)
+				_, err := keeper.Delegate(ctx, delAddrs[i], bondAmt, stakingtypes.Unbonded, validator, true)
+				s.Require().NoError(err)
+
+				// Undelegate
+				_, _, err = keeper.Undelegate(ctx, delAddrs[i], valAddr, math.LegacyNewDec(5))
+				s.Require().NoError(err)
+			}
+
+			// Verify unbonding delegations were created
+			for i := 0; i < tc.numUnbondingDelegations; i++ {
+				_, err := keeper.GetUnbondingDelegation(ctx, delAddrs[i], valAddr)
+				s.Require().NoError(err)
+			}
+
+			// Fast-forward time to maturity
+			ctx = ctx.WithBlockTime(blockTime.Add(params.UnbondingTime))
+
+			// Verify GetUBDs returns the expected number of unbonding delegations
+			allUBDs, err := keeper.GetUBDs(ctx)
+			s.Require().NoError(err)
+			s.Require().NotEmpty(allUBDs)
+
+			// Verify GetUBDQueueTimeSlice returns the expected number of unbonding delegations
+			// In this case, it should return all unbonding delegations as all unbonding delegations are at the same time.
+			ubds, err := keeper.GetUBDQueueTimeSlice(ctx, ctx.BlockTime())
+			s.Require().NoError(err)
+			s.Require().Equal(tc.numUnbondingDelegations, len(ubds))
+
+			// Dequeue and complete all mature unbonding delegations
+			matureUnbonds, err := keeper.DequeueAllMatureUBDQueue(ctx, ctx.BlockTime())
+			s.Require().NoError(err)
+			s.Require().Equal(tc.numUnbondingDelegations, len(matureUnbonds), "all unbonding delegations should be mature")
+
+			// Complete the unbonding delegations
+			for _, dvPair := range matureUnbonds {
+				delAddr, err := accountKeeper.AddressCodec().StringToBytes(dvPair.DelegatorAddress)
+				s.Require().NoError(err)
+				valAddr, err := keeper.ValidatorAddressCodec().StringToBytes(dvPair.ValidatorAddress)
+				s.Require().NoError(err)
+				_, err = keeper.CompleteUnbonding(ctx, delAddr, valAddr)
+				s.Require().NoError(err)
+			}
+
+			// Verify all unbonding delegations were completed (removed from store)
+			for i := 0; i < tc.numUnbondingDelegations; i++ {
+				_, err := keeper.GetUnbondingDelegation(ctx, delAddrs[i], valAddr)
+				s.Require().ErrorIs(err, stakingtypes.ErrNoUnbondingDelegation, "unbonding delegation should be completed and removed")
+			}
+		})
+	}
+}
+
+// TestRedelegationsWithDifferentCacheSizes tests that redelegations complete correctly even with different cache sizes.
+func (s *KeeperTestSuite) TestRedelegationsWithDifferentCacheSizes() {
+	testCases := []struct {
+		name             string
+		maxCacheSize     int
+		numRedelegations int
+	}{
+		{
+			name:             "cache size = 0 i.e unlimited",
+			maxCacheSize:     0,
+			numRedelegations: 3,
+		},
+		{
+			name:             "cache size < 0 i.e no cache",
+			maxCacheSize:     -1,
+			numRedelegations: 5,
+		},
+		{
+			name:             "cache size > redelegations",
+			maxCacheSize:     5,
+			numRedelegations: 2,
+		},
+		{
+			name:             "cache size == redelegations",
+			maxCacheSize:     2,
+			numRedelegations: 2,
+		},
+		{
+			name:             "cache size < redelegations",
+			maxCacheSize:     1,
+			numRedelegations: 3,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
+			storeService := runtime.NewKVStoreService(key)
+			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
+			encCfg := moduletestutil.MakeTestEncodingConfig()
+
+			ctrl := gomock.NewController(s.T())
+			accountKeeper := testutil.NewMockAccountKeeper(ctrl)
+			accountKeeper.EXPECT().GetModuleAddress(stakingtypes.BondedPoolName).Return(bondedAcc.GetAddress()).AnyTimes()
+			accountKeeper.EXPECT().GetModuleAddress(stakingtypes.NotBondedPoolName).Return(notBondedAcc.GetAddress()).AnyTimes()
+			accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec("cosmos")).AnyTimes()
+
+			bankKeeper := testutil.NewMockBankKeeper(ctrl)
+			bankKeeper.EXPECT().DelegateCoinsFromAccountToModule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			bankKeeper.EXPECT().SendCoinsFromModuleToModule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			// Initialize keeper with specific cache size
+			keeper := stakingkeeper.NewKeeper(
+				encCfg.Codec,
+				storeService,
+				accountKeeper,
+				bankKeeper,
+				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				address.NewBech32Codec("cosmosvaloper"),
+				address.NewBech32Codec("cosmosvalcons"),
+				tc.maxCacheSize,
+			)
+			params := stakingtypes.DefaultParams()
+			params.UnbondingTime = 1 * time.Second // Short unbonding time for testing
+			s.Require().NoError(keeper.SetParams(ctx, params))
+
+			blockTime := time.Now().UTC()
+			ctx = ctx.WithBlockTime(blockTime)
+
+			// Create 2 validators
+			valAddr1 := sdk.ValAddress(PKs[0].Address())
+			validator1 := testutil.NewValidator(s.T(), valAddr1, PKs[0])
+			validator1, _ = validator1.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 100))
+			validator1 = stakingkeeper.TestingUpdateValidator(keeper, ctx, validator1, true)
+
+			valAddr2 := sdk.ValAddress(PKs[1].Address())
+			validator2 := testutil.NewValidator(s.T(), valAddr2, PKs[1])
+			validator2, _ = validator2.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 100))
+			stakingkeeper.TestingUpdateValidator(keeper, ctx, validator2, true)
+
+			// Create multiple redelegations
+			delAddrs, _ := createValAddrs(tc.numRedelegations)
+			for i := 0; i < tc.numRedelegations; i++ {
+				// Delegate to validator1
+				bondAmt := keeper.TokensFromConsensusPower(ctx, 10)
+				_, err := keeper.Delegate(ctx, delAddrs[i], bondAmt, stakingtypes.Unbonded, validator1, true)
+				s.Require().NoError(err)
+
+				// Redelegate from validator1 to validator2
+				_, err = keeper.BeginRedelegation(ctx, delAddrs[i], valAddr1, valAddr2, math.LegacyNewDec(5))
+				s.Require().NoError(err)
+			}
+
+			// Verify redelegations were created
+			for i := 0; i < tc.numRedelegations; i++ {
+				_, err := keeper.GetRedelegation(ctx, delAddrs[i], valAddr1, valAddr2)
+				s.Require().NoError(err)
+			}
+
+			// Fast-forward time to maturity
+			ctx = ctx.WithBlockTime(blockTime.Add(params.UnbondingTime))
+
+			// Verify GetPendingRedelegations returns the expected number of redelegations
+			allReds, err := keeper.GetPendingRedelegations(ctx)
+			s.Require().NoError(err)
+			s.Require().NotEmpty(allReds, "should have pending redelegations")
+
+			// Verify GetRedelegationQueueTimeSlice returns the expected number of redelegations
+			// In this case, it should return all redelegations as all redelegations mature at the same time.
+			reds, err := keeper.GetRedelegationQueueTimeSlice(ctx, ctx.BlockTime())
+			s.Require().NoError(err)
+			s.Require().Equal(tc.numRedelegations, len(reds))
+
+			// Dequeue and complete all mature redelegations
+			matureRedelegations, err := keeper.DequeueAllMatureRedelegationQueue(ctx, ctx.BlockTime())
+			s.Require().NoError(err)
+			s.Require().Equal(tc.numRedelegations, len(matureRedelegations), "all redelegations should be mature")
+
+			// Complete the redelegations
+			for _, dvvTriplet := range matureRedelegations {
+				delAddr, err := accountKeeper.AddressCodec().StringToBytes(dvvTriplet.DelegatorAddress)
+				s.Require().NoError(err)
+				valSrcAddr, err := keeper.ValidatorAddressCodec().StringToBytes(dvvTriplet.ValidatorSrcAddress)
+				s.Require().NoError(err)
+				valDstAddr, err := keeper.ValidatorAddressCodec().StringToBytes(dvvTriplet.ValidatorDstAddress)
+				s.Require().NoError(err)
+				_, err = keeper.CompleteRedelegation(ctx, delAddr, valSrcAddr, valDstAddr)
+				s.Require().NoError(err)
+			}
+
+			// Verify all redelegations were completed (removed from store)
+			for i := 0; i < tc.numRedelegations; i++ {
+				_, err := keeper.GetRedelegation(ctx, delAddrs[i], valAddr1, valAddr2)
+				s.Require().ErrorIs(err, stakingtypes.ErrNoRedelegation, "redelegation should be completed and removed")
+			}
+		})
+	}
 }

@@ -4,13 +4,23 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmttime "github.com/cometbft/cometbft/types/time"
 	"github.com/golang/mock/gomock"
 
 	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 
+	"github.com/cosmos/cosmos-sdk/codec/address"
+	"github.com/cosmos/cosmos-sdk/runtime"
+	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	"github.com/cosmos/cosmos-sdk/x/staking/testutil"
+	stakingtestutil "github.com/cosmos/cosmos-sdk/x/staking/testutil"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -662,4 +672,105 @@ func (s *KeeperTestSuite) TestSortValidatorQueueKeysByAscendingTimestampOrder() 
 	lastTime, _, err := stakingtypes.ParseCacheValidatorQueueKey(keys[len(keys)-1])
 	require.NoError(err)
 	require.Equal(oneHourLater, lastTime)
+}
+
+// TestUnbondingValidatorsWithDifferentCacheSizes tests that validators unbond correctly even with different cache sizes.
+func (s *KeeperTestSuite) TestUnbondingValidatorsWithDifferentCacheSizes() {
+	testCases := []struct {
+		name                   string
+		maxCacheSize           int
+		numUnbondingValidators int
+	}{
+		{
+			name:                   "cache size = 0 i.e unlimited",
+			maxCacheSize:           0,
+			numUnbondingValidators: 3,
+		},
+		{
+			name:                   "cache size < 0 i.e no cache",
+			maxCacheSize:           -1,
+			numUnbondingValidators: 5,
+		},
+		{
+			name:                   "cache size > unbonding validators",
+			maxCacheSize:           3,
+			numUnbondingValidators: 2,
+		},
+		{
+			name:                   "cache size == unbonding validators",
+			maxCacheSize:           2,
+			numUnbondingValidators: 2,
+		},
+		{
+			name:                   "cache size < unbonding validators",
+			maxCacheSize:           1,
+			numUnbondingValidators: 2,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
+			storeService := runtime.NewKVStoreService(key)
+			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
+			encCfg := moduletestutil.MakeTestEncodingConfig()
+
+			ctrl := gomock.NewController(s.T())
+			accountKeeper := stakingtestutil.NewMockAccountKeeper(ctrl)
+			accountKeeper.EXPECT().GetModuleAddress(stakingtypes.BondedPoolName).Return(bondedAcc.GetAddress()).AnyTimes()
+			accountKeeper.EXPECT().GetModuleAddress(stakingtypes.NotBondedPoolName).Return(notBondedAcc.GetAddress()).AnyTimes()
+			accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec("cosmos")).AnyTimes()
+
+			bankKeeper := stakingtestutil.NewMockBankKeeper(ctrl)
+
+			// Initialize keeper with specific cache size
+			keeper := stakingkeeper.NewKeeper(
+				encCfg.Codec,
+				storeService,
+				accountKeeper,
+				bankKeeper,
+				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				address.NewBech32Codec("cosmosvaloper"),
+				address.NewBech32Codec("cosmosvalcons"),
+				tc.maxCacheSize,
+			)
+			s.Require().NoError(keeper.SetParams(ctx, stakingtypes.DefaultParams()))
+
+			blockTime := time.Now().UTC()
+			blockHeight := int64(1000)
+			ctx = ctx.WithBlockHeight(blockHeight).WithBlockTime(blockTime)
+
+			// Create multiple unbonding validators that are ready to unbond
+			for i := 0; i < tc.numUnbondingValidators; i++ {
+				valPubKey := PKs[i]
+				valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
+				val := testutil.NewValidator(s.T(), valAddr, valPubKey)
+				val.UnbondingHeight = blockHeight
+				val.UnbondingTime = blockTime
+				val.Status = stakingtypes.Unbonding
+				s.Require().NoError(keeper.SetValidator(ctx, val))
+				s.Require().NoError(keeper.InsertUnbondingValidatorQueue(ctx, val))
+			}
+
+			// Verify we have the expected number of validators before unbonding
+			allValidators, err := keeper.GetAllValidators(ctx)
+			s.Require().NoError(err)
+			s.Require().Equal(tc.numUnbondingValidators, len(allValidators), "should have all validators before unbonding")
+
+			// Verify GetUnbondingValidators returns the expected number of validators.
+			// In this case, it should return all validators as all validators are unbonding at the same height and time.
+			unbondingValidators, err := keeper.GetUnbondingValidators(ctx, blockTime, blockHeight)
+			s.Require().NoError(err)
+			s.Require().Equal(tc.numUnbondingValidators, len(unbondingValidators))
+
+			err = keeper.UnbondAllMatureValidators(ctx)
+			s.Require().NoError(err)
+
+			// Verify all validators were unbonded (removed from the store)
+			allValidatorsAfter, err := keeper.GetAllValidators(ctx)
+			s.Require().NoError(err)
+			s.Require().Equal(0, len(allValidatorsAfter))
+		})
+	}
 }
