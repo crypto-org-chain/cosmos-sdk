@@ -121,7 +121,7 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) 
 	}
 
 	if c.unbondingValidatorsQueue.dirty {
-		c.logger(ctx).Info("unbonding validators queue is dirty. Reinitializing cache from store.")
+		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
 		data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
 		if err != nil {
 			return nil, err
