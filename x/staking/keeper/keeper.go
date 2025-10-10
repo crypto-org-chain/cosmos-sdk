@@ -66,7 +66,7 @@ func NewKeeper(
 		panic("validator and/or consensus address codec are nil")
 	}
 
-	return &Keeper{
+	k := &Keeper{
 		storeService:          storeService,
 		cdc:                   cdc,
 		authKeeper:            ak,
@@ -75,8 +75,14 @@ func NewKeeper(
 		authority:             authority,
 		validatorAddressCodec: validatorAddressCodec,
 		consensusAddressCodec: consensusAddressCodec,
-		cache:                 cache.NewCache(maxCacheSize),
 	}
+	unbondingValidatorsQueue := cache.NewCacheEntry[string, []string, string](maxCacheSize, k.GetAllUnbondingValidatorsFromStore)
+	// TODO: UPDATE callback function
+	unbondingDelegationsQueue := cache.NewCacheEntry[string, []types.DVPair, types.DVPair](maxCacheSize, nil)
+	// TODO: UPDATE callback function
+	redelegationsQueue := cache.NewCacheEntry[string, []types.DVVTriplet, types.DVVTriplet](maxCacheSize, nil)
+	k.cache = cache.NewCache(unbondingValidatorsQueue, unbondingDelegationsQueue, redelegationsQueue, k.Logger)
+	return k
 }
 
 // Logger returns a module-specific logger.
