@@ -208,10 +208,7 @@ func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(ctx context.Conte
 	c.unbondingValidatorsQueue.setEntry(key, addrs)
 	full := c.unbondingValidatorsQueue.full
 	if full {
-		c.logger(ctx).Warn(
-			"GetUnbondingValidatorsQueue: unbonding validators queue exceeded capacity. Wait for reinitialization or restart the node with a larger cache size for this cache to function.",
-			"max_size", c.unbondingValidatorsQueue.max,
-		)
+		c.fullWarningMessage(ctx, "SetUnbondingValidatorQueueEntry", c.unbondingValidatorsQueue.max)
 	}
 	return nil
 }
