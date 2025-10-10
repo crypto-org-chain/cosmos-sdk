@@ -447,12 +447,14 @@ func (k Keeper) GetLastValidators(ctx context.Context) (validators []types.Valid
 // GetUnbondingValidators returns a slice of mature validator addresses that
 // complete their unbonding at a given time and height.
 func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
-	cachedAddrs, full, err := k.cache.GetUnbondingValidatorsQueueEntry(ctx, endTime, endHeight)
-	if err != nil {
-		return nil, err
-	}
-	if !full {
-		return cachedAddrs, nil
+	if k.cache != nil {
+		cachedAddrs, full, err := k.cache.GetUnbondingValidatorsQueueEntry(ctx, endTime, endHeight)
+		if err != nil {
+			return nil, err
+		}
+		if !full {
+			return cachedAddrs, nil
+		}
 	}
 
 	store := k.storeService.OpenKVStore(ctx)
