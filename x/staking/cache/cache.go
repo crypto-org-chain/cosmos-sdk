@@ -63,29 +63,17 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
-
 	if e.data == nil {
 		e.data = make(map[K]V)
-	}
-
-	if _, exists := e.data[key]; exists {
-		sliceCopy := make([]T, len(value))
-		copy(sliceCopy, value)
-		e.data[key] = sliceCopy
-		return
-	}
-
-	if e.max > 0 && len(e.data) == e.max {
-		e.full = true
-		e.dirty = true
-		return
 	}
 
 	sliceCopy := make([]T, len(value))
 	copy(sliceCopy, value)
 	e.data[key] = sliceCopy
-	e.dirty = false
 
+	if len(e.data) == e.max {
+		e.full = true
+	}
 }
 
 func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
@@ -141,9 +129,11 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) 
 		for key, value := range unbondingValidators {
 			c.unbondingValidatorsQueue.setEntry(key, value)
 			if c.unbondingValidatorsQueue.full {
+				c.unbondingValidatorsQueue.dirty = true
 				c.logger(ctx).Warn("Unbonding validators initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
 				return nil, types.ErrCacheMaxSizeReached
 			}
+			c.unbondingValidatorsQueue.dirty = false
 		}
 	}
 
@@ -160,15 +150,12 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Cont
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(ctx context.Context, key string, addrs []string) error {
-	_, err := c.GetUnbondingValidatorsQueue(ctx)
-	if err != nil {
-		return err
-	}
-	c.unbondingValidatorsQueue.setEntry(key, addrs)
 	if c.unbondingValidatorsQueue.full {
+		c.unbondingValidatorsQueue.dirty = true
 		c.logger(ctx).Warn("SetUnbondingValidatorQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
 		return types.ErrCacheMaxSizeReached
 	}
+	c.unbondingValidatorsQueue.setEntry(key, addrs)
 	return nil
 }
 
