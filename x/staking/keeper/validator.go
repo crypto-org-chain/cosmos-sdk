@@ -491,7 +491,10 @@ func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Ti
 	}
 
 	if k.cache != nil {
-		k.cache.SetUnbondingValidatorQueueEntry(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
+		err = k.cache.SetUnbondingValidatorQueueEntry(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
+		if err != nil && !errors.Is(err, types.ErrCacheMaxSizeReached) {
+			return err
+		}
 	}
 	return nil
 }
