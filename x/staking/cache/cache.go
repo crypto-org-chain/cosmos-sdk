@@ -63,6 +63,10 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	
+	if e.full {
+		return
+	}
 	if e.data == nil {
 		e.data = make(map[K]V)
 	}
