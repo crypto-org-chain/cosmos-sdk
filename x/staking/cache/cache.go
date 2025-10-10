@@ -122,14 +122,13 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) 
 
 	if c.unbondingValidatorsQueue.dirty {
 		c.logger(ctx).Info("unbonding validators queue is dirty. Reinitializing cache from store.")
-		unbondingValidators, err := c.unbondingValidatorsQueue.getFromStore(ctx)
+		data, err := c.unbondingValidatorsQueue.getFromStore(ctx)
 		if err != nil {
 			return nil, err
 		}
-		for key, value := range unbondingValidators {
+		for key, value := range data {
 			c.unbondingValidatorsQueue.setEntry(key, value)
 			if c.unbondingValidatorsQueue.full {
-				c.unbondingValidatorsQueue.dirty = true
 				c.logger(ctx).Warn("Unbonding validators initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
 				return nil, types.ErrCacheMaxSizeReached
 			}
