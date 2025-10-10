@@ -49,7 +49,9 @@ func (e *cacheEntry[K, V, T]) get() map[K]V {
 
 	copied := make(map[K]V, len(e.data))
 	for k, v := range e.data {
-		copied[k] = append([]T(nil), v...)
+		sliceCopy := make([]T, len(v))
+		copy(sliceCopy, v)
+		copied[k] = sliceCopy
 	}
 
 	return copied
@@ -73,7 +75,8 @@ func (e *cacheEntry[K, V, T]) set(data map[K]V) {
 		if len(v) == 0 {
 			continue
 		}
-		sliceCopy := append([]T(nil), v...)
+		sliceCopy := make([]T, len(v))
+		copy(sliceCopy, v)
 		copied[k] = sliceCopy
 	}
 
@@ -88,12 +91,18 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if e.full {
+		return
+	}
+
 	if e.data == nil {
 		e.data = make(map[K]V)
 	}
 
+
 	if _, exists := e.data[key]; exists {
-		sliceCopy := append([]T(nil), value...)
+		sliceCopy := make([]T, len(value))
+		copy(sliceCopy, value)
 		e.data[key] = sliceCopy
 		return
 	}
@@ -103,7 +112,8 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 		return
 	}
 
-	sliceCopy := append([]T(nil), value...)
+	sliceCopy := make([]T, len(value))
+	copy(sliceCopy, value)
 	e.data[key] = sliceCopy
 
 }
