@@ -476,7 +476,7 @@ func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, e
 
 // SetUnbondingValidatorsQueue sets a given slice of validator addresses into
 // the unbonding validator queue by a given height and time.
-func (k *Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Time, endHeight int64, addrs []string) error {
+func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Time, endHeight int64, addrs []string) error {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := k.cdc.Marshal(&types.ValAddresses{Addresses: addrs})
 	if err != nil {
@@ -495,7 +495,7 @@ func (k *Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.T
 
 // InsertUnbondingValidatorQueue inserts a given unbonding validator address into
 // the unbonding validator queue for a given height and time.
-func (k *Keeper) InsertUnbondingValidatorQueue(ctx context.Context, val types.Validator) error {
+func (k Keeper) InsertUnbondingValidatorQueue(ctx context.Context, val types.Validator) error {
 	addrs, err := k.GetUnbondingValidators(ctx, val.UnbondingTime, val.UnbondingHeight)
 	if err != nil {
 		return err
@@ -506,7 +506,7 @@ func (k *Keeper) InsertUnbondingValidatorQueue(ctx context.Context, val types.Va
 
 // DeleteValidatorQueueTimeSlice deletes all entries in the queue indexed by a
 // given height and time.
-func (k *Keeper) DeleteValidatorQueueTimeSlice(ctx context.Context, endTime time.Time, endHeight int64) error {
+func (k Keeper) DeleteValidatorQueueTimeSlice(ctx context.Context, endTime time.Time, endHeight int64) error {
 	store := k.storeService.OpenKVStore(ctx)
 	err := store.Delete(types.GetValidatorQueueKey(endTime, endHeight))
 	if err != nil {
@@ -520,7 +520,7 @@ func (k *Keeper) DeleteValidatorQueueTimeSlice(ctx context.Context, endTime time
 
 // DeleteValidatorQueue removes a validator by address from the unbonding queue
 // indexed by a given height and time.
-func (k *Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) error {
+func (k Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) error {
 	addrs, err := k.GetUnbondingValidators(ctx, val.UnbondingTime, val.UnbondingHeight)
 	if err != nil {
 		return err
@@ -567,7 +567,7 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 
 // UnbondAllMatureValidators unbonds all the mature unbonding validators that
 // have finished their unbonding period.
-func (k *Keeper) UnbondAllMatureValidators(ctx context.Context) error {
+func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	blockTime := sdkCtx.BlockTime()
 	blockHeight := sdkCtx.BlockHeight()
@@ -663,7 +663,7 @@ func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (
 }
 
 // GetAllUnbondingValidators returns all unbonding validators
-func (k *Keeper) GetAllUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) (map[string][]string, error) {
+func (k Keeper) GetAllUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) (map[string][]string, error) {
 	if k.cache != nil {
 		addrs, full, err := k.cache.GetUnbondingValidatorsQueue(ctx)
 		if err != nil {
@@ -677,7 +677,7 @@ func (k *Keeper) GetAllUnbondingValidators(ctx context.Context, endTime time.Tim
 }
 
 // GetUnbondingValidatorsFromStore gets unbonding validators from the store for a given height and time.
-func (k *Keeper) GetUnbondingValidatorsFromStore(ctx context.Context, endTime time.Time, endHeight int64) (map[string][]string, error) {
+func (k Keeper) GetUnbondingValidatorsFromStore(ctx context.Context, endTime time.Time, endHeight int64) (map[string][]string, error) {
 	iterator, err := k.ValidatorQueueIterator(ctx, endTime, endHeight)
 	if err != nil {
 		return nil, err
@@ -692,7 +692,7 @@ func (k *Keeper) GetUnbondingValidatorsFromStore(ctx context.Context, endTime ti
 }
 
 // GetAllUnbondingValidatorsFromStore gets unbonding validators from the store
-func (k *Keeper) GetAllUnbondingValidatorsFromStore(ctx context.Context) (map[string][]string, error) {
+func (k Keeper) GetAllUnbondingValidatorsFromStore(ctx context.Context) (map[string][]string, error) {
 	iterator, err := k.ValidatorQueueIteratorAll(ctx)
 	if err != nil {
 		return nil, err
@@ -706,7 +706,7 @@ func (k *Keeper) GetAllUnbondingValidatorsFromStore(ctx context.Context) (map[st
 	return unbondingValidators, nil
 }
 
-func (k *Keeper) getUnbondingValidatorsFromIterator(iterator corestore.Iterator) (map[string][]string, error) {
+func (k Keeper) getUnbondingValidatorsFromIterator(iterator corestore.Iterator) (map[string][]string, error) {
 	unbondingValidators := make(map[string][]string)
 
 	for ; iterator.Valid(); iterator.Next() {
