@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -28,11 +27,11 @@ type cacheEntry[K comparable, V slice[T], T any] struct {
 	// - if max < 0, the cache is a no-op cache.
 	max int
 
-	populateFromStore func(ctx context.Context) (map[K]V, error)
+	getFromStore func(ctx context.Context) (map[K]V, error)
 }
 
-func NewCacheEntry[K comparable, V slice[T], T any](max int, populateFromStore func(ctx context.Context) (map[K]V, error)) *cacheEntry[K, V, T] {
-	return &cacheEntry[K, V, T]{max: max, populateFromStore: populateFromStore}
+func NewCacheEntry[K comparable, V slice[T], T any](max int, getFromStore func(ctx context.Context) (map[K]V, error)) *cacheEntry[K, V, T] {
+	return &cacheEntry[K, V, T]{max: max, getFromStore: getFromStore, dirty: true}
 }
 
 func (e *cacheEntry[K, V, T]) get() map[K]V {
@@ -57,30 +56,26 @@ func (e *cacheEntry[K, V, T]) get() map[K]V {
 	return copied
 }
 
-func (e *cacheEntry[K, V, T]) set(data map[K]V) {
+func (e *cacheEntry[K, V, T]) getEntry(key K) V {
 	if e.max < 0 {
-		return
+		return nil
 	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 
-	if e.max > 0 && len(data) > e.max {
-		e.full = true
-		return
+	if e.data == nil {
+		return nil
 	}
 
-	copied := make(map[K]V, len(data))
-	for k, v := range data {
-		if len(v) == 0 {
-			continue
-		}
-		sliceCopy := make([]T, len(v))
-		copy(sliceCopy, v)
-		copied[k] = sliceCopy
+	value, exists := e.data[key]
+	if !exists {
+		return nil
 	}
 
-	e.data = copied
+	sliceCopy := make([]T, len(value))
+	copy(sliceCopy, value)
+	return sliceCopy
 }
 
 func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
@@ -91,14 +86,9 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.full {
-		return
-	}
-
 	if e.data == nil {
 		e.data = make(map[K]V)
 	}
-
 
 	if _, exists := e.data[key]; exists {
 		sliceCopy := make([]T, len(value))
@@ -109,12 +99,14 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 
 	if e.max > 0 && len(e.data) == e.max {
 		e.full = true
+		e.dirty = true
 		return
 	}
 
 	sliceCopy := make([]T, len(value))
 	copy(sliceCopy, value)
 	e.data[key] = sliceCopy
+	e.dirty = false
 
 }
 
@@ -128,8 +120,8 @@ func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
 
 	if e.data != nil {
 		delete(e.data, key)
-		if e.full {
-			e.dirty = true
+		if len(e.data) < e.max {
+			e.full = false
 		}
 	}
 }
@@ -155,60 +147,48 @@ func NewCache(
 	}
 }
 
-func (c *ValidatorsQueueCache) fullWarningMessage(ctx context.Context, fnName string, max int) {
-	c.logger(ctx).Warn(fmt.Sprintf("%s: queue exceeded capacity. Wait for reinitialization or restart the node with a larger cache size for this cache to function. Max size: %d", fnName, max))
-}
-
-func (c *ValidatorsQueueCache) initUnbondingValidatorsCache(ctx context.Context) error {
-	unbondingValidators, err := c.unbondingValidatorsQueue.populateFromStore(ctx)
-	if err != nil {
-		return err
-	}
-	c.unbondingValidatorsQueue.set(unbondingValidators)
-	c.unbondingValidatorsQueue.dirty = false
-	return nil
-}
-
-func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) (map[string][]string, bool, error) {
-	if c.unbondingValidatorsQueue.dirty {
+func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) (map[string][]string, error) {
+	if !c.unbondingValidatorsQueue.full && c.unbondingValidatorsQueue.dirty {
 		c.logger(ctx).Info("unbonding validators queue is dirty. Reinitializing cache from store.")
-		err := c.initUnbondingValidatorsCache(ctx)
+		unbondingValidators, err := c.unbondingValidatorsQueue.getFromStore(ctx)
 		if err != nil {
-			return nil, false, err
+			return nil, err
+		}
+		for key, value := range unbondingValidators {
+			c.unbondingValidatorsQueue.setEntry(key, value)
+			if c.unbondingValidatorsQueue.full {
+				c.logger(ctx).Warn("Unbonding validators reinitialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
+				return nil, types.ErrCacheMaxSizeReached
+			}
 		}
 	}
-	full := c.unbondingValidatorsQueue.full
-	if full {
-		c.fullWarningMessage(ctx, "GetUnbondingValidatorsQueue", c.unbondingValidatorsQueue.max)
+
+	if c.unbondingValidatorsQueue.full {
+		c.logger(ctx).Warn("GetUnbondingValidatorsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
+		return nil, types.ErrCacheMaxSizeReached
 	}
-	return c.unbondingValidatorsQueue.get(), full, nil
+
+	return c.unbondingValidatorsQueue.get(), nil
 }
 
-func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Context, endTime time.Time, endHeight int64) ([]string, bool, error) {
-	validators, full, err := c.GetUnbondingValidatorsQueue(ctx)
-	if err != nil {
-		return nil, false, err
+func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
+	if c.unbondingValidatorsQueue.full {
+		c.logger(ctx).Warn("GetUnbondingValidatorsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
+		return nil, types.ErrCacheMaxSizeReached
 	}
-	if full {
-		return nil, true, nil
-	}
-	if validators != nil {
-		if addrs, ok := validators[types.GetCacheValidatorQueueKey(endTime, endHeight)]; ok {
-			return addrs, false, nil
-		}
-	}
-	return nil, false, nil
+
+	return c.unbondingValidatorsQueue.getEntry(types.GetCacheValidatorQueueKey(endTime, endHeight)), nil
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(ctx context.Context, key string, addrs []string) error {
-	_, _, err := c.GetUnbondingValidatorsQueue(ctx)
+	_, err := c.GetUnbondingValidatorsQueue(ctx)
 	if err != nil {
 		return err
 	}
 	c.unbondingValidatorsQueue.setEntry(key, addrs)
-	full := c.unbondingValidatorsQueue.full
-	if full {
-		c.fullWarningMessage(ctx, "SetUnbondingValidatorQueueEntry", c.unbondingValidatorsQueue.max)
+	if c.unbondingValidatorsQueue.full {
+		c.logger(ctx).Warn("SetUnbondingValidatorQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
+		return types.ErrCacheMaxSizeReached
 	}
 	return nil
 }

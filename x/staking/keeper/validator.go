@@ -448,13 +448,14 @@ func (k Keeper) GetLastValidators(ctx context.Context) (validators []types.Valid
 // complete their unbonding at a given time and height.
 func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
 	if k.cache != nil {
-		cachedAddrs, full, err := k.cache.GetUnbondingValidatorsQueueEntry(ctx, endTime, endHeight)
-		if err != nil {
-			return nil, err
-		}
-		if !full {
+		cachedAddrs, err := k.cache.GetUnbondingValidatorsQueueEntry(ctx, endTime, endHeight)
+		if err == nil {
 			return cachedAddrs, nil
 		}
+		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
+			return nil, err
+		}
+
 	}
 
 	store := k.storeService.OpenKVStore(ctx)
@@ -667,12 +668,12 @@ func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (
 // GetAllUnbondingValidators returns all unbonding validators
 func (k Keeper) GetAllUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) (map[string][]string, error) {
 	if k.cache != nil {
-		addrs, full, err := k.cache.GetUnbondingValidatorsQueue(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if !full {
+		addrs, err := k.cache.GetUnbondingValidatorsQueue(ctx)
+		if err == nil {
 			return addrs, nil
+		}
+		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
+			return nil, err
 		}
 	}
 	return k.GetUnbondingValidatorsFromStore(ctx, endTime, endHeight)
