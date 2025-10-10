@@ -27,11 +27,11 @@ type cacheEntry[K comparable, V slice[T], T any] struct {
 	// - if max < 0, the cache is a no-op cache.
 	max int
 
-	getFromStore func(ctx context.Context) (map[K]V, error)
+	loadFromStore func(ctx context.Context) (map[K]V, error)
 }
 
-func NewCacheEntry[K comparable, V slice[T], T any](max int, getFromStore func(ctx context.Context) (map[K]V, error)) *cacheEntry[K, V, T] {
-	return &cacheEntry[K, V, T]{max: max, getFromStore: getFromStore, dirty: true}
+func NewCacheEntry[K comparable, V slice[T], T any](max int, loadFromStore func(ctx context.Context) (map[K]V, error)) *cacheEntry[K, V, T] {
+	return &cacheEntry[K, V, T]{max: max, loadFromStore: loadFromStore, dirty: true}
 }
 
 func (e *cacheEntry[K, V, T]) get() map[K]V {
@@ -122,7 +122,7 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) 
 
 	if c.unbondingValidatorsQueue.dirty {
 		c.logger(ctx).Info("unbonding validators queue is dirty. Reinitializing cache from store.")
-		data, err := c.unbondingValidatorsQueue.getFromStore(ctx)
+		data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
 		if err != nil {
 			return nil, err
 		}
