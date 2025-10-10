@@ -157,7 +157,7 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) 
 		for key, value := range unbondingValidators {
 			c.unbondingValidatorsQueue.setEntry(key, value)
 			if c.unbondingValidatorsQueue.full {
-				c.logger(ctx).Warn("Unbonding validators reinitialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
+				c.logger(ctx).Warn("Unbonding validators initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
 				return nil, types.ErrCacheMaxSizeReached
 			}
 		}
