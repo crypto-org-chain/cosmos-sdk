@@ -56,6 +56,28 @@ func (e *cacheEntry[K, V, T]) get() map[K]V {
 	return copied
 }
 
+func (e *cacheEntry[K, V, T]) getEntry(key K) V {
+	if e.max < 0 {
+		return nil
+	}
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.data == nil {
+		return nil
+	}
+
+	value, exists := e.data[key]
+	if !exists {
+		return nil
+	}
+
+	sliceCopy := make([]T, len(value))
+	copy(sliceCopy, value)
+	return sliceCopy
+}
+
 func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	if e.max < 0 {
 		return
@@ -63,7 +85,7 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	if e.full {
 		return
 	}
@@ -117,39 +139,47 @@ func NewCache(
 	}
 }
 
-func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) (map[string][]string, error) {
-
+func (c *ValidatorsQueueCache) initUnbondingValidatorsQueue(ctx context.Context) error {
 	if c.unbondingValidatorsQueue.full {
 		c.logger(ctx).Warn("GetUnbondingValidatorsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
-		return nil, types.ErrCacheMaxSizeReached
+		return types.ErrCacheMaxSizeReached
 	}
 
 	if c.unbondingValidatorsQueue.dirty {
 		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
 		data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for key, value := range data {
 			c.unbondingValidatorsQueue.setEntry(key, value)
 			if c.unbondingValidatorsQueue.full {
 				c.logger(ctx).Warn("Unbonding validators initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
-				return nil, types.ErrCacheMaxSizeReached
+				return types.ErrCacheMaxSizeReached
 			}
 			c.unbondingValidatorsQueue.dirty = false
 		}
+	}
+	return nil
+}
+
+func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) (map[string][]string, error) {
+
+	err := c.initUnbondingValidatorsQueue(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	return c.unbondingValidatorsQueue.get(), nil
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
-	data, err := c.GetUnbondingValidatorsQueue(ctx)
+	err := c.initUnbondingValidatorsQueue(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return data[types.GetCacheValidatorQueueKey(endTime, endHeight)], nil
+	return c.unbondingValidatorsQueue.getEntry(types.GetCacheValidatorQueueKey(endTime, endHeight)), nil
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(ctx context.Context, key string, addrs []string) error {
