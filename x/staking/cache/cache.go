@@ -141,12 +141,12 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) 
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
-	_, err := c.GetUnbondingValidatorsQueue(ctx)
+	data, err := c.GetUnbondingValidatorsQueue(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.unbondingValidatorsQueue.get()[types.GetCacheValidatorQueueKey(endTime, endHeight)], nil
+	return data[types.GetCacheValidatorQueueKey(endTime, endHeight)], nil
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(ctx context.Context, key string, addrs []string) error {
