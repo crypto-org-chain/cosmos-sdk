@@ -14,7 +14,7 @@ type slice[T any] interface {
 	~[]T
 }
 
-type cacheEntry[K comparable, V slice[T], T any] struct {
+type CacheEntry[K comparable, V slice[T], T any] struct {
 	mu   sync.RWMutex
 	data map[K]V
 	// indicates if the cache requires a reload from the store
@@ -28,11 +28,11 @@ type cacheEntry[K comparable, V slice[T], T any] struct {
 	loadFromStore func(ctx context.Context) (map[K]V, error)
 }
 
-func NewCacheEntry[K comparable, V slice[T], T any](max uint, loadFromStore func(ctx context.Context) (map[K]V, error)) *cacheEntry[K, V, T] {
-	return &cacheEntry[K, V, T]{max: max, loadFromStore: loadFromStore, dirty: true}
+func NewCacheEntry[K comparable, V slice[T], T any](max uint, loadFromStore func(ctx context.Context) (map[K]V, error)) *CacheEntry[K, V, T] {
+	return &CacheEntry[K, V, T]{max: max, loadFromStore: loadFromStore, dirty: true}
 }
 
-func (e *cacheEntry[K, V, T]) get() map[K]V {
+func (e *CacheEntry[K, V, T]) get() map[K]V {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -51,7 +51,7 @@ func (e *cacheEntry[K, V, T]) get() map[K]V {
 	return copied
 }
 
-func (e *cacheEntry[K, V, T]) getEntry(key K) V {
+func (e *CacheEntry[K, V, T]) getEntry(key K) V {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -69,7 +69,7 @@ func (e *cacheEntry[K, V, T]) getEntry(key K) V {
 	return sliceCopy
 }
 
-func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
+func (e *CacheEntry[K, V, T]) setEntry(key K, value V) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -90,7 +90,7 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	}
 }
 
-func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
+func (e *CacheEntry[K, V, T]) deleteEntry(key K) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -104,7 +104,7 @@ func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
 	}
 }
 
-func (e *cacheEntry[K, V, T]) clear() {
+func (e *CacheEntry[K, V, T]) clear() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.data = make(map[K]V)
@@ -112,16 +112,16 @@ func (e *cacheEntry[K, V, T]) clear() {
 }
 
 type ValidatorsQueueCache struct {
-	unbondingValidatorsQueue  *cacheEntry[string, []string, string]
-	unbondingDelegationsQueue *cacheEntry[string, []types.DVPair, types.DVPair]
-	redelegationsQueue        *cacheEntry[string, []types.DVVTriplet, types.DVVTriplet]
+	unbondingValidatorsQueue  *CacheEntry[string, []string, string]
+	unbondingDelegationsQueue *CacheEntry[string, []types.DVPair, types.DVPair]
+	redelegationsQueue        *CacheEntry[string, []types.DVVTriplet, types.DVVTriplet]
 	logger                    func(ctx context.Context) log.Logger
 }
 
 func NewCache(
-	unbondingValidatorsQueue *cacheEntry[string, []string, string],
-	unbondingDelegationsQueue *cacheEntry[string, []types.DVPair, types.DVPair],
-	redelegationsQueue *cacheEntry[string, []types.DVVTriplet, types.DVVTriplet],
+	unbondingValidatorsQueue *CacheEntry[string, []string, string],
+	unbondingDelegationsQueue *CacheEntry[string, []types.DVPair, types.DVPair],
+	redelegationsQueue *CacheEntry[string, []types.DVVTriplet, types.DVVTriplet],
 	logger func(ctx context.Context) log.Logger,
 ) *ValidatorsQueueCache {
 	return &ValidatorsQueueCache{
