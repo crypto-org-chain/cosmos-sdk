@@ -316,11 +316,7 @@ func NewSimApp(
 	}
 	app.txConfig = txConfig
 
-	// Get staking cache size from app options. First try the flag, then fall back to config file
 	stakingCacheSize := cast.ToUint(appOpts.Get(server.FlagStakingCacheSize))
-	if stakingCacheSize == 0 {
-		stakingCacheSize = cast.ToUint(appOpts.Get("staking.cache-size"))
-	}
 
 	app.StakingKeeper = stakingkeeper.NewKeeper(
 		appCodec, runtime.NewKVStoreService(keys[stakingtypes.StoreKey]), app.AccountKeeper, app.BankKeeper, authtypes.NewModuleAddress(govtypes.ModuleName).String(), authcodec.NewBech32Codec(sdk.Bech32PrefixValAddr), authcodec.NewBech32Codec(sdk.Bech32PrefixConsAddr), stakingCacheSize,
