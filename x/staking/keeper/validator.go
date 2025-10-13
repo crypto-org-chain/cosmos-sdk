@@ -455,7 +455,6 @@ func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, e
 		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
 			return nil, err
 		}
-
 	}
 
 	store := k.storeService.OpenKVStore(ctx)
@@ -712,6 +711,7 @@ func (k Keeper) GetAllUnbondingValidatorsFromStore(ctx context.Context) (map[str
 	return unbondingValidators, nil
 }
 
+// getUnbondingValidatorsFromIterator gets unbonding validators from the iterator.
 func (k Keeper) getUnbondingValidatorsFromIterator(iterator corestore.Iterator) (map[string][]string, error) {
 	unbondingValidators := make(map[string][]string)
 
