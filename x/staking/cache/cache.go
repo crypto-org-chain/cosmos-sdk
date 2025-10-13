@@ -38,11 +38,12 @@ func (e *cacheEntry[K, V, T]) get() map[K]V {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
+	copied := make(map[K]V, len(e.data))
+
 	if e.max < 0 || e.data == nil {
-		return nil
+		return copied
 	}
 
-	copied := make(map[K]V, len(e.data))
 	for k, v := range e.data {
 		sliceCopy := make([]T, len(v))
 		copy(sliceCopy, v)
@@ -57,12 +58,12 @@ func (e *cacheEntry[K, V, T]) getEntry(key K) V {
 	defer e.mu.RUnlock()
 
 	if e.max < 0 || e.data == nil {
-		return nil
+		return make([]T, 0)
 	}
 
 	value, exists := e.data[key]
 	if !exists {
-		return nil
+		return make([]T, 0)
 	}
 
 	sliceCopy := make([]T, len(value))
@@ -77,7 +78,7 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	if e.max < 0 || e.full {
 		return
 	}
-	
+
 	if e.data == nil {
 		e.data = make(map[K]V)
 	}
