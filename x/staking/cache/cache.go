@@ -35,14 +35,10 @@ func NewCacheEntry[K comparable, V slice[T], T any](max int, loadFromStore func(
 }
 
 func (e *cacheEntry[K, V, T]) get() map[K]V {
-	if e.max < 0 {
-		return nil
-	}
-
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if e.data == nil {
+	if e.max < 0 || e.data == nil {
 		return nil
 	}
 
@@ -57,14 +53,10 @@ func (e *cacheEntry[K, V, T]) get() map[K]V {
 }
 
 func (e *cacheEntry[K, V, T]) getEntry(key K) V {
-	if e.max < 0 {
-		return nil
-	}
-
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if e.data == nil {
+	if e.max < 0 || e.data == nil {
 		return nil
 	}
 
@@ -79,14 +71,10 @@ func (e *cacheEntry[K, V, T]) getEntry(key K) V {
 }
 
 func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
-	if e.max < 0 {
-		return
-	}
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.full {
+	if e.max < 0 || e.full {
 		return
 	}
 	if e.data == nil {
@@ -103,18 +91,16 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 }
 
 func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
-	if e.max < 0 {
-		return
-	}
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.data != nil {
-		delete(e.data, key)
-		if len(e.data) < e.max {
-			e.full = false
-		}
+	if e.max < 0 || e.data == nil {
+		return
+	}
+
+	delete(e.data, key)
+	if len(e.data) < e.max {
+		e.full = false
 	}
 }
 
