@@ -97,6 +97,10 @@ func init() {
 	}
 }
 
+func ProvideStakingCacheSize(appOpts servertypes.AppOptions) uint {
+	return cast.ToUint(appOpts.Get(server.FlagStakingCacheSize))
+}
+
 // NewSimApp returns a reference to an initialized SimApp.
 func NewSimApp(
 	logger log.Logger,
@@ -159,9 +163,7 @@ func NewSimApp(
 				// custom function that implements the minttypes.InflationCalculationFn
 				// interface.
 			),
-			depinject.Provide(func() uint {
-				return cast.ToUint(appOpts.Get(server.FlagStakingCacheSize))
-			}),
+			depinject.Provide(ProvideStakingCacheSize),
 		)
 	)
 
