@@ -104,6 +104,13 @@ func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
 	}
 }
 
+func (e *cacheEntry[K, V, T]) clear() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.data = make(map[K]V)
+	e.full = false
+}
+
 type ValidatorsQueueCache struct {
 	unbondingValidatorsQueue  *cacheEntry[string, []string, string]
 	unbondingDelegationsQueue *cacheEntry[string, []types.DVPair, types.DVPair]
@@ -130,6 +137,9 @@ func (c *ValidatorsQueueCache) loadUnbondingValidatorsQueue(ctx context.Context)
 	if err != nil {
 		return err
 	}
+
+	c.unbondingValidatorsQueue.clear()
+
 	for key, value := range data {
 		c.unbondingValidatorsQueue.setEntry(key, value)
 		if c.unbondingValidatorsQueue.full {
@@ -194,6 +204,9 @@ func (c *ValidatorsQueueCache) loadUnbondingDelegationsQueue(ctx context.Context
 	if err != nil {
 		return err
 	}
+
+	c.unbondingDelegationsQueue.clear()
+
 	for key, value := range data {
 		c.unbondingDelegationsQueue.setEntry(key, value)
 		if c.unbondingDelegationsQueue.full {
@@ -258,6 +271,9 @@ func (c *ValidatorsQueueCache) loadRedelegationsQueue(ctx context.Context) error
 	if err != nil {
 		return err
 	}
+
+	c.redelegationsQueue.clear()
+
 	for key, value := range data {
 		c.redelegationsQueue.setEntry(key, value)
 		if c.redelegationsQueue.full {
