@@ -77,6 +77,7 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	if e.max < 0 || e.full {
 		return
 	}
+	
 	if e.data == nil {
 		e.data = make(map[K]V)
 	}
@@ -125,44 +126,51 @@ func NewCache(
 	}
 }
 
-func (c *ValidatorsQueueCache) initUnbondingValidatorsQueue(ctx context.Context) error {
-	if c.unbondingValidatorsQueue.full {
-		c.logger(ctx).Warn("GetUnbondingValidatorsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
-		return types.ErrCacheMaxSizeReached
+func (c *ValidatorsQueueCache) loadUnbondingValidatorsQueue(ctx context.Context) error {
+	data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
+	if err != nil {
+		return err
 	}
-
-	if c.unbondingValidatorsQueue.dirty {
-		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
-		data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
-		if err != nil {
-			return err
-		}
-		for key, value := range data {
-			c.unbondingValidatorsQueue.setEntry(key, value)
-			if c.unbondingValidatorsQueue.full {
-				c.logger(ctx).Warn("Unbonding validators initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
-				return types.ErrCacheMaxSizeReached
-			}
-			c.unbondingValidatorsQueue.dirty = false
+	for key, value := range data {
+		c.unbondingValidatorsQueue.setEntry(key, value)
+		if c.unbondingValidatorsQueue.full {
+			c.logger(ctx).Warn("Unbonding validators initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
+			return types.ErrCacheMaxSizeReached
 		}
 	}
+	c.unbondingValidatorsQueue.dirty = false
 	return nil
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) (map[string][]string, error) {
+	if c.unbondingValidatorsQueue.full {
+		c.logger(ctx).Warn("GetUnbondingValidatorsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
+		return nil, types.ErrCacheMaxSizeReached
+	}
 
-	err := c.initUnbondingValidatorsQueue(ctx)
-	if err != nil {
-		return nil, err
+	if c.unbondingValidatorsQueue.dirty {
+		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
+		err := c.loadUnbondingValidatorsQueue(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c.unbondingValidatorsQueue.get(), nil
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
-	err := c.initUnbondingValidatorsQueue(ctx)
-	if err != nil {
-		return nil, err
+	if c.unbondingValidatorsQueue.full {
+		c.logger(ctx).Warn("GetUnbondingValidatorsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
+		return nil, types.ErrCacheMaxSizeReached
+	}
+
+	if c.unbondingValidatorsQueue.dirty {
+		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
+		err := c.loadUnbondingValidatorsQueue(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c.unbondingValidatorsQueue.getEntry(types.GetCacheValidatorQueueKey(endTime, endHeight)), nil
