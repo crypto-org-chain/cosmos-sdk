@@ -23,15 +23,12 @@ type cacheEntry[K comparable, V slice[T], T any] struct {
 	full bool
 	// max defines the maximum number of entries in each cache map
 	// to prevent OOM attacks.
-	// - if max == 0, there is no cap on the number of entries in the cache
-	// - if max > 0, the cache will cap the number of entries it stores
-	// - if max < 0, the cache is a no-op cache.
-	max int
+	max uint
 
 	loadFromStore func(ctx context.Context) (map[K]V, error)
 }
 
-func NewCacheEntry[K comparable, V slice[T], T any](max int, loadFromStore func(ctx context.Context) (map[K]V, error)) *cacheEntry[K, V, T] {
+func NewCacheEntry[K comparable, V slice[T], T any](max uint, loadFromStore func(ctx context.Context) (map[K]V, error)) *cacheEntry[K, V, T] {
 	return &cacheEntry[K, V, T]{max: max, loadFromStore: loadFromStore, dirty: true}
 }
 
@@ -41,7 +38,7 @@ func (e *cacheEntry[K, V, T]) get() map[K]V {
 
 	copied := make(map[K]V, len(e.data))
 
-	if e.max < 0 || e.data == nil {
+	if e.max == 0 || e.data == nil {
 		return copied
 	}
 
@@ -58,7 +55,7 @@ func (e *cacheEntry[K, V, T]) getEntry(key K) V {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if e.max < 0 || e.data == nil {
+	if e.max == 0 || e.data == nil {
 		return make([]T, 0)
 	}
 
@@ -76,7 +73,7 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.max < 0 || e.full {
+	if e.max == 0 || e.full {
 		return
 	}
 
@@ -88,7 +85,7 @@ func (e *cacheEntry[K, V, T]) setEntry(key K, value V) {
 	copy(sliceCopy, value)
 	e.data[key] = sliceCopy
 
-	if len(e.data) == e.max {
+	if uint(len(e.data)) == e.max {
 		e.full = true
 	}
 }
@@ -97,12 +94,12 @@ func (e *cacheEntry[K, V, T]) deleteEntry(key K) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.max < 0 || e.data == nil {
+	if e.max == 0 || e.data == nil {
 		return
 	}
 
 	delete(e.data, key)
-	if len(e.data) < e.max {
+	if uint(len(e.data)) < e.max {
 		e.full = false
 	}
 }
