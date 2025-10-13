@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -191,16 +192,64 @@ func (c *ValidatorsQueueCache) DeleteUnbondingValidatorQueueEntry(key string) {
 	c.unbondingValidatorsQueue.deleteEntry(key)
 }
 
-func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue() (map[string][]types.DVPair, bool) {
-	return c.unbondingDelegationsQueue.get()
+func (c *ValidatorsQueueCache) loadUnbondingDelegationsQueue(ctx context.Context) error {
+	data, err := c.unbondingDelegationsQueue.loadFromStore(ctx)
+	if err != nil {
+		return err
+	}
+	for key, value := range data {
+		c.unbondingDelegationsQueue.setEntry(key, value)
+		if c.unbondingDelegationsQueue.full {
+			c.logger(ctx).Warn("Unbonding delegations initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingDelegationsQueue.max)
+			return types.ErrCacheMaxSizeReached
+		}
+	}
+	c.unbondingDelegationsQueue.dirty = false
+	return nil
 }
 
-func (c *ValidatorsQueueCache) SetUnbondingDelegationsQueue(delegations map[string][]types.DVPair) {
-	c.unbondingDelegationsQueue.set(delegations)
+func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue(ctx context.Context) (map[string][]types.DVPair, error) {
+	if c.unbondingDelegationsQueue.full {
+		c.logger(ctx).Warn("GetUnbondingDelegationsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingDelegationsQueue.max)
+		return nil, types.ErrCacheMaxSizeReached
+	}
+
+	if c.unbondingDelegationsQueue.dirty {
+		c.logger(ctx).Info("Unbonding delegations queue is dirty. Reinitializing cache from store.")
+		err := c.loadUnbondingDelegationsQueue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return c.unbondingDelegationsQueue.get(), nil
 }
 
-func (c *ValidatorsQueueCache) SetUnbondingDelegationQueueEntry(key string, pairs []types.DVPair) {
-	c.unbondingDelegationsQueue.setEntry(key, pairs)
+func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueueEntry(ctx context.Context, endTime time.Time) ([]types.DVPair, error) {
+	if c.unbondingDelegationsQueue.full {
+		c.logger(ctx).Warn("GetUnbondingDelegationsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingDelegationsQueue.max)
+		return nil, types.ErrCacheMaxSizeReached
+	}
+
+	if c.unbondingDelegationsQueue.dirty {
+		c.logger(ctx).Info("Unbonding delegations queue is dirty. Reinitializing cache from store.")
+		err := c.loadUnbondingDelegationsQueue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return c.unbondingDelegationsQueue.getEntry(sdk.FormatTimeString(endTime)), nil
+}
+
+func (c *ValidatorsQueueCache) SetUnbondingDelegationsQueueEntry(ctx context.Context, key string, delegations []types.DVPair) error {
+	if c.unbondingDelegationsQueue.full {
+		c.unbondingDelegationsQueue.dirty = true
+		c.logger(ctx).Warn("SetUnbondingDelegationsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingDelegationsQueue.max)
+		return types.ErrCacheMaxSizeReached
+	}
+	c.unbondingDelegationsQueue.setEntry(key, delegations)
+	return nil
 }
 
 func (c *ValidatorsQueueCache) DeleteUnbondingDelegationQueueEntry(key string) {

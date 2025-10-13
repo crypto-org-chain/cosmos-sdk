@@ -77,8 +77,7 @@ func NewKeeper(
 		consensusAddressCodec: consensusAddressCodec,
 	}
 	unbondingValidatorsQueue := cache.NewCacheEntry[string, []string, string](maxCacheSize, k.GetAllUnbondingValidatorsFromStore)
-	// TODO: UPDATE callback function
-	unbondingDelegationsQueue := cache.NewCacheEntry[string, []types.DVPair, types.DVPair](maxCacheSize, nil)
+	unbondingDelegationsQueue := cache.NewCacheEntry[string, []types.DVPair, types.DVPair](maxCacheSize, k.GetAllUnbondingDelegationsQueueFromStore)
 	// TODO: UPDATE callback function
 	redelegationsQueue := cache.NewCacheEntry[string, []types.DVVTriplet, types.DVVTriplet](maxCacheSize, nil)
 	k.cache = cache.NewCache(unbondingValidatorsQueue, unbondingDelegationsQueue, redelegationsQueue, k.Logger)

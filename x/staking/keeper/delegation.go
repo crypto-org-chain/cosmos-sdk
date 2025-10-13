@@ -447,12 +447,14 @@ func (k Keeper) SetUnbondingDelegationEntry(
 // is a slice of DVPairs corresponding to unbonding delegations that expire at a
 // certain time.
 func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvPairs []types.DVPair, err error) {
-
-	if ubds, full := k.cache.GetUnbondingDelegationsQueue(); !full && ubds != nil {
-		if pairs, ok := ubds[sdk.FormatTimeString(timestamp)]; ok {
-			return pairs, nil
+	if k.cache != nil {
+		cachedPairs, err := k.cache.GetUnbondingDelegationsQueueEntry(ctx, timestamp)
+		if err == nil {
+			return cachedPairs, nil
 		}
-		return []types.DVPair{}, nil
+		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
+			return nil, err
+		}
 	}
 
 	store := k.storeService.OpenKVStore(ctx)
@@ -468,44 +470,6 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 	return pairs.Pairs, err
 }
 
-// GetUBDs returns all unbonding delegations, initializing the cache from the store if needed.
-func (k *Keeper) GetUBDs(ctx context.Context) (map[string][]types.DVPair, error) {
-
-	if ubds, full := k.cache.GetUnbondingDelegationsQueue(); !full && ubds != nil {
-		return ubds, nil
-	}
-
-	return k.InitUBDsCache(ctx)
-}
-
-// InitUBDsCache initializes the cache from the store.
-func (k *Keeper) InitUBDsCache(ctx context.Context) (map[string][]types.DVPair, error) {
-	iterator, err := k.UBDQueueIterator(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer iterator.Close()
-
-	unbondingDelegations := make(map[string][]types.DVPair)
-	for ; iterator.Valid(); iterator.Next() {
-		timeslice := types.DVPairs{}
-		value := iterator.Value()
-		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
-			return nil, err
-		}
-
-		t, err := types.ParseUnbondingDelegationTimeKey(iterator.Key())
-		if err != nil {
-			return nil, err
-		}
-		unbondingDelegations[sdk.FormatTimeString(t)] = timeslice.Pairs
-	}
-
-	k.cache.SetUnbondingDelegationsQueue(unbondingDelegations)
-
-	return unbondingDelegations, nil
-}
-
 // SetUBDQueueTimeSlice sets a specific unbonding queue timeslice.
 func (k *Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
 	store := k.storeService.OpenKVStore(ctx)
@@ -518,12 +482,12 @@ func (k *Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, 
 		return err
 	}
 
-	_, err = k.GetUBDs(ctx)
-	if err != nil {
-		return err
+	if k.cache != nil {
+		err = k.cache.SetUnbondingDelegationsQueueEntry(ctx, sdk.FormatTimeString(timestamp), keys)
+		if err != nil && !errors.Is(err, types.ErrCacheMaxSizeReached) {
+			return err
+		}
 	}
-
-	k.cache.SetUnbondingDelegationQueueEntry(sdk.FormatTimeString(timestamp), keys)
 	return nil
 }
 
@@ -548,15 +512,22 @@ func (k *Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegati
 	return k.SetUBDQueueTimeSlice(ctx, completionTime, timeSlice)
 }
 
-// UBDQueueIterator returns all the unbonding queue timeslices
-func (k Keeper) UBDQueueIterator(ctx context.Context) (corestore.Iterator, error) {
+// UBDQueueIterator returns all the unbonding queue timeslices from time 0 until endTime.
+func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corestore.Iterator, error) {
+	store := k.storeService.OpenKVStore(ctx)
+	return store.Iterator(types.UnbondingQueueKey,
+		storetypes.InclusiveEndBytes(types.GetUnbondingDelegationTimeKey(endTime)))
+}
+
+// UBDQueueIteratorAll returns all the unbonding queue timeslices.
+func (k Keeper) UBDQueueIteratorAll(ctx context.Context) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
 	return store.Iterator(types.UnbondingQueueKey, storetypes.PrefixEndBytes(types.UnbondingQueueKey))
 }
 
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices, and deletes the matured timeslices from the queue.
 func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
-	unbondingDelegations, err := k.GetUBDs(ctx)
+	unbondingDelegations, err := k.GetUBDs(ctx, currTime)
 	if err != nil {
 		return matureUnbonds, err
 	}
@@ -587,10 +558,77 @@ func (k *Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Tim
 		if err != nil {
 			return matureUnbonds, err
 		}
-		k.cache.DeleteUnbondingDelegationQueueEntry(key)
+
+		if k.cache != nil {
+			k.cache.DeleteUnbondingDelegationQueueEntry(key)
+		}
 	}
 
 	return matureUnbonds, nil
+}
+
+// GetUBDs gets unbonding delegations from the cache or the store
+func (k *Keeper) GetUBDs(ctx context.Context, endTime time.Time) (map[string][]types.DVPair, error) {
+	if k.cache != nil {
+		pairs, err := k.cache.GetUnbondingDelegationsQueue(ctx)
+		if err == nil {
+			return pairs, nil
+		}
+		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
+			return nil, err
+		}
+	}
+	return k.GetUnbondingDelegationsQueueFromStore(ctx, endTime)
+}
+
+// GetAllUnbondingDelegationsQueueFromStore gets unbonding delegations from the store
+func (k Keeper) GetAllUnbondingDelegationsQueueFromStore(ctx context.Context) (map[string][]types.DVPair, error) {
+	iterator, err := k.UBDQueueIteratorAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer iterator.Close()
+	ubds, err := k.getUnbondingDelegationsFromIterator(iterator)
+	if err != nil {
+		return nil, err
+	}
+
+	return ubds, nil
+}
+
+// GetUnbondingDelegationsQueueFromStore gets unbonding delegations from the store for a given time.
+func (k Keeper) GetUnbondingDelegationsQueueFromStore(ctx context.Context, endTime time.Time) (map[string][]types.DVPair, error) {
+	iterator, err := k.UBDQueueIterator(ctx, endTime)
+	if err != nil {
+		return nil, err
+	}
+	defer iterator.Close()
+	ubds, err := k.getUnbondingDelegationsFromIterator(iterator)
+	if err != nil {
+		return nil, err
+	}
+
+	return ubds, nil
+}
+
+// getUnbondingDelegationsFromIterator gets unbonding delegations from the iterator.
+func (k Keeper) getUnbondingDelegationsFromIterator(iterator corestore.Iterator) (map[string][]types.DVPair, error) {
+	unbondingDelegations := make(map[string][]types.DVPair)
+
+	for ; iterator.Valid(); iterator.Next() {
+		timeslice := types.DVPairs{}
+		value := iterator.Value()
+		if err := k.cdc.Unmarshal(value, &timeslice); err != nil {
+			return nil, err
+		}
+
+		t, err := types.ParseUnbondingDelegationTimeKey(iterator.Key())
+		if err != nil {
+			return nil, err
+		}
+		unbondingDelegations[sdk.FormatTimeString(t)] = timeslice.Pairs
+	}
+	return unbondingDelegations, nil
 }
 
 // GetRedelegations returns a given amount of all the delegator redelegations.
