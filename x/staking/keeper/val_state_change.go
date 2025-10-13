@@ -145,7 +145,7 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Iterate over validators, highest power to lowest.
 	iterator, err := k.ValidatorsPowerStoreIterator(ctx)
 	if err != nil {
@@ -174,13 +174,13 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 		case validator.IsUnbonded():
 			validator, err = k.unbondedToBonded(ctx, validator)
 			if err != nil {
-				return
+				return updates, err
 			}
 			amtFromNotBondedToBonded = amtFromNotBondedToBonded.Add(validator.GetTokens())
 		case validator.IsUnbonding():
 			validator, err = k.unbondingToBonded(ctx, validator)
 			if err != nil {
-				return
+				return updates, err
 			}
 			amtFromNotBondedToBonded = amtFromNotBondedToBonded.Add(validator.GetTokens())
 		case validator.IsBonded():

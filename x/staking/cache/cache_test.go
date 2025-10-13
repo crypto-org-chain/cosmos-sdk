@@ -247,7 +247,6 @@ func TestValidatorsQueueCache_LoadFromStore(t *testing.T) {
 	require.False(t, cache.unbondingValidatorsQueue.dirty)
 	require.False(t, cache.unbondingDelegationsQueue.dirty)
 	require.False(t, cache.redelegationsQueue.dirty)
-
 }
 
 func TestValidatorsQueueCache_DirtyReinitialization(t *testing.T) {

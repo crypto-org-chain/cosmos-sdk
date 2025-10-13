@@ -468,6 +468,7 @@ func SortTimestampsByAscendingOrder(keys []string) {
 		return t1.Before(t2)
 	})
 }
+
 // SortValidatorQueueKeysByAscendingTimestampOrder sorts the validator queue keys by ascending timestamp.
 func SortValidatorQueueKeysByAscendingTimestampOrder(keys []string) {
 	sort.Slice(keys, func(i, j int) bool {

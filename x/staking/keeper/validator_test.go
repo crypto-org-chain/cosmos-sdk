@@ -1042,6 +1042,7 @@ func (s *KeeperTestSuite) TestUnbondingValidatorQueueCacheRecovery() {
 		s.Require().Equal(0, len(vals), "should have no validators in queue")
 	}
 }
+
 func (s *KeeperTestSuite) TestSortValidatorQueueKeysByAscendingTimestampOrder() {
 	require := s.Require()
 
@@ -1079,7 +1080,6 @@ func (s *KeeperTestSuite) TestSortValidatorQueueKeysByAscendingTimestampOrder() 
 	require.NoError(err)
 	require.Equal(oneHourLater, lastTime)
 }
-
 
 func (s *KeeperTestSuite) TestGetAndParseCacheValidatorQueueKey() {
 	require := s.Require()
