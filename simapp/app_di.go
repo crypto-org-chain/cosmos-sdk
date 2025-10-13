@@ -6,6 +6,7 @@ import (
 	"io"
 
 	dbm "github.com/cosmos/cosmos-db"
+	"github.com/spf13/cast"
 
 	clienthelpers "cosmossdk.io/client/v2/helpers"
 	"cosmossdk.io/depinject"
@@ -158,6 +159,9 @@ func NewSimApp(
 				// custom function that implements the minttypes.InflationCalculationFn
 				// interface.
 			),
+			depinject.Provide(func() uint {
+				return cast.ToUint(appOpts.Get(server.FlagStakingCacheSize))
+			}),
 		)
 	)
 
