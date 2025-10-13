@@ -256,18 +256,66 @@ func (c *ValidatorsQueueCache) DeleteUnbondingDelegationQueueEntry(key string) {
 	c.unbondingDelegationsQueue.deleteEntry(key)
 }
 
-func (c *ValidatorsQueueCache) GetRedelegationsQueue() (map[string][]types.DVVTriplet, bool) {
-	return c.redelegationsQueue.get()
+func (c *ValidatorsQueueCache) loadRedelegationsQueue(ctx context.Context) error {
+	data, err := c.redelegationsQueue.loadFromStore(ctx)
+	if err != nil {
+		return err
+	}
+	for key, value := range data {
+		c.redelegationsQueue.setEntry(key, value)
+		if c.redelegationsQueue.full {
+			c.logger(ctx).Warn("Redelegations initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.redelegationsQueue.max)
+			return types.ErrCacheMaxSizeReached
+		}
+	}
+	c.redelegationsQueue.dirty = false
+	return nil
 }
 
-func (c *ValidatorsQueueCache) SetRedelegationsQueue(reds map[string][]types.DVVTriplet) {
-	c.redelegationsQueue.set(reds)
+func (c *ValidatorsQueueCache) GetRedelegationsQueue(ctx context.Context) (map[string][]types.DVVTriplet, error) {
+	if c.redelegationsQueue.full {
+		c.logger(ctx).Warn("GetRedelegationsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.redelegationsQueue.max)
+		return nil, types.ErrCacheMaxSizeReached
+	}
+
+	if c.redelegationsQueue.dirty {
+		c.logger(ctx).Info("Redelegations queue is dirty. Reinitializing cache from store.")
+		err := c.loadRedelegationsQueue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return c.redelegationsQueue.get(), nil
 }
 
-func (c *ValidatorsQueueCache) SetRedelegationEntryQueue(key string, triplets []types.DVVTriplet) {
-	c.redelegationsQueue.setEntry(key, triplets)
+func (c *ValidatorsQueueCache) GetRedelegationsQueueEntry(ctx context.Context, endTime time.Time) ([]types.DVVTriplet, error) {
+	if c.redelegationsQueue.full {
+		c.logger(ctx).Warn("GetRedelegationsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.redelegationsQueue.max)
+		return nil, types.ErrCacheMaxSizeReached
+	}
+
+	if c.redelegationsQueue.dirty {
+		c.logger(ctx).Info("Redelegations queue is dirty. Reinitializing cache from store.")
+		err := c.loadRedelegationsQueue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return c.redelegationsQueue.getEntry(sdk.FormatTimeString(endTime)), nil
 }
 
-func (c *ValidatorsQueueCache) DeleteRedelegationEntryQueue(key string) {
+func (c *ValidatorsQueueCache) SetRedelegationsQueueEntry(ctx context.Context, key string, redelegations []types.DVVTriplet) error {
+	if c.redelegationsQueue.full {
+		c.redelegationsQueue.dirty = true
+		c.logger(ctx).Warn("SetRedelegationsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.redelegationsQueue.max)
+		return types.ErrCacheMaxSizeReached
+	}
+	c.redelegationsQueue.setEntry(key, redelegations)
+	return nil
+}
+
+func (c *ValidatorsQueueCache) DeleteRedelegationsQueueEntry(key string) {
 	c.redelegationsQueue.deleteEntry(key)
 }
