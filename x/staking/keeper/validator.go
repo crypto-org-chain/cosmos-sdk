@@ -577,7 +577,7 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	blockTime := sdkCtx.BlockTime()
 	blockHeight := sdkCtx.BlockHeight()
 
-	unbondingValidators, err := k.GetAllUnbondingValidators(ctx, blockTime, blockHeight)
+	unbondingValidators, err := k.GetPendingUnbondingValidators(ctx, blockTime, blockHeight)
 	if err != nil {
 		return err
 	}
@@ -667,8 +667,8 @@ func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (
 	return pubkey, nil
 }
 
-// GetAllUnbondingValidators returns all unbonding validators
-func (k Keeper) GetAllUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) (map[string][]string, error) {
+// GetPendingUnbondingValidators gets unbonding validators from the cache or the store
+func (k Keeper) GetPendingUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) (map[string][]string, error) {
 	if k.cache != nil {
 		addrs, err := k.cache.GetUnbondingValidatorsQueue(ctx)
 		if err == nil {
