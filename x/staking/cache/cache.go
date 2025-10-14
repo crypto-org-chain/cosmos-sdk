@@ -162,7 +162,6 @@ func (c *ValidatorsQueueCache) loadUnbondingValidatorsQueue(ctx context.Context)
 	for key, value := range data {
 		c.unbondingValidatorsQueue.setEntry(key, value)
 		if c.unbondingValidatorsQueue.full.Load() {
-			c.logger(ctx).Warn("Unbonding validators initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
 			return types.ErrCacheMaxSizeReached
 		}
 	}
@@ -172,7 +171,6 @@ func (c *ValidatorsQueueCache) loadUnbondingValidatorsQueue(ctx context.Context)
 
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) (map[string][]string, error) {
 	if c.unbondingValidatorsQueue.full.Load() {
-		c.logger(ctx).Warn("GetUnbondingValidatorsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
@@ -189,7 +187,6 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) 
 
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
 	if c.unbondingValidatorsQueue.full.Load() {
-		c.logger(ctx).Warn("GetUnbondingValidatorsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
@@ -207,7 +204,6 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Cont
 func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(ctx context.Context, key string, addrs []string) error {
 	if c.unbondingValidatorsQueue.full.Load() {
 		c.unbondingValidatorsQueue.dirty.Store(true)
-		c.logger(ctx).Warn("SetUnbondingValidatorQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingValidatorsQueue.max)
 		return types.ErrCacheMaxSizeReached
 	}
 	c.unbondingValidatorsQueue.setEntry(key, addrs)
@@ -229,7 +225,6 @@ func (c *ValidatorsQueueCache) loadUnbondingDelegationsQueue(ctx context.Context
 	for key, value := range data {
 		c.unbondingDelegationsQueue.setEntry(key, value)
 		if c.unbondingDelegationsQueue.full.Load() {
-			c.logger(ctx).Warn("Unbonding delegations initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingDelegationsQueue.max)
 			return types.ErrCacheMaxSizeReached
 		}
 	}
@@ -239,7 +234,6 @@ func (c *ValidatorsQueueCache) loadUnbondingDelegationsQueue(ctx context.Context
 
 func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue(ctx context.Context) (map[string][]types.DVPair, error) {
 	if c.unbondingDelegationsQueue.full.Load() {
-		c.logger(ctx).Warn("GetUnbondingDelegationsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingDelegationsQueue.max)
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
@@ -256,12 +250,10 @@ func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue(ctx context.Context)
 
 func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueueEntry(ctx context.Context, endTime time.Time) ([]types.DVPair, error) {
 	if c.unbondingDelegationsQueue.full.Load() {
-		c.logger(ctx).Warn("GetUnbondingDelegationsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingDelegationsQueue.max)
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
 	if c.unbondingDelegationsQueue.dirty.Load() {
-		c.logger(ctx).Info("Unbonding delegations queue is dirty. Reinitializing cache from store.")
 		err := c.loadUnbondingDelegationsQueue(ctx)
 		if err != nil {
 			return nil, err
@@ -274,7 +266,6 @@ func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueueEntry(ctx context.Con
 func (c *ValidatorsQueueCache) SetUnbondingDelegationsQueueEntry(ctx context.Context, key string, delegations []types.DVPair) error {
 	if c.unbondingDelegationsQueue.full.Load() {
 		c.unbondingDelegationsQueue.dirty.Store(true)
-		c.logger(ctx).Warn("SetUnbondingDelegationsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.unbondingDelegationsQueue.max)
 		return types.ErrCacheMaxSizeReached
 	}
 	c.unbondingDelegationsQueue.setEntry(key, delegations)
@@ -296,7 +287,6 @@ func (c *ValidatorsQueueCache) loadRedelegationsQueue(ctx context.Context) error
 	for key, value := range data {
 		c.redelegationsQueue.setEntry(key, value)
 		if c.redelegationsQueue.full.Load() {
-			c.logger(ctx).Warn("Redelegations initialization failed. Queue is full. Wait for subsequent reinitializations or restart the node with a larger cache size for this cache to be valid. max size: %d", c.redelegationsQueue.max)
 			return types.ErrCacheMaxSizeReached
 		}
 	}
@@ -306,7 +296,6 @@ func (c *ValidatorsQueueCache) loadRedelegationsQueue(ctx context.Context) error
 
 func (c *ValidatorsQueueCache) GetRedelegationsQueue(ctx context.Context) (map[string][]types.DVVTriplet, error) {
 	if c.redelegationsQueue.full.Load() {
-		c.logger(ctx).Warn("GetRedelegationsQueue failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.redelegationsQueue.max)
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
@@ -323,7 +312,6 @@ func (c *ValidatorsQueueCache) GetRedelegationsQueue(ctx context.Context) (map[s
 
 func (c *ValidatorsQueueCache) GetRedelegationsQueueEntry(ctx context.Context, endTime time.Time) ([]types.DVVTriplet, error) {
 	if c.redelegationsQueue.full.Load() {
-		c.logger(ctx).Warn("GetRedelegationsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.redelegationsQueue.max)
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
@@ -341,7 +329,6 @@ func (c *ValidatorsQueueCache) GetRedelegationsQueueEntry(ctx context.Context, e
 func (c *ValidatorsQueueCache) SetRedelegationsQueueEntry(ctx context.Context, key string, redelegations []types.DVVTriplet) error {
 	if c.redelegationsQueue.full.Load() {
 		c.redelegationsQueue.dirty.Store(true)
-		c.logger(ctx).Warn("SetRedelegationsQueueEntry failed. Queue is full. Wait for reinitialization or restart the node with a larger cache size for this cache to be valid. max size: %d", c.redelegationsQueue.max)
 		return types.ErrCacheMaxSizeReached
 	}
 	c.redelegationsQueue.setEntry(key, redelegations)
