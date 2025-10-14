@@ -453,7 +453,7 @@ func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, e
 			return cachedAddrs, nil
 		}
 		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return nil, err
+			k.Logger(ctx).Error("GetUnbondingValidators from cache failed. Error: %s", err)
 		}
 	}
 
@@ -492,7 +492,7 @@ func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Ti
 	if k.cache != nil {
 		err = k.cache.SetUnbondingValidatorQueueEntry(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
 		if err != nil && !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return err
+			k.Logger(ctx).Error("SetUnbondingValidatorsQueue from cache failed. Error: %s", err)
 		}
 	}
 	return nil
@@ -675,7 +675,7 @@ func (k Keeper) GetPendingUnbondingValidators(ctx context.Context, endTime time.
 			return addrs, nil
 		}
 		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return nil, err
+			k.Logger(ctx).Error("GetPendingUnbondingValidators from cache failed. Error: %s", err)
 		}
 	}
 	return k.GetUnbondingValidatorsFromStore(ctx, endTime, endHeight)

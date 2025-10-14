@@ -453,7 +453,7 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 			return cachedPairs, nil
 		}
 		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return nil, err
+			k.Logger(ctx).Error("GetUBDQueueTimeSlice from cache failed. Error: %s", err)
 		}
 	}
 
@@ -485,7 +485,7 @@ func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, k
 	if k.cache != nil {
 		err = k.cache.SetUnbondingDelegationsQueueEntry(ctx, sdk.FormatTimeString(timestamp), keys)
 		if err != nil && !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return err
+			k.Logger(ctx).Error("SetUBDQueueTimeSlice from cache failed. Error: %s", err)
 		}
 	}
 	return nil
@@ -575,7 +575,7 @@ func (k Keeper) GetUBDs(ctx context.Context, endTime time.Time) (map[string][]ty
 			return pairs, nil
 		}
 		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return nil, err
+			k.Logger(ctx).Error("GetUBDs from cache failed. Error: %s", err)
 		}
 	}
 	return k.GetUnbondingDelegationsQueueFromStore(ctx, endTime)
@@ -846,7 +846,7 @@ func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 			return cachedTriplets, nil
 		}
 		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return nil, err
+			k.Logger(ctx).Error("GetRedelegationQueueTimeSlice from cache failed. Error: %s", err)
 		}
 	}
 
@@ -884,7 +884,7 @@ func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 	if k.cache != nil {
 		err = k.cache.SetRedelegationsQueueEntry(ctx, sdk.FormatTimeString(timestamp), keys)
 		if err != nil && !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return err
+			k.Logger(ctx).Error("SetRedelegationQueueTimeSlice from cache failed. Error: %s", err)
 		}
 	}
 	return nil
@@ -951,7 +951,7 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 		if nonMature := t.After(currTime); nonMature {
 			return matureRedelegations, nil
 		}
-		
+
 		triplets := redelegations[key]
 		matureRedelegations = append(matureRedelegations, triplets...)
 
@@ -1498,7 +1498,7 @@ func (k Keeper) GetPendingRedelegations(ctx context.Context, currTime time.Time)
 			return redelegations, nil
 		}
 		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
-			return nil, err
+			k.Logger(ctx).Error("GetPendingRedelegations from cache failed. Error: %s", err)
 		}
 	}
 	return k.GetRedelegationsQueueFromStore(ctx, currTime)
