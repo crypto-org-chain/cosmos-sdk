@@ -194,11 +194,12 @@ func TestValidatorsQueueCache_Initialization(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry(100, validatorsLoader),
-		NewCacheEntry(100, delegationsLoader),
-		NewCacheEntry(100, redelegationsLoader),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		validatorsLoader,
+		delegationsLoader,
+		redelegationsLoader,
 	)
 
 	require.NotNil(t, cache)
@@ -232,11 +233,12 @@ func TestValidatorsQueueCache_LoadFromStore(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry(100, validatorsLoader),
-		NewCacheEntry(100, delegationsLoader),
-		NewCacheEntry(100, redelegationsLoader),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		validatorsLoader,
+		delegationsLoader,
+		redelegationsLoader,
 	)
 
 	// Initially dirty, should load from store
@@ -311,11 +313,12 @@ func TestValidatorsQueueCache_DirtyReinitialization(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry(100, validatorsLoader),
-		NewCacheEntry(100, delegationsLoader),
-		NewCacheEntry(100, redelegationsLoader),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		validatorsLoader,
+		delegationsLoader,
+		redelegationsLoader,
 	)
 
 	// Test unbonding validators queue
@@ -401,11 +404,12 @@ func TestValidatorsQueueCache_FullPreventsLoad(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry(3, validatorsLoader),
-		NewCacheEntry(3, delegationsLoader),
-		NewCacheEntry(3, redelegationsLoader),
+	cache := NewValidatorsQueueCache(
+		3,
 		logger,
+		validatorsLoader,
+		delegationsLoader,
+		redelegationsLoader,
 	)
 
 	// Try to load unbonding validators - should fail due to exceeding max
@@ -434,11 +438,12 @@ func TestValidatorsQueueCache_GetEntry(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry[string, []string](100, nil),
-		NewCacheEntry[string, []types.DVPair](100, nil),
-		NewCacheEntry[string, []types.DVVTriplet](100, nil),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		nil,
+		nil,
+		nil,
 	)
 
 	// Clear dirty flags to avoid loading
@@ -486,11 +491,12 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry[string, []string](100, nil),
-		NewCacheEntry[string, []types.DVPair](100, nil),
-		NewCacheEntry[string, []types.DVVTriplet](100, nil),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		nil,
+		nil,
+		nil,
 	)
 
 	// Clear dirty flags to avoid loading
@@ -562,11 +568,12 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry[string, []string](2, nil),
-		NewCacheEntry[string, []types.DVPair](2, nil),
-		NewCacheEntry[string, []types.DVVTriplet](2, nil),
+	cache := NewValidatorsQueueCache(
+		2,
 		logger,
+		nil,
+		nil,
+		nil,
 	)
 
 	// Clear dirty flags
@@ -642,11 +649,12 @@ func TestValidatorsQueueCache_UnbondingDelegations(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry[string, []string](100, nil),
-		NewCacheEntry(100, delegationsLoader),
-		NewCacheEntry[string, []types.DVVTriplet](100, nil),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		nil,
+		delegationsLoader,
+		nil,
 	)
 
 	// Load from store
@@ -680,11 +688,12 @@ func TestValidatorsQueueCache_UnbondingDelegationsEntry(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry[string, []string](100, nil),
-		NewCacheEntry[string, []types.DVPair](100, nil),
-		NewCacheEntry[string, []types.DVVTriplet](100, nil),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		nil,
+		nil,
+		nil,
 	)
 
 	// Clear dirty flag
@@ -721,11 +730,12 @@ func TestValidatorsQueueCache_Redelegations(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry[string, []string](100, nil),
-		NewCacheEntry[string, []types.DVPair](100, nil),
-		NewCacheEntry(100, redelegationsLoader),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		nil,
+		nil,
+		redelegationsLoader,
 	)
 
 	// Load from store
@@ -758,11 +768,12 @@ func TestValidatorsQueueCache_RedelegationsEntry(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry[string, []string](100, nil),
-		NewCacheEntry[string, []types.DVPair](100, nil),
-		NewCacheEntry[string, []types.DVVTriplet](100, nil),
+	cache := NewValidatorsQueueCache(
+		100,
 		logger,
+		nil,
+		nil,
+		nil,
 	)
 
 	// Clear dirty flag
@@ -925,11 +936,12 @@ func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 		return log.NewNopLogger()
 	}
 
-	cache := NewCache(
-		NewCacheEntry[string, []string](10000, nil),
-		NewCacheEntry[string, []types.DVPair](10000, nil),
-		NewCacheEntry[string, []types.DVVTriplet](10000, nil),
+	cache := NewValidatorsQueueCache(
+		10000,
 		logger,
+		nil,
+		nil,
+		nil,
 	)
 
 	// Clear dirty flags

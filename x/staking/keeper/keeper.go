@@ -78,11 +78,13 @@ func NewKeeper(
 	}
 
 	if maxCacheSize >= 0 {
-		size := uint(maxCacheSize)
-		unbondingValidatorsQueue := cache.NewCacheEntry(size, k.GetAllUnbondingValidatorsFromStore)
-		unbondingDelegationsQueue := cache.NewCacheEntry(size, k.GetAllUnbondingDelegationsQueueFromStore)
-		redelegationsQueue := cache.NewCacheEntry(size, k.GetAllRedelegationsQueueFromStore)
-		k.cache = cache.NewCache(unbondingValidatorsQueue, unbondingDelegationsQueue, redelegationsQueue, k.Logger)
+		k.cache = cache.NewValidatorsQueueCache(
+			uint(maxCacheSize),
+			k.Logger,
+			k.GetAllUnbondingValidatorsFromStore,
+			k.GetAllUnbondingDelegationsQueueFromStore,
+			k.GetAllRedelegationsQueueFromStore,
+		)
 	}
 
 	return k

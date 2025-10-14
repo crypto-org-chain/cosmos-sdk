@@ -119,6 +119,21 @@ type ValidatorsQueueCache struct {
 	logger                    func(ctx context.Context) log.Logger
 }
 
+func NewValidatorsQueueCache(
+	size uint,
+	logger func(ctx context.Context) log.Logger,
+	loadUnbondingValidators func(ctx context.Context) (map[string][]string, error),
+	loadUnbondingDelegations func(ctx context.Context) (map[string][]types.DVPair, error),
+	loadRedelegations func(ctx context.Context) (map[string][]types.DVVTriplet, error),
+) *ValidatorsQueueCache {
+	return NewCache(
+		NewCacheEntry(size, loadUnbondingValidators),
+		NewCacheEntry(size, loadUnbondingDelegations),
+		NewCacheEntry(size, loadRedelegations),
+		logger,
+	)
+}
+
 func NewCache(
 	unbondingValidatorsQueue *CacheEntry[string, []string, string],
 	unbondingDelegationsQueue *CacheEntry[string, []types.DVPair, types.DVPair],
