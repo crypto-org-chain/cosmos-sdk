@@ -929,7 +929,7 @@ func (k Keeper) RedelegationQueueIteratorAll(ctx context.Context) (storetypes.It
 func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
 	redelegations, err := k.GetPendingRedelegations(ctx, currTime)
 	if err != nil {
-		return matureRedelegations, err
+		return nil, err
 	}
 
 	keys := make([]string, 0, len(redelegations))
@@ -945,18 +945,19 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 	for _, key := range keys {
 		t, err := sdk.ParseTime(key)
 		if err != nil {
-			return matureRedelegations, err
+			return nil, err
 		}
 
 		if nonMature := t.After(currTime); nonMature {
 			return matureRedelegations, nil
 		}
+		
 		triplets := redelegations[key]
 		matureRedelegations = append(matureRedelegations, triplets...)
 
 		err = store.Delete(types.GetRedelegationTimeKey(t))
 		if err != nil {
-			return matureRedelegations, err
+			return nil, err
 		}
 
 		if k.cache != nil {
