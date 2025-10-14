@@ -99,7 +99,7 @@ func TestCacheEntry_UnlimitedSize(t *testing.T) {
 
 	data := cache.get()
 	require.Len(t, data, 3)
-	require.False(t, cache.full, "unlimited cache should never be full")
+	require.False(t, cache.full.Load(), "unlimited cache should never be full")
 
 	// Add many more entries to verify it's truly unlimited
 	for i := 0; i < 1000; i++ {
@@ -108,7 +108,7 @@ func TestCacheEntry_UnlimitedSize(t *testing.T) {
 
 	data = cache.get()
 	require.GreaterOrEqual(t, len(data), 1000)
-	require.False(t, cache.full, "unlimited cache should never be full")
+	require.False(t, cache.full.Load(), "unlimited cache should never be full")
 }
 
 func TestCacheEntry_MaxSizeExceeded(t *testing.T) {
@@ -119,13 +119,13 @@ func TestCacheEntry_MaxSizeExceeded(t *testing.T) {
 	cache.setEntry("key2", []string{"val2"})
 	cache.setEntry("key3", []string{"val3"})
 
-	require.True(t, cache.full)
+	require.True(t, cache.full.Load())
 	require.Len(t, cache.get(), 3)
 
 	// Try to add one more - should set full flag
 	cache.setEntry("key4", []string{"val4"})
 
-	require.True(t, cache.full, "cache should be marked as full")
+	require.True(t, cache.full.Load(), "cache should be marked as full")
 	// key4 was not added because cache is now full
 	data := cache.get()
 	require.Len(t, data, 3)
@@ -137,7 +137,7 @@ func TestCacheEntry_FullFlagPreventsWrites(t *testing.T) {
 
 	cache.setEntry("key1", []string{"val1"})
 	cache.setEntry("key2", []string{"val2"})
-	require.True(t, cache.full)
+	require.True(t, cache.full.Load())
 
 	// Try to add more - should be ignored
 	cache.setEntry("key4", []string{"val4"})
@@ -158,11 +158,11 @@ func TestCacheEntry_DeleteClearsFull(t *testing.T) {
 	cache.setEntry("key1", []string{"val1"})
 	cache.setEntry("key2", []string{"val2"})
 	cache.setEntry("key3", []string{"val3"}) // Triggers full
-	require.True(t, cache.full)
+	require.True(t, cache.full.Load())
 
 	// Delete one entry - should clear full flag
 	cache.deleteEntry("key1")
-	require.False(t, cache.full, "deleting should clear full flag")
+	require.False(t, cache.full.Load(), "deleting should clear full flag")
 
 	// Now we should be able to add again
 	cache.setEntry("key4", []string{"val4"})
@@ -259,9 +259,9 @@ func TestValidatorsQueueCache_LoadFromStore(t *testing.T) {
 	require.Equal(t, []types.DVVTriplet{{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}}, redelgations["time1"])
 
 	// Cache should no longer be dirty
-	require.False(t, cache.unbondingValidatorsQueue.dirty)
-	require.False(t, cache.unbondingDelegationsQueue.dirty)
-	require.False(t, cache.redelegationsQueue.dirty)
+	require.False(t, cache.unbondingValidatorsQueue.dirty.Load())
+	require.False(t, cache.unbondingDelegationsQueue.dirty.Load())
+	require.False(t, cache.redelegationsQueue.dirty.Load())
 }
 
 func TestValidatorsQueueCache_DirtyReinitialization(t *testing.T) {
@@ -328,7 +328,7 @@ func TestValidatorsQueueCache_DirtyReinitialization(t *testing.T) {
 	require.Contains(t, valData, "time1")
 	require.Equal(t, 1, valCallCount)
 
-	cache.unbondingValidatorsQueue.dirty = true
+	cache.unbondingValidatorsQueue.dirty.Store(true)
 	valData, err = cache.GetUnbondingValidatorsQueue(ctx)
 	require.NoError(t, err)
 	require.Len(t, valData, 1)
@@ -343,7 +343,7 @@ func TestValidatorsQueueCache_DirtyReinitialization(t *testing.T) {
 	require.Contains(t, delData, "time1")
 	require.Equal(t, 1, delCallCount)
 
-	cache.unbondingDelegationsQueue.dirty = true
+	cache.unbondingDelegationsQueue.dirty.Store(true)
 	delData, err = cache.GetUnbondingDelegationsQueue(ctx)
 	require.NoError(t, err)
 	require.Len(t, delData, 1)
@@ -358,7 +358,7 @@ func TestValidatorsQueueCache_DirtyReinitialization(t *testing.T) {
 	require.Contains(t, redData, "time1")
 	require.Equal(t, 1, redCallCount)
 
-	cache.redelegationsQueue.dirty = true
+	cache.redelegationsQueue.dirty.Store(true)
 	redData, err = cache.GetRedelegationsQueue(ctx)
 	require.NoError(t, err)
 	require.Len(t, redData, 1)
@@ -416,19 +416,19 @@ func TestValidatorsQueueCache_FullPreventsLoad(t *testing.T) {
 	_, err := cache.GetUnbondingValidatorsQueue(ctx)
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
-	require.True(t, cache.unbondingValidatorsQueue.full)
+	require.True(t, cache.unbondingValidatorsQueue.full.Load())
 
 	// Try to load unbonding delegations - should fail due to exceeding max
 	_, err = cache.GetUnbondingDelegationsQueue(ctx)
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
-	require.True(t, cache.unbondingDelegationsQueue.full)
+	require.True(t, cache.unbondingDelegationsQueue.full.Load())
 
 	// Try to load redelegations - should fail due to exceeding max
 	_, err = cache.GetRedelegationsQueue(ctx)
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
-	require.True(t, cache.redelegationsQueue.full)
+	require.True(t, cache.redelegationsQueue.full.Load())
 }
 
 func TestValidatorsQueueCache_GetEntry(t *testing.T) {
@@ -447,9 +447,9 @@ func TestValidatorsQueueCache_GetEntry(t *testing.T) {
 	)
 
 	// Clear dirty flags to avoid loading
-	cache.unbondingValidatorsQueue.dirty = false
-	cache.unbondingDelegationsQueue.dirty = false
-	cache.redelegationsQueue.dirty = false
+	cache.unbondingValidatorsQueue.dirty.Store(false)
+	cache.unbondingDelegationsQueue.dirty.Store(false)
+	cache.redelegationsQueue.dirty.Store(false)
 
 	// Test unbonding validators queue entry
 	endTime := time.Now().UTC()
@@ -500,9 +500,9 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 	)
 
 	// Clear dirty flags to avoid loading
-	cache.unbondingValidatorsQueue.dirty = false
-	cache.unbondingDelegationsQueue.dirty = false
-	cache.redelegationsQueue.dirty = false
+	cache.unbondingValidatorsQueue.dirty.Store(false)
+	cache.unbondingDelegationsQueue.dirty.Store(false)
+	cache.redelegationsQueue.dirty.Store(false)
 
 	// Test unbonding validators queue
 	err := cache.SetUnbondingValidatorQueueEntry(ctx, "key1", []string{"val1"})
@@ -577,9 +577,9 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	)
 
 	// Clear dirty flags
-	cache.unbondingValidatorsQueue.dirty = false
-	cache.unbondingDelegationsQueue.dirty = false
-	cache.redelegationsQueue.dirty = false
+	cache.unbondingValidatorsQueue.dirty.Store(false)
+	cache.unbondingDelegationsQueue.dirty.Store(false)
+	cache.redelegationsQueue.dirty.Store(false)
 
 	// Test unbonding validators queue
 	err := cache.SetUnbondingValidatorQueueEntry(ctx, "key1", []string{"val1"})
@@ -591,8 +591,8 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	err = cache.SetUnbondingValidatorQueueEntry(ctx, "key3", []string{"val3"})
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
-	require.True(t, cache.unbondingValidatorsQueue.full)
-	require.True(t, cache.unbondingValidatorsQueue.dirty)
+	require.True(t, cache.unbondingValidatorsQueue.full.Load())
+	require.True(t, cache.unbondingValidatorsQueue.dirty.Load())
 
 	// Test unbonding delegations queue
 	err = cache.SetUnbondingDelegationsQueueEntry(ctx, "time1", []types.DVPair{
@@ -610,8 +610,8 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
-	require.True(t, cache.unbondingDelegationsQueue.full)
-	require.True(t, cache.unbondingDelegationsQueue.dirty)
+	require.True(t, cache.unbondingDelegationsQueue.full.Load())
+	require.True(t, cache.unbondingDelegationsQueue.dirty.Load())
 
 	// Test redelegations queue
 	err = cache.SetRedelegationsQueueEntry(ctx, "time1", []types.DVVTriplet{
@@ -629,8 +629,8 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
-	require.True(t, cache.redelegationsQueue.full)
-	require.True(t, cache.redelegationsQueue.dirty)
+	require.True(t, cache.redelegationsQueue.full.Load())
+	require.True(t, cache.redelegationsQueue.dirty.Load())
 }
 
 func TestValidatorsQueueCache_UnbondingDelegations(t *testing.T) {
@@ -697,7 +697,7 @@ func TestValidatorsQueueCache_UnbondingDelegationsEntry(t *testing.T) {
 	)
 
 	// Clear dirty flag
-	cache.unbondingDelegationsQueue.dirty = false
+	cache.unbondingDelegationsQueue.dirty.Store(false)
 
 	endTime := time.Now().UTC()
 	key := sdk.FormatTimeString(endTime)
@@ -777,7 +777,7 @@ func TestValidatorsQueueCache_RedelegationsEntry(t *testing.T) {
 	)
 
 	// Clear dirty flag
-	cache.redelegationsQueue.dirty = false
+	cache.redelegationsQueue.dirty.Store(false)
 
 	endTime := time.Now().UTC()
 	key := sdk.FormatTimeString(endTime)
@@ -798,7 +798,7 @@ func TestValidatorsQueueCache_RedelegationsEntry(t *testing.T) {
 // Concurrent operations tests
 func TestCacheEntry_ConcurrentReads(t *testing.T) {
 	cache := NewCacheEntry[string, []string](1000, nil)
-	cache.dirty = false // Skip loading
+	cache.dirty.Store(false) // Skip loading
 
 	for i := 0; i < 100; i++ {
 		cache.setEntry(fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
@@ -852,7 +852,7 @@ func TestCacheEntry_ConcurrentWrites(t *testing.T) {
 
 func TestCacheEntry_ConcurrentReadWrite(t *testing.T) {
 	cache := NewCacheEntry[string, []string](10000, nil)
-	cache.dirty = false
+	cache.dirty.Store(false)
 
 	for i := 0; i < 100; i++ {
 		cache.setEntry(fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
@@ -945,9 +945,9 @@ func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 	)
 
 	// Clear dirty flags
-	cache.unbondingValidatorsQueue.dirty = false
-	cache.unbondingDelegationsQueue.dirty = false
-	cache.redelegationsQueue.dirty = false
+	cache.unbondingValidatorsQueue.dirty.Store(false)
+	cache.unbondingDelegationsQueue.dirty.Store(false)
+	cache.redelegationsQueue.dirty.Store(false)
 
 	var wg sync.WaitGroup
 	numRoutines := 30
