@@ -453,13 +453,18 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 func (s *KeeperTestSuite) TestGetAllPendingUnbondingValidators() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always read from store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always read from store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > unbonding queue entries",
@@ -549,13 +554,18 @@ func (s *KeeperTestSuite) TestGetAllPendingUnbondingValidators() {
 func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always write to store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always write to store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > unbonding queue entries",
@@ -691,13 +701,18 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 func (s *KeeperTestSuite) TestGetUnbondingValidators() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always read from store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always read from store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > unbonding queue entries",
@@ -830,11 +845,16 @@ func (s *KeeperTestSuite) TestGetUnbondingValidators() {
 func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 	testCases := []struct {
 		name                   string
-		maxCacheSize           uint
+		maxCacheSize           int
 		numUnbondingValidators int
 	}{
 		{
-			name:                   "cache size = 0. No cache",
+			name:                   "cache size < 0 (cache disabled)",
+			maxCacheSize:           -1,
+			numUnbondingValidators: 3,
+		},
+		{
+			name:                   "cache size = 0 (unlimited cache)",
 			maxCacheSize:           0,
 			numUnbondingValidators: 3,
 		},
@@ -941,7 +961,7 @@ func (s *KeeperTestSuite) TestUnbondingValidatorQueueCacheRecovery() {
 	bankKeeper := testutil.NewMockBankKeeper(ctrl)
 
 	// Initialize keeper with small cache size (2 time+height keys)
-	maxCacheSize := uint(2)
+	maxCacheSize := 2
 	keeper := stakingkeeper.NewKeeper(
 		encCfg.Codec,
 		storeService,

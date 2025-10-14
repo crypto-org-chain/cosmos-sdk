@@ -172,8 +172,10 @@ type MempoolConfig struct {
 type StakingConfig struct {
 	// CacheSize defines the maximum number of time-based queue entries to cache
 	// for unbonding validators, unbonding delegations, and redelegations.
-	// A value of 0 means no cache (all reads go to the store).
-	CacheSize uint `mapstructure:"cache-size"`
+	// cache-size = 0 means unlimited cache (no size limit).
+	// cache-size < 0 means the cache is disabled.
+	// cache-size > 0 sets a size limit for the cache.
+	CacheSize int `mapstructure:"cache-size"`
 }
 
 // State Streaming configuration

@@ -89,13 +89,26 @@ func TestCacheEntry_DeleteEntry(t *testing.T) {
 	require.Contains(t, data, "key2")
 }
 
-func TestCacheEntry_ZeroSize(t *testing.T) {
+func TestCacheEntry_UnlimitedSize(t *testing.T) {
 	cache := NewCacheEntry[string, []string](0, nil)
 
-	// With max=0, cache should not store anything
+	// With max=0, cache is unlimited (can store anything)
 	cache.setEntry("key1", []string{"val1"})
+	cache.setEntry("key2", []string{"val2"})
+	cache.setEntry("key3", []string{"val3"})
+
 	data := cache.get()
-	require.Empty(t, data)
+	require.Len(t, data, 3)
+	require.False(t, cache.full, "unlimited cache should never be full")
+
+	// Add many more entries to verify it's truly unlimited
+	for i := 0; i < 1000; i++ {
+		cache.setEntry(fmt.Sprintf("key%d", i+10), []string{fmt.Sprintf("val%d", i)})
+	}
+
+	data = cache.get()
+	require.GreaterOrEqual(t, len(data), 1000)
+	require.False(t, cache.full, "unlimited cache should never be full")
 }
 
 func TestCacheEntry_MaxSizeExceeded(t *testing.T) {

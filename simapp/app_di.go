@@ -97,8 +97,8 @@ func init() {
 	}
 }
 
-func ProvideStakingCacheSize(appOpts servertypes.AppOptions) uint {
-	return cast.ToUint(appOpts.Get(server.FlagStakingCacheSize))
+func ProvideStakingCacheSize(appOpts servertypes.AppOptions) int {
+	return cast.ToInt(appOpts.Get(server.FlagStakingCacheSize))
 }
 
 // NewSimApp returns a reference to an initialized SimApp.

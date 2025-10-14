@@ -17,12 +17,13 @@ type slice[T any] interface {
 type CacheEntry[K comparable, V slice[T], T any] struct {
 	mu   sync.RWMutex
 	data map[K]V
-	// indicates if the cache requires a reload from the store
+	// indicates if the cache requires a reload from the store.
 	dirty bool
-	// indicates if the cache is full
+	// indicates if the cache is full.
 	full bool
 	// max defines the maximum number of entries in each cache map
 	// to prevent OOM attacks.
+	// if the size is 0, the cache is unlimited.
 	max uint
 
 	loadFromStore func(ctx context.Context) (map[K]V, error)
@@ -38,7 +39,7 @@ func (e *CacheEntry[K, V, T]) get() map[K]V {
 
 	copied := make(map[K]V, len(e.data))
 
-	if e.max == 0 || e.data == nil {
+	if e.data == nil {
 		return copied
 	}
 
@@ -55,7 +56,7 @@ func (e *CacheEntry[K, V, T]) getEntry(key K) V {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if e.max == 0 || e.data == nil {
+	if e.data == nil {
 		return make([]T, 0)
 	}
 
@@ -73,7 +74,7 @@ func (e *CacheEntry[K, V, T]) setEntry(key K, value V) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.max == 0 || e.full {
+	if e.full {
 		return
 	}
 
@@ -85,7 +86,7 @@ func (e *CacheEntry[K, V, T]) setEntry(key K, value V) {
 	copy(sliceCopy, value)
 	e.data[key] = sliceCopy
 
-	if uint(len(e.data)) == e.max {
+	if e.max > 0 && uint(len(e.data)) == e.max {
 		e.full = true
 	}
 }
@@ -94,12 +95,12 @@ func (e *CacheEntry[K, V, T]) deleteEntry(key K) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.max == 0 || e.data == nil {
+	if e.data == nil {
 		return
 	}
 
 	delete(e.data, key)
-	if uint(len(e.data)) < e.max {
+	if e.max > 0 && uint(len(e.data)) < e.max {
 		e.full = false
 	}
 }

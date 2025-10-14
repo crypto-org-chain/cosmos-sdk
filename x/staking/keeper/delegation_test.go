@@ -1172,13 +1172,18 @@ func (s *KeeperTestSuite) TestSetUnbondingDelegationEntry() {
 func (s *KeeperTestSuite) TestGetUBDQueueTimeSlice() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always read from store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always read from store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > unbonding delegation entries",
@@ -1307,13 +1312,18 @@ func (s *KeeperTestSuite) TestGetUBDQueueTimeSlice() {
 func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always read from store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always read from store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > unbonding delegation entries",
@@ -1413,13 +1423,18 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 func (s *KeeperTestSuite) TestInsertUBDQueue() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always write to store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always write to store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > unbonding delegation entries",
@@ -1561,11 +1576,16 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 	testCases := []struct {
 		name                    string
-		maxCacheSize            uint
+		maxCacheSize            int
 		numUnbondingDelegations int
 	}{
 		{
-			name:                    "cache size = 0 i.e unlimited",
+			name:                    "cache size < 0 (cache disabled)",
+			maxCacheSize:            -1,
+			numUnbondingDelegations: 3,
+		},
+		{
+			name:                    "cache size = 0 (unlimited cache)",
 			maxCacheSize:            0,
 			numUnbondingDelegations: 3,
 		},
@@ -1708,7 +1728,7 @@ func (s *KeeperTestSuite) TestUnbondingDelegationQueueCacheRecovery() {
 	bankKeeper.EXPECT().UndelegateCoinsFromModuleToAccount(gomock.Any(), stakingtypes.NotBondedPoolName, gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Initialize keeper with small cache size (2 timestamps)
-	maxCacheSize := uint(2)
+	maxCacheSize := 2
 	keeper := stakingkeeper.NewKeeper(
 		encCfg.Codec,
 		storeService,
@@ -1829,13 +1849,18 @@ func (s *KeeperTestSuite) TestGetAndParseUnbondingDelegationTimeKey() {
 func (s *KeeperTestSuite) TestGetRedelegationQueueTimeSlice() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always read from store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always read from store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > redelegation entries",
@@ -1955,13 +1980,18 @@ func (s *KeeperTestSuite) TestGetRedelegationQueueTimeSlice() {
 func (s *KeeperTestSuite) TestGetPendingRedelegations() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always read from store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always read from store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > redelegation entries",
@@ -2055,13 +2085,18 @@ func (s *KeeperTestSuite) TestGetPendingRedelegations() {
 func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 	testCases := []struct {
 		name         string
-		maxCacheSize uint
+		maxCacheSize int
 		description  string
 	}{
 		{
-			name:         "cache size = 0 (no cache)",
+			name:         "cache size < 0 (cache disabled)",
+			maxCacheSize: -1,
+			description:  "should always write to store when cache is not initialized",
+		},
+		{
+			name:         "cache size = 0 (unlimited cache)",
 			maxCacheSize: 0,
-			description:  "should always write to store when cache is disabled",
+			description:  "should use unlimited cache with no size restrictions",
 		},
 		{
 			name:         "cache size > redelegation entries",
@@ -2185,11 +2220,16 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 	testCases := []struct {
 		name             string
-		maxCacheSize     uint
+		maxCacheSize     int
 		numRedelegations int
 	}{
 		{
-			name:             "cache size = 0. No cache",
+			name:             "cache size < 0 (cache disabled)",
+			maxCacheSize:     -1,
+			numRedelegations: 3,
+		},
+		{
+			name:             "cache size = 0 (unlimited cache)",
 			maxCacheSize:     0,
 			numRedelegations: 3,
 		},
@@ -2337,7 +2377,7 @@ func (s *KeeperTestSuite) TestRedelegationQueueCacheRecovery() {
 	bankKeeper.EXPECT().SendCoinsFromModuleToModule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Initialize keeper with small cache size (2 timestamps)
-	maxCacheSize := uint(2)
+	maxCacheSize := 2
 	keeper := stakingkeeper.NewKeeper(
 		encCfg.Codec,
 		storeService,

@@ -1000,7 +1000,7 @@ func addStartNodeFlags(cmd *cobra.Command, opts StartCmdOptions) {
 	cmd.Flags().Uint32(FlagStateSyncSnapshotKeepRecent, 2, "State sync snapshot to keep")
 	cmd.Flags().Bool(FlagDisableIAVLFastNode, false, "Disable fast node for IAVL tree")
 	cmd.Flags().Int(FlagMempoolMaxTxs, mempool.DefaultMaxTx, "Sets MaxTx value for the app-side mempool")
-	cmd.Flags().Uint(FlagStakingCacheSize, 0, "Sets the cache size for staking unbonding queues (0 = no cache)")
+	cmd.Flags().Int(FlagStakingCacheSize, 0, "Sets the cache size for staking unbonding queues (0 = unlimited, negative = disabled)")
 	cmd.Flags().Duration(FlagShutdownGrace, 0*time.Second, "On Shutdown, duration to wait for resource clean up")
 
 	// support old flags name for backwards compatibility

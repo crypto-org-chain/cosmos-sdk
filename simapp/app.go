@@ -316,7 +316,7 @@ func NewSimApp(
 	}
 	app.txConfig = txConfig
 
-	stakingCacheSize := cast.ToUint(appOpts.Get(server.FlagStakingCacheSize))
+	stakingCacheSize := cast.ToInt(appOpts.Get(server.FlagStakingCacheSize))
 
 	app.StakingKeeper = stakingkeeper.NewKeeper(
 		appCodec, runtime.NewKVStoreService(keys[stakingtypes.StoreKey]), app.AccountKeeper, app.BankKeeper, authtypes.NewModuleAddress(govtypes.ModuleName).String(), authcodec.NewBech32Codec(sdk.Bech32PrefixValAddr), authcodec.NewBech32Codec(sdk.Bech32PrefixConsAddr), stakingCacheSize,

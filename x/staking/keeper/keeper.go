@@ -46,7 +46,7 @@ func NewKeeper(
 	authority string,
 	validatorAddressCodec addresscodec.Codec,
 	consensusAddressCodec addresscodec.Codec,
-	maxCacheSize uint,
+	maxCacheSize int,
 ) *Keeper {
 	// ensure bonded and not bonded module accounts are set
 	if addr := ak.GetModuleAddress(types.BondedPoolName); addr == nil {
@@ -77,12 +77,14 @@ func NewKeeper(
 		consensusAddressCodec: consensusAddressCodec,
 	}
 
-	if maxCacheSize > 0 {
-		unbondingValidatorsQueue := cache.NewCacheEntry(maxCacheSize, k.GetAllUnbondingValidatorsFromStore)
-		unbondingDelegationsQueue := cache.NewCacheEntry(maxCacheSize, k.GetAllUnbondingDelegationsQueueFromStore)
-		redelegationsQueue := cache.NewCacheEntry(maxCacheSize, k.GetAllRedelegationsQueueFromStore)
+	if maxCacheSize >= 0 {
+		size := uint(maxCacheSize)
+		unbondingValidatorsQueue := cache.NewCacheEntry(size, k.GetAllUnbondingValidatorsFromStore)
+		unbondingDelegationsQueue := cache.NewCacheEntry(size, k.GetAllUnbondingDelegationsQueueFromStore)
+		redelegationsQueue := cache.NewCacheEntry(size, k.GetAllRedelegationsQueueFromStore)
 		k.cache = cache.NewCache(unbondingValidatorsQueue, unbondingDelegationsQueue, redelegationsQueue, k.Logger)
 	}
+
 	return k
 }
 
