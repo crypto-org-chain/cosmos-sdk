@@ -104,6 +104,7 @@ This patch update also includes minor dependency bumps.
   * The `InflationCalculationFn` argument to `mint.NewAppModule()` is now ignored and must be nil.  To set a custom `InflationCalculationFn` on the default minter, use `mintkeeper.WithMintFn(mintkeeper.DefaultMintFn(customInflationFn))`.
 * (api) [#24428](https://github.com/cosmos/cosmos-sdk/pull/24428) Add block height to response headers
 * (baseapp) [#25470](https://github.com/cosmos/cosmos-sdk/pull/25470) Support mount object store in baseapp, add `ObjectStore` api in context.
+* (baseapp) [#25334](https://github.com/cosmos/cosmos-sdk/pull/25334) Add `Executor` to support custom execution logic and incarnation cache for performance optimisation
 
 ### Improvements
 
