@@ -615,24 +615,35 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 					return fmt.Errorf("unexpected validator in unbonding queue; status was not unbonding")
 				}
 
-				val, err = k.UnbondingToUnbonded(ctx, val)
-				if err != nil {
-					return err
-				}
+				if val.UnbondingOnHoldRefCount == 0 {
+					for _, id := range val.UnbondingIds {
+						if err = k.DeleteUnbondingIndex(ctx, id); err != nil {
+							return err
+						}
+					}
 
-				if val.GetDelegatorShares().IsZero() {
-					str, err := k.validatorAddressCodec.StringToBytes(val.GetOperator())
+					val, err = k.UnbondingToUnbonded(ctx, val)
 					if err != nil {
 						return err
 					}
-					if err = k.RemoveValidator(ctx, str); err != nil {
+
+					if val.GetDelegatorShares().IsZero() {
+						str, err := k.validatorAddressCodec.StringToBytes(val.GetOperator())
+						if err != nil {
+							return err
+						}
+						if err = k.RemoveValidator(ctx, str); err != nil {
+							return err
+						}
+					} else {
+						// remove unbonding ids
+						val.UnbondingIds = []uint64{}
+					}
+
+					// remove validator from queue
+					if err = k.DeleteValidatorQueue(ctx, val); err != nil {
 						return err
 					}
-				}
-
-				// remove validator from queue
-				if err = k.DeleteValidatorQueue(ctx, val); err != nil {
-					return err
 				}
 			}
 		}
