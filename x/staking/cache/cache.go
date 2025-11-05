@@ -67,7 +67,7 @@ func (e *CacheEntry[V]) getEntry(ctx context.Context, cdc codec.BinaryCodec, log
 	}
 
 	store := e.storeService.OpenMemoryStore(ctx)
-	storeKey := e.getStoreKey(ctx, key)
+	storeKey := e.getStoreKey(key)
 
 	bz, err := store.Get(storeKey)
 	if err != nil {
@@ -87,7 +87,7 @@ func (e *CacheEntry[V]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key
 	}
 
 	store := e.storeService.OpenMemoryStore(ctx)
-	storeKey := e.getStoreKey(ctx, key)
+	storeKey := e.getStoreKey(key)
 
 	bz, err := marshal(cdc, e.cacheType, value)
 	if err != nil {
@@ -113,7 +113,7 @@ func (e *CacheEntry[V]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key
 
 func (e *CacheEntry[V]) deleteEntry(ctx context.Context, key string) error {
 	store := e.storeService.OpenMemoryStore(ctx)
-	storeKey := e.getStoreKey(ctx, key)
+	storeKey := e.getStoreKey(key)
 
 	if err := store.Delete(storeKey); err != nil {
 		return err
@@ -244,7 +244,7 @@ func (e *CacheEntry[V]) countEntries(ctx context.Context) (uint, error) {
 	return count, nil
 }
 
-func (e *CacheEntry[V]) getStoreKey(ctx context.Context, key string) []byte {
+func (e *CacheEntry[V]) getStoreKey(key string) []byte {
 	prefix := e.getPrefix()
 	return append(prefix, []byte(key)...)
 }
