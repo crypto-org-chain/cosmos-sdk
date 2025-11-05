@@ -15,196 +15,81 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-type slice[T any] interface {
-	~[]T
-}
+type CacheEntryType string
 
-type CacheEntry[K comparable, V slice[T], T any] struct {
-	mu   sync.RWMutex
-	data map[K]V
-	// indicates if the cache requires a reload from the store.
-	dirty atomic.Bool
-	// indicates if the cache is full.
-	full atomic.Bool
-	// max defines the maximum number of entries in each cache map
-	// to prevent OOM attacks.
-	// if the size is 0, the cache is unlimited.
-	max uint
+const (
+	UnbondingValidators  CacheEntryType = "unbonding_validators"
+	UnbondingDelegations CacheEntryType = "unbonding_delegations"
+	Redelegations        CacheEntryType = "redelegations"
+)
 
-	loadFromStore func(ctx context.Context) (map[K]V, error)
-}
-
-func NewCacheEntry[K comparable, V slice[T], T any](max uint, loadFromStore func(ctx context.Context) (map[K]V, error)) *CacheEntry[K, V, T] {
-	entry := &CacheEntry[K, V, T]{max: max, loadFromStore: loadFromStore}
-	entry.dirty.Store(true)
-	return entry
-}
-
-func (e *CacheEntry[K, V, T]) get() map[K]V {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	copied := make(map[K]V, len(e.data))
-
-	if e.data == nil {
-		return copied
-	}
-
-	for k, v := range e.data {
-		sliceCopy := make([]T, len(v))
-		copy(sliceCopy, v)
-		copied[k] = sliceCopy
-	}
-
-	return copied
-}
-
-func (e *CacheEntry[K, V, T]) getEntry(key K) V {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	if e.data == nil {
-		return make([]T, 0)
-	}
-
-	value, exists := e.data[key]
-	if !exists {
-		return make([]T, 0)
-	}
-
-	sliceCopy := make([]T, len(value))
-	copy(sliceCopy, value)
-	return sliceCopy
-}
-
-func (e *CacheEntry[K, V, T]) setEntry(key K, value V) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e.full.Load() {
-		return
-	}
-
-	if e.data == nil {
-		e.data = make(map[K]V)
-	}
-
-	sliceCopy := make([]T, len(value))
-	copy(sliceCopy, value)
-	e.data[key] = sliceCopy
-
-	if e.max > 0 && uint(len(e.data)) == e.max {
-		e.full.Store(true)
-	}
-}
-
-func (e *CacheEntry[K, V, T]) deleteEntry(key K) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e.data == nil {
-		return
-	}
-
-	delete(e.data, key)
-	if e.max > 0 && uint(len(e.data)) < e.max {
-		e.full.Store(false)
-	}
-}
-
-func (e *CacheEntry[K, V, T]) clear() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.data = make(map[K]V)
-	e.full.Store(false)
-}
-
-// StoreCacheEntry is a store-backed cache entry (vs in-memory map)
-// This is used for unbonding delegations queue to demonstrate rollback behavior
-type StoreCacheEntry struct {
-	// Mutex only protects bulk load operations to prevent concurrent reloads
+type CacheEntry[V any] struct {
+	// protects bulk load operations to prevent concurrent reloads
 	loadMu sync.Mutex
 
-	// Store access (store itself is thread-safe)
 	storeService corestoretypes.MemoryStoreService
-	cdc          codec.BinaryCodec
-	storePrefix  []byte
 
-	// Cache metadata (atomic flags are thread-safe)
 	dirty         atomic.Bool
 	full          atomic.Bool
 	max           uint
-	loadFromStore func(ctx context.Context) (map[string][]types.DVPair, error)
-	logger        func(ctx context.Context) log.Logger
-	name          string
+	loadFromStore func(ctx context.Context) (map[string]V, error)
+
+	cacheType CacheEntryType
 }
 
-func NewStoreCacheEntry(
+func NewCacheEntry[V any](
 	storeService corestoretypes.MemoryStoreService,
-	cdc codec.BinaryCodec,
-	storePrefix []byte,
 	max uint,
-	loadFromStore func(ctx context.Context) (map[string][]types.DVPair, error),
-	name string,
-	logger func(ctx context.Context) log.Logger,
-) *StoreCacheEntry {
-	entry := &StoreCacheEntry{
+	loadFromStore func(ctx context.Context) (map[string]V, error),
+	cacheType CacheEntryType,
+) *CacheEntry[V] {
+	entry := &CacheEntry[V]{
 		storeService:  storeService,
-		cdc:           cdc,
-		storePrefix:   storePrefix,
 		max:           max,
 		loadFromStore: loadFromStore,
-		name:          name,
-		logger:        logger,
+		cacheType:     cacheType,
 	}
 	entry.dirty.Store(true)
 	return entry
 }
 
-// getEntry retrieves a single entry from the store
-func (e *StoreCacheEntry) getEntry(ctx context.Context, key string) ([]types.DVPair, error) {
+func (e *CacheEntry[V]) getEntry(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger, key string) (V, error) {
+	var zero V
 	if e.full.Load() {
-		return nil, types.ErrCacheMaxSizeReached
+		return zero, types.ErrCacheMaxSizeReached
 	}
 
+	// If cache is dirty, reload from store
 	if e.dirty.Load() {
-		// For store-backed cache, dirty flag means we should skip cache
-		// and read from main store instead
-		return nil, fmt.Errorf("cache is dirty")
+		if err := e.reload(ctx, cdc, logger); err != nil {
+			return zero, err
+		}
 	}
 
 	store := e.storeService.OpenMemoryStore(ctx)
-	storeKey := append(e.storePrefix, []byte(key)...)
+	storeKey := e.getStoreKey(ctx, key)
 
 	bz, err := store.Get(storeKey)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
 
 	if bz == nil {
-		return []types.DVPair{}, nil
+		return zero, nil
 	}
 
-	var pairs types.DVPairs
-	if err := e.cdc.Unmarshal(bz, &pairs); err != nil {
-		return nil, err
-	}
-
-	return pairs.Pairs, nil
+	return unmarshal[V](cdc, e.cacheType, bz)
 }
 
-// setEntry stores a single entry in the store
-// No mutex needed - store operations are thread-safe
-func (e *StoreCacheEntry) setEntry(ctx context.Context, key string, value []types.DVPair) error {
+func (e *CacheEntry[V]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
 	if e.full.Load() {
 		return types.ErrCacheMaxSizeReached
 	}
 
 	store := e.storeService.OpenMemoryStore(ctx)
-	storeKey := append(e.storePrefix, []byte(key)...)
+	storeKey := e.getStoreKey(ctx, key)
 
-	pairs := types.DVPairs{Pairs: value}
-	bz, err := e.cdc.Marshal(&pairs)
+	bz, err := marshal(cdc, e.cacheType, value)
 	if err != nil {
 		return err
 	}
@@ -213,7 +98,6 @@ func (e *StoreCacheEntry) setEntry(ctx context.Context, key string, value []type
 		return err
 	}
 
-	// Check if we've hit the max size
 	if e.max > 0 {
 		count, err := e.countEntries(ctx)
 		if err != nil {
@@ -227,17 +111,14 @@ func (e *StoreCacheEntry) setEntry(ctx context.Context, key string, value []type
 	return nil
 }
 
-// deleteEntry removes an entry from the store
-// No mutex needed - store operations are thread-safe
-func (e *StoreCacheEntry) deleteEntry(ctx context.Context, key string) error {
+func (e *CacheEntry[V]) deleteEntry(ctx context.Context, key string) error {
 	store := e.storeService.OpenMemoryStore(ctx)
-	storeKey := append(e.storePrefix, []byte(key)...)
+	storeKey := e.getStoreKey(ctx, key)
 
 	if err := store.Delete(storeKey); err != nil {
 		return err
 	}
 
-	// Check if we're now below max size
 	if e.max > 0 {
 		count, err := e.countEntries(ctx)
 		if err != nil {
@@ -251,32 +132,11 @@ func (e *StoreCacheEntry) deleteEntry(ctx context.Context, key string) error {
 	return nil
 }
 
-// countEntries counts total entries in the store (for size limit checking)
-func (e *StoreCacheEntry) countEntries(ctx context.Context) (uint, error) {
+func (e *CacheEntry[V]) clear(ctx context.Context) error {
 	store := e.storeService.OpenMemoryStore(ctx)
+	prefix := e.getPrefix(ctx)
+	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 
-	// Iterate to count
-	iter, err := store.Iterator(e.storePrefix, storetypes.PrefixEndBytes(e.storePrefix))
-	if err != nil {
-		return 0, err
-	}
-	defer iter.Close()
-
-	count := uint(0)
-	for ; iter.Valid(); iter.Next() {
-		count++
-	}
-
-	return count, nil
-}
-
-// clear removes all entries from the store
-// No mutex needed - store operations are thread-safe
-func (e *StoreCacheEntry) clear(ctx context.Context) error {
-	store := e.storeService.OpenMemoryStore(ctx)
-
-	// Iterate and delete all
-	iter, err := store.Iterator(e.storePrefix, storetypes.PrefixEndBytes(e.storePrefix))
 	if err != nil {
 		return err
 	}
@@ -292,49 +152,44 @@ func (e *StoreCacheEntry) clear(ctx context.Context) error {
 	return nil
 }
 
-// getAll retrieves all entries from the store
-// Automatically reloads from main store if cache is dirty
-func (e *StoreCacheEntry) getAll(ctx context.Context) (map[string][]types.DVPair, error) {
+func (e *CacheEntry[V]) getAll(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) (map[string]V, error) {
 	if e.full.Load() {
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
 	// If cache is dirty, reload from main store first
 	if e.dirty.Load() {
-		if err := e.load(ctx); err != nil {
+		if err := e.reload(ctx, cdc, logger); err != nil {
 			return nil, err
 		}
 	}
 
-	store := e.storeService.OpenMemoryStore(ctx)
-	result := make(map[string][]types.DVPair)
+	result := make(map[string]V)
 
-	// Iterate through all entries with our prefix
-	iter, err := store.Iterator(e.storePrefix, storetypes.PrefixEndBytes(e.storePrefix))
+	store := e.storeService.OpenMemoryStore(ctx)
+	prefix := e.getPrefix(ctx)
+	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	if err != nil {
 		return nil, err
 	}
 	defer iter.Close()
 
-	prefixLen := len(e.storePrefix)
+	prefixLen := len([]byte(e.cacheType))
 	for ; iter.Valid(); iter.Next() {
-		// Remove prefix to get the actual key
 		key := string(iter.Key()[prefixLen:])
 
-		var pairs types.DVPairs
-		if err := e.cdc.Unmarshal(iter.Value(), &pairs); err != nil {
+		value, err := unmarshal[V](cdc, e.cacheType, iter.Value())
+		if err != nil {
 			return nil, err
 		}
 
-		result[key] = pairs.Pairs
+		result[key] = value
 	}
 
 	return result, nil
 }
 
-// load loads all data from the main store into the cache store
-// Mutex protects against concurrent reloads
-func (e *StoreCacheEntry) load(ctx context.Context) error {
+func (e *CacheEntry[V]) reload(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) error {
 	e.loadMu.Lock()
 	defer e.loadMu.Unlock()
 
@@ -344,8 +199,8 @@ func (e *StoreCacheEntry) load(ctx context.Context) error {
 		return nil
 	}
 
-	if e.logger != nil {
-		e.logger(ctx).Info(fmt.Sprintf("%s cache is dirty. Reinitializing cache from store.", e.name))
+	if logger != nil {
+		logger(ctx).Info(fmt.Sprintf("%s cache is dirty. Reinitializing cache from store.", e.cacheType))
 	}
 
 	data, err := e.loadFromStore(ctx)
@@ -360,7 +215,7 @@ func (e *StoreCacheEntry) load(ctx context.Context) error {
 
 	// Load all entries into the cache store
 	for key, value := range data {
-		if err := e.setEntry(ctx, key, value); err != nil {
+		if err := e.setEntry(ctx, cdc, key, value); err != nil {
 			return err
 		}
 		if e.full.Load() {
@@ -372,202 +227,175 @@ func (e *StoreCacheEntry) load(ctx context.Context) error {
 	return nil
 }
 
+func (e *CacheEntry[V]) countEntries(ctx context.Context) (uint, error) {
+	store := e.storeService.OpenMemoryStore(ctx)
+	prefix := e.getPrefix(ctx)
+	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	count := uint(0)
+	for ; iter.Valid(); iter.Next() {
+		count++
+	}
+
+	return count, nil
+}
+
+func (e *CacheEntry[V]) getStoreKey(ctx context.Context, key string) []byte {
+	prefix := e.getPrefix(ctx)
+	return append(prefix, []byte(key)...)
+}
+
+func (e *CacheEntry[V]) getPrefix(ctx context.Context) []byte {
+	return []byte(e.cacheType)
+}
+
+func marshal[V any](cdc codec.BinaryCodec, cacheType CacheEntryType, value V) ([]byte, error) {
+	switch cacheType {
+	case UnbondingValidators:
+		addrs := any(value).([]string)
+		return cdc.Marshal(&types.ValAddresses{Addresses: addrs})
+	case UnbondingDelegations:
+		pairs := any(value).([]types.DVPair)
+		return cdc.Marshal(&types.DVPairs{Pairs: pairs})
+	case Redelegations:
+		triplets := any(value).([]types.DVVTriplet)
+		return cdc.Marshal(&types.DVVTriplets{Triplets: triplets})
+	default:
+		return nil, fmt.Errorf("unknown cache type: %s", cacheType)
+	}
+}
+
+func unmarshal[V any](cdc codec.BinaryCodec, cacheType CacheEntryType, bz []byte) (V, error) {
+	var zero V
+	switch cacheType {
+	case UnbondingValidators:
+		var valAddrs types.ValAddresses
+		if err := cdc.Unmarshal(bz, &valAddrs); err != nil {
+			return zero, err
+		}
+		return any(valAddrs.Addresses).(V), nil
+	case UnbondingDelegations:
+		var pairs types.DVPairs
+		if err := cdc.Unmarshal(bz, &pairs); err != nil {
+			return zero, err
+		}
+		return any(pairs.Pairs).(V), nil
+	case Redelegations:
+		var triplets types.DVVTriplets
+		if err := cdc.Unmarshal(bz, &triplets); err != nil {
+			return zero, err
+		}
+		return any(triplets.Triplets).(V), nil
+	default:
+		return zero, fmt.Errorf("unknown cache type: %s", cacheType)
+	}
+}
+
 type ValidatorsQueueCache struct {
-	unbondingValidatorsQueue  *CacheEntry[string, []string, string]
-	unbondingDelegationsQueue *StoreCacheEntry
-	redelegationsQueue        *CacheEntry[string, []types.DVVTriplet, types.DVVTriplet]
+	unbondingValidatorsQueue  *CacheEntry[[]string]
+	unbondingDelegationsQueue *CacheEntry[[]types.DVPair]
+	redelegationsQueue        *CacheEntry[[]types.DVVTriplet]
+	cdc                       codec.BinaryCodec
 	logger                    func(ctx context.Context) log.Logger
 }
 
 func NewValidatorsQueueCache(
 	size uint,
-	logger func(ctx context.Context) log.Logger,
 	cacheStoreService corestoretypes.MemoryStoreService,
-	cdc codec.BinaryCodec,
 	loadUnbondingValidators func(ctx context.Context) (map[string][]string, error),
 	loadUnbondingDelegations func(ctx context.Context) (map[string][]types.DVPair, error),
 	loadRedelegations func(ctx context.Context) (map[string][]types.DVVTriplet, error),
+	cdc codec.BinaryCodec,
+	logger func(ctx context.Context) log.Logger,
 ) *ValidatorsQueueCache {
-	// Use store-backed cache for unbonding delegations (POC)
-	unbondingDelegationsCache := NewStoreCacheEntry(
-		cacheStoreService,
-		cdc,
-		[]byte("ubd_queue/"), // prefix for unbonding delegations in cache store
-		size,
-		loadUnbondingDelegations, // loader function
-		"unbonding_delegations",
-		logger, // logger for cache reload notifications
-	)
-
 	return NewCache(
-		NewCacheEntry(size, loadUnbondingValidators),
-		unbondingDelegationsCache,
-		NewCacheEntry(size, loadRedelegations),
+		NewCacheEntry(
+			cacheStoreService,
+			size,
+			loadUnbondingValidators,
+			UnbondingValidators,
+		),
+		NewCacheEntry(
+			cacheStoreService,
+			size,
+			loadUnbondingDelegations,
+			UnbondingDelegations,
+		),
+		NewCacheEntry(
+			cacheStoreService,
+			size,
+			loadRedelegations,
+			Redelegations,
+		),
+		cdc,
 		logger,
 	)
 }
 
 func NewCache(
-	unbondingValidatorsQueue *CacheEntry[string, []string, string],
-	unbondingDelegationsQueue *StoreCacheEntry,
-	redelegationsQueue *CacheEntry[string, []types.DVVTriplet, types.DVVTriplet],
+	unbondingValidatorsQueue *CacheEntry[[]string],
+	unbondingDelegationsQueue *CacheEntry[[]types.DVPair],
+	redelegationsQueue *CacheEntry[[]types.DVVTriplet],
+	cdc codec.BinaryCodec,
 	logger func(ctx context.Context) log.Logger,
 ) *ValidatorsQueueCache {
 	return &ValidatorsQueueCache{
 		unbondingValidatorsQueue:  unbondingValidatorsQueue,
 		unbondingDelegationsQueue: unbondingDelegationsQueue,
 		redelegationsQueue:        redelegationsQueue,
+		cdc:                       cdc,
 		logger:                    logger,
 	}
 }
 
-func (c *ValidatorsQueueCache) loadUnbondingValidatorsQueue(ctx context.Context) error {
-	data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
-	if err != nil {
-		return err
-	}
-
-	c.unbondingValidatorsQueue.clear()
-
-	for key, value := range data {
-		c.unbondingValidatorsQueue.setEntry(key, value)
-		if c.unbondingValidatorsQueue.full.Load() {
-			return types.ErrCacheMaxSizeReached
-		}
-	}
-	c.unbondingValidatorsQueue.dirty.Store(false)
-	return nil
-}
-
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) (map[string][]string, error) {
-	if c.unbondingValidatorsQueue.full.Load() {
-		return nil, types.ErrCacheMaxSizeReached
-	}
-
-	if c.unbondingValidatorsQueue.dirty.Load() {
-		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
-		err := c.loadUnbondingValidatorsQueue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return c.unbondingValidatorsQueue.get(), nil
+	return c.unbondingValidatorsQueue.getAll(ctx, c.cdc, c.logger)
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
-	if c.unbondingValidatorsQueue.full.Load() {
-		return nil, types.ErrCacheMaxSizeReached
-	}
-
-	if c.unbondingValidatorsQueue.dirty.Load() {
-		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
-		err := c.loadUnbondingValidatorsQueue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return c.unbondingValidatorsQueue.getEntry(types.GetCacheValidatorQueueKey(endTime, endHeight)), nil
+	return c.unbondingValidatorsQueue.getEntry(ctx, c.cdc, c.logger, types.GetCacheValidatorQueueKey(endTime, endHeight))
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(ctx context.Context, key string, addrs []string) error {
-	if c.unbondingValidatorsQueue.full.Load() {
-		c.unbondingValidatorsQueue.dirty.Store(true)
-		return types.ErrCacheMaxSizeReached
-	}
-	c.unbondingValidatorsQueue.setEntry(key, addrs)
-	return nil
+	return c.unbondingValidatorsQueue.setEntry(ctx, c.cdc, key, addrs)
 }
 
-func (c *ValidatorsQueueCache) DeleteUnbondingValidatorQueueEntry(key string) {
-	c.unbondingValidatorsQueue.deleteEntry(key)
+func (c *ValidatorsQueueCache) DeleteUnbondingValidatorQueueEntry(ctx context.Context, key string) error {
+	return c.unbondingValidatorsQueue.deleteEntry(ctx, key)
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue(ctx context.Context) (map[string][]types.DVPair, error) {
-	// getAll handles dirty check and reload automatically
-	return c.unbondingDelegationsQueue.getAll(ctx)
+	return c.unbondingDelegationsQueue.getAll(ctx, c.cdc, c.logger)
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueueEntry(ctx context.Context, endTime time.Time) ([]types.DVPair, error) {
-	// Store-backed cache: read directly from store (through context)
-	pairs, err := c.unbondingDelegationsQueue.getEntry(ctx, sdk.FormatTimeString(endTime))
-	if err != nil {
-		// If cache is dirty or errored, return nil to fallback to main store
-		return nil, err
-	}
-	return pairs, nil
+	return c.unbondingDelegationsQueue.getEntry(ctx, c.cdc, c.logger, sdk.FormatTimeString(endTime))
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingDelegationsQueueEntry(ctx context.Context, key string, delegations []types.DVPair) error {
-	// Store-backed cache: write directly to store (through context)
-	return c.unbondingDelegationsQueue.setEntry(ctx, key, delegations)
+	return c.unbondingDelegationsQueue.setEntry(ctx, c.cdc, key, delegations)
 }
 
 func (c *ValidatorsQueueCache) DeleteUnbondingDelegationQueueEntry(ctx context.Context, key string) error {
-	// Store-backed cache: delete from store (through context)
 	return c.unbondingDelegationsQueue.deleteEntry(ctx, key)
 }
 
-func (c *ValidatorsQueueCache) loadRedelegationsQueue(ctx context.Context) error {
-	data, err := c.redelegationsQueue.loadFromStore(ctx)
-	if err != nil {
-		return err
-	}
-
-	c.redelegationsQueue.clear()
-
-	for key, value := range data {
-		c.redelegationsQueue.setEntry(key, value)
-		if c.redelegationsQueue.full.Load() {
-			return types.ErrCacheMaxSizeReached
-		}
-	}
-	c.redelegationsQueue.dirty.Store(false)
-	return nil
-}
-
 func (c *ValidatorsQueueCache) GetRedelegationsQueue(ctx context.Context) (map[string][]types.DVVTriplet, error) {
-	if c.redelegationsQueue.full.Load() {
-		return nil, types.ErrCacheMaxSizeReached
-	}
-
-	if c.redelegationsQueue.dirty.Load() {
-		c.logger(ctx).Info("Redelegations queue is dirty. Reinitializing cache from store.")
-		err := c.loadRedelegationsQueue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return c.redelegationsQueue.get(), nil
+	return c.redelegationsQueue.getAll(ctx, c.cdc, c.logger)
 }
 
 func (c *ValidatorsQueueCache) GetRedelegationsQueueEntry(ctx context.Context, endTime time.Time) ([]types.DVVTriplet, error) {
-	if c.redelegationsQueue.full.Load() {
-		return nil, types.ErrCacheMaxSizeReached
-	}
-
-	if c.redelegationsQueue.dirty.Load() {
-		c.logger(ctx).Info("Redelegations queue is dirty. Reinitializing cache from store.")
-		err := c.loadRedelegationsQueue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return c.redelegationsQueue.getEntry(sdk.FormatTimeString(endTime)), nil
+	return c.redelegationsQueue.getEntry(ctx, c.cdc, c.logger, sdk.FormatTimeString(endTime))
 }
 
 func (c *ValidatorsQueueCache) SetRedelegationsQueueEntry(ctx context.Context, key string, redelegations []types.DVVTriplet) error {
-	if c.redelegationsQueue.full.Load() {
-		c.redelegationsQueue.dirty.Store(true)
-		return types.ErrCacheMaxSizeReached
-	}
-	c.redelegationsQueue.setEntry(key, redelegations)
-	return nil
+	return c.redelegationsQueue.setEntry(ctx, c.cdc, key, redelegations)
 }
 
-func (c *ValidatorsQueueCache) DeleteRedelegationsQueueEntry(key string) {
-	c.redelegationsQueue.deleteEntry(key)
+func (c *ValidatorsQueueCache) DeleteRedelegationsQueueEntry(ctx context.Context, key string) error {
+	return c.redelegationsQueue.deleteEntry(ctx, key)
 }

@@ -86,12 +86,12 @@ func NewKeeper(
 		}
 		k.cache = cache.NewValidatorsQueueCache(
 			uint(maxCacheSize),
-			k.Logger,
 			cacheStoreService,
-			cdc,
 			k.GetAllUnbondingValidatorsFromStore,
 			k.GetAllUnbondingDelegationsQueueFromStore,
 			k.GetAllRedelegationsQueueFromStore,
+			cdc,
+			k.Logger,
 		)
 	}
 
