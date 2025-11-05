@@ -46,7 +46,9 @@ func (s *KeeperTestSuite) SetupTest() {
 	require := s.Require()
 	key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 	storeService := runtime.NewKVStoreService(key)
-	testCtx := testutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+	memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+	memStoreService := runtime.NewMemStoreService(memKey)
+	testCtx := testutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 	ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 	encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -61,6 +63,7 @@ func (s *KeeperTestSuite) SetupTest() {
 	keeper := stakingkeeper.NewKeeper(
 		encCfg.Codec,
 		storeService,
+		memStoreService,
 		accountKeeper,
 		bankKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),

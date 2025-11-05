@@ -487,7 +487,9 @@ func (s *KeeperTestSuite) TestGetAllPendingUnbondingValidators() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -502,6 +504,7 @@ func (s *KeeperTestSuite) TestGetAllPendingUnbondingValidators() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -588,7 +591,9 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -604,6 +609,7 @@ func (s *KeeperTestSuite) TestInsertUnbondingValidatorQueue() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -735,7 +741,9 @@ func (s *KeeperTestSuite) TestGetUnbondingValidators() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -750,6 +758,7 @@ func (s *KeeperTestSuite) TestGetUnbondingValidators() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -879,7 +888,9 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -895,6 +906,7 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -948,7 +960,9 @@ func (s *KeeperTestSuite) TestUnbondingValidatorQueueCacheRecovery() {
 	// Cache size is based on the number of unique time+height keys, not individual validators
 	key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 	storeService := runtime.NewKVStoreService(key)
-	testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+	memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+	memStoreService := runtime.NewMemStoreService(memKey)
+	testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 	ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 	encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -965,6 +979,7 @@ func (s *KeeperTestSuite) TestUnbondingValidatorQueueCacheRecovery() {
 	keeper := stakingkeeper.NewKeeper(
 		encCfg.Codec,
 		storeService,
+		memStoreService,
 		accountKeeper,
 		bankKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),

@@ -1214,7 +1214,9 @@ func (s *KeeperTestSuite) TestGetUBDQueueTimeSlice() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -1229,6 +1231,7 @@ func (s *KeeperTestSuite) TestGetUBDQueueTimeSlice() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -1354,7 +1357,9 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -1369,6 +1374,7 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -1465,7 +1471,9 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -1480,6 +1488,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -1618,7 +1627,9 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -1637,6 +1648,7 @@ func (s *KeeperTestSuite) TestDequeueAllMatureUBDQueue() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -1720,7 +1732,9 @@ func (s *KeeperTestSuite) TestUnbondingDelegationQueueCacheRecovery() {
 	// Cache size is based on the number of unique timestamps (keys), not individual entries
 	key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 	storeService := runtime.NewKVStoreService(key)
-	testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+	memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+	memStoreService := runtime.NewMemStoreService(memKey)
+	testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 	ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 	encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -1740,6 +1754,7 @@ func (s *KeeperTestSuite) TestUnbondingDelegationQueueCacheRecovery() {
 	keeper := stakingkeeper.NewKeeper(
 		encCfg.Codec,
 		storeService,
+		memStoreService,
 		accountKeeper,
 		bankKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -1891,7 +1906,9 @@ func (s *KeeperTestSuite) TestGetRedelegationQueueTimeSlice() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -1906,6 +1923,7 @@ func (s *KeeperTestSuite) TestGetRedelegationQueueTimeSlice() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -2022,7 +2040,9 @@ func (s *KeeperTestSuite) TestGetPendingRedelegations() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -2037,6 +2057,7 @@ func (s *KeeperTestSuite) TestGetPendingRedelegations() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -2127,7 +2148,9 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -2142,6 +2165,7 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -2262,7 +2286,9 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 		s.Run(tc.name, func() {
 			key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 			storeService := runtime.NewKVStoreService(key)
-			testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+			memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+			memStoreService := runtime.NewMemStoreService(memKey)
+			testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 			ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 			encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -2280,6 +2306,7 @@ func (s *KeeperTestSuite) TestDequeueAllMatureRedelegationQueue() {
 			keeper := stakingkeeper.NewKeeper(
 				encCfg.Codec,
 				storeService,
+				memStoreService,
 				accountKeeper,
 				bankKeeper,
 				authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -2370,7 +2397,9 @@ func (s *KeeperTestSuite) TestRedelegationQueueCacheRecovery() {
 	// Cache size is based on the number of unique timestamps (keys), not individual entries
 	key := storetypes.NewKVStoreKey(stakingtypes.StoreKey)
 	storeService := runtime.NewKVStoreService(key)
-	testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+	memKey := storetypes.NewMemoryStoreKey(stakingtypes.CacheStoreKey)
+	memStoreService := runtime.NewMemStoreService(memKey)
+	testCtx := sdktestutil.DefaultContextWithMemoryStore(s.T(), key, storetypes.NewTransientStoreKey("transient_test"), memKey)
 	ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 	encCfg := moduletestutil.MakeTestEncodingConfig()
 
@@ -2389,6 +2418,7 @@ func (s *KeeperTestSuite) TestRedelegationQueueCacheRecovery() {
 	keeper := stakingkeeper.NewKeeper(
 		encCfg.Codec,
 		storeService,
+		memStoreService,
 		accountKeeper,
 		bankKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
