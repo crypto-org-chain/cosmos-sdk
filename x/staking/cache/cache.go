@@ -23,7 +23,7 @@ const (
 	Redelegations        CacheEntryType = "redelegations"
 )
 
-type CacheEntry[V any] struct {
+type CacheEntry[V ~[]E, E any] struct {
 	// protects bulk load operations to prevent concurrent reloads
 	loadMu sync.Mutex
 
@@ -37,13 +37,13 @@ type CacheEntry[V any] struct {
 	cacheType CacheEntryType
 }
 
-func NewCacheEntry[V any](
+func NewCacheEntry[V ~[]E, E any](
 	storeService corestoretypes.MemoryStoreService,
 	max uint,
 	loadFromStore func(ctx context.Context) (map[string]V, error),
 	cacheType CacheEntryType,
-) *CacheEntry[V] {
-	entry := &CacheEntry[V]{
+) *CacheEntry[V, E] {
+	entry := &CacheEntry[V, E]{
 		storeService:  storeService,
 		max:           max,
 		loadFromStore: loadFromStore,
@@ -53,16 +53,15 @@ func NewCacheEntry[V any](
 	return entry
 }
 
-func (e *CacheEntry[V]) getEntry(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger, key string) (V, error) {
-	var zero V
+func (e *CacheEntry[V, E]) getEntry(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger, key string) (V, error) {
 	if e.full.Load() {
-		return zero, types.ErrCacheMaxSizeReached
+		return V{}, types.ErrCacheMaxSizeReached
 	}
 
 	// If cache is dirty, reload from store
 	if e.dirty.Load() {
 		if err := e.reload(ctx, cdc, logger); err != nil {
-			return zero, err
+			return V{}, err
 		}
 	}
 
@@ -71,17 +70,17 @@ func (e *CacheEntry[V]) getEntry(ctx context.Context, cdc codec.BinaryCodec, log
 
 	bz, err := store.Get(storeKey)
 	if err != nil {
-		return zero, err
+		return V{}, err
 	}
 
 	if bz == nil {
-		return zero, nil
+		return V{}, nil
 	}
 
 	return unmarshal[V](cdc, e.cacheType, bz)
 }
 
-func (e *CacheEntry[V]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
+func (e *CacheEntry[V, E]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
 	if e.full.Load() {
 		e.dirty.Store(true)
 		return types.ErrCacheMaxSizeReached
@@ -112,7 +111,7 @@ func (e *CacheEntry[V]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key
 	return nil
 }
 
-func (e *CacheEntry[V]) deleteEntry(ctx context.Context, key string) error {
+func (e *CacheEntry[V, E]) deleteEntry(ctx context.Context, key string) error {
 	store := e.storeService.OpenMemoryStore(ctx)
 	storeKey := e.getStoreKey(key)
 
@@ -133,7 +132,7 @@ func (e *CacheEntry[V]) deleteEntry(ctx context.Context, key string) error {
 	return nil
 }
 
-func (e *CacheEntry[V]) clear(ctx context.Context) error {
+func (e *CacheEntry[V, E]) clear(ctx context.Context) error {
 	store := e.storeService.OpenMemoryStore(ctx)
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
@@ -153,7 +152,7 @@ func (e *CacheEntry[V]) clear(ctx context.Context) error {
 	return nil
 }
 
-func (e *CacheEntry[V]) getAll(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) (map[string]V, error) {
+func (e *CacheEntry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) (map[string]V, error) {
 	if e.full.Load() {
 		return nil, types.ErrCacheMaxSizeReached
 	}
@@ -190,7 +189,7 @@ func (e *CacheEntry[V]) getAll(ctx context.Context, cdc codec.BinaryCodec, logge
 	return result, nil
 }
 
-func (e *CacheEntry[V]) reload(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) error {
+func (e *CacheEntry[V, E]) reload(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) error {
 	e.loadMu.Lock()
 	defer e.loadMu.Unlock()
 
@@ -225,7 +224,7 @@ func (e *CacheEntry[V]) reload(ctx context.Context, cdc codec.BinaryCodec, logge
 	return nil
 }
 
-func (e *CacheEntry[V]) countEntries(ctx context.Context) (uint, error) {
+func (e *CacheEntry[V, E]) countEntries(ctx context.Context) (uint, error) {
 	store := e.storeService.OpenMemoryStore(ctx)
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
@@ -242,12 +241,12 @@ func (e *CacheEntry[V]) countEntries(ctx context.Context) (uint, error) {
 	return count, nil
 }
 
-func (e *CacheEntry[V]) getStoreKey(key string) []byte {
+func (e *CacheEntry[V, E]) getStoreKey(key string) []byte {
 	prefix := e.getPrefix()
 	return append(prefix, []byte(key)...)
 }
 
-func (e *CacheEntry[V]) getPrefix() []byte {
+func (e *CacheEntry[V, E]) getPrefix() []byte {
 	return []byte(e.cacheType)
 }
 
@@ -294,9 +293,9 @@ func unmarshal[V any](cdc codec.BinaryCodec, cacheType CacheEntryType, bz []byte
 }
 
 type ValidatorsQueueCache struct {
-	unbondingValidatorsQueue  *CacheEntry[[]string]
-	unbondingDelegationsQueue *CacheEntry[[]types.DVPair]
-	redelegationsQueue        *CacheEntry[[]types.DVVTriplet]
+	unbondingValidatorsQueue  *CacheEntry[[]string, string]
+	unbondingDelegationsQueue *CacheEntry[[]types.DVPair, types.DVPair]
+	redelegationsQueue        *CacheEntry[[]types.DVVTriplet, types.DVVTriplet]
 	cdc                       codec.BinaryCodec
 	logger                    func(ctx context.Context) log.Logger
 }
@@ -335,9 +334,9 @@ func NewValidatorsQueueCache(
 }
 
 func NewCache(
-	unbondingValidatorsQueue *CacheEntry[[]string],
-	unbondingDelegationsQueue *CacheEntry[[]types.DVPair],
-	redelegationsQueue *CacheEntry[[]types.DVVTriplet],
+	unbondingValidatorsQueue *CacheEntry[[]string, string],
+	unbondingDelegationsQueue *CacheEntry[[]types.DVPair, types.DVPair],
+	redelegationsQueue *CacheEntry[[]types.DVVTriplet, types.DVVTriplet],
 	cdc codec.BinaryCodec,
 	logger func(ctx context.Context) log.Logger,
 ) *ValidatorsQueueCache {
