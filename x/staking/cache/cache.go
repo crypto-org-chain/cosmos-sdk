@@ -83,6 +83,7 @@ func (e *CacheEntry[V]) getEntry(ctx context.Context, cdc codec.BinaryCodec, log
 
 func (e *CacheEntry[V]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
 	if e.full.Load() {
+		e.dirty.Store(true)
 		return types.ErrCacheMaxSizeReached
 	}
 
@@ -217,9 +218,6 @@ func (e *CacheEntry[V]) reload(ctx context.Context, cdc codec.BinaryCodec, logge
 	for key, value := range data {
 		if err := e.setEntry(ctx, cdc, key, value); err != nil {
 			return err
-		}
-		if e.full.Load() {
-			return types.ErrCacheMaxSizeReached
 		}
 	}
 
