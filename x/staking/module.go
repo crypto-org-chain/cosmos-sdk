@@ -205,7 +205,8 @@ type ModuleInputs struct {
 	BankKeeper            types.BankKeeper
 	Cdc                   codec.Codec
 	StoreService          store.KVStoreService
-	MaxCacheSize          int `optional:"true"`
+	CacheStoreService     store.MemoryStoreService `optional:"true"` // Memory store for cache
+	MaxCacheSize          int                  `optional:"true"`
 
 	// LegacySubspace is used solely for migration of x/params managed parameters
 	LegacySubspace exported.Subspace `optional:"true"`
@@ -229,6 +230,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 	k := keeper.NewKeeper(
 		in.Cdc,
 		in.StoreService,
+		in.CacheStoreService, // Memory store for cache (optional, can be nil)
 		in.AccountKeeper,
 		in.BankKeeper,
 		authority.String(),

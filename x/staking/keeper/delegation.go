@@ -576,7 +576,10 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 		}
 
 		if k.cache != nil {
-			k.cache.DeleteUnbondingDelegationQueueEntry(key)
+			// Note: errors from cache deletion are not fatal, but we log them
+			if err := k.cache.DeleteUnbondingDelegationQueueEntry(ctx, key); err != nil {
+				k.Logger(ctx).Error("failed to delete unbonding delegation from cache", "key", key, "error", err)
+			}
 		}
 	}
 

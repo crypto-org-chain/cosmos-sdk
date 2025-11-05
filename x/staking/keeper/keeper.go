@@ -26,6 +26,7 @@ var _ types.DelegationSet = Keeper{}
 // Keeper of the x/staking store
 type Keeper struct {
 	storeService          storetypes.KVStoreService
+	cacheStoreService     storetypes.MemoryStoreService
 	cdc                   codec.BinaryCodec
 	authKeeper            types.AccountKeeper
 	bankKeeper            types.BankKeeper
@@ -41,6 +42,7 @@ type Keeper struct {
 func NewKeeper(
 	cdc codec.BinaryCodec,
 	storeService storetypes.KVStoreService,
+	cacheStoreService storetypes.MemoryStoreService,
 	ak types.AccountKeeper,
 	bk types.BankKeeper,
 	authority string,
@@ -68,6 +70,7 @@ func NewKeeper(
 
 	k := &Keeper{
 		storeService:          storeService,
+		cacheStoreService:     cacheStoreService,
 		cdc:                   cdc,
 		authKeeper:            ak,
 		bankKeeper:            bk,
@@ -78,9 +81,14 @@ func NewKeeper(
 	}
 
 	if maxCacheSize >= 0 {
+		if cacheStoreService == nil {
+			panic("staking cache store service should not be nil when cache is enabled (>=0)")
+		}
 		k.cache = cache.NewValidatorsQueueCache(
 			uint(maxCacheSize),
 			k.Logger,
+			cacheStoreService,
+			cdc,
 			k.GetAllUnbondingValidatorsFromStore,
 			k.GetAllUnbondingDelegationsQueueFromStore,
 			k.GetAllRedelegationsQueueFromStore,
