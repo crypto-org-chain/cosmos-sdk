@@ -134,7 +134,7 @@ func (e *CacheEntry[V]) deleteEntry(ctx context.Context, key string) error {
 
 func (e *CacheEntry[V]) clear(ctx context.Context) error {
 	store := e.storeService.OpenMemoryStore(ctx)
-	prefix := e.getPrefix(ctx)
+	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 
 	if err != nil {
@@ -167,7 +167,7 @@ func (e *CacheEntry[V]) getAll(ctx context.Context, cdc codec.BinaryCodec, logge
 	result := make(map[string]V)
 
 	store := e.storeService.OpenMemoryStore(ctx)
-	prefix := e.getPrefix(ctx)
+	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	if err != nil {
 		return nil, err
@@ -229,7 +229,7 @@ func (e *CacheEntry[V]) reload(ctx context.Context, cdc codec.BinaryCodec, logge
 
 func (e *CacheEntry[V]) countEntries(ctx context.Context) (uint, error) {
 	store := e.storeService.OpenMemoryStore(ctx)
-	prefix := e.getPrefix(ctx)
+	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	if err != nil {
 		return 0, err
@@ -245,11 +245,11 @@ func (e *CacheEntry[V]) countEntries(ctx context.Context) (uint, error) {
 }
 
 func (e *CacheEntry[V]) getStoreKey(ctx context.Context, key string) []byte {
-	prefix := e.getPrefix(ctx)
+	prefix := e.getPrefix()
 	return append(prefix, []byte(key)...)
 }
 
-func (e *CacheEntry[V]) getPrefix(ctx context.Context) []byte {
+func (e *CacheEntry[V]) getPrefix() []byte {
 	return []byte(e.cacheType)
 }
 
