@@ -178,7 +178,7 @@ func (app *App) QueryHelper() *baseapp.QueryServiceTestHelper {
 }
 
 // CreateMultiStore is a helper for setting up multiple stores for provided modules.
-func CreateMultiStore(keys map[string]*storetypes.KVStoreKey, okeys map[string]*storetypes.ObjectStoreKey, logger log.Logger) storetypes.CommitMultiStore {
+func CreateMultiStore(keys map[string]*storetypes.KVStoreKey, okeys map[string]*storetypes.ObjectStoreKey, memKeys map[string]*storetypes.MemoryStoreKey, logger log.Logger) storetypes.CommitMultiStore {
 	db := dbm.NewMemDB()
 	cms := store.NewCommitMultiStore(db, logger, metrics.NewNoOpMetrics())
 
@@ -188,6 +188,10 @@ func CreateMultiStore(keys map[string]*storetypes.KVStoreKey, okeys map[string]*
 
 	for key := range okeys {
 		cms.MountStoreWithDB(okeys[key], storetypes.StoreTypeObject, nil)
+	}
+
+	for key := range memKeys {
+		cms.MountStoreWithDB(memKeys[key], storetypes.StoreTypeMemory, nil)
 	}
 
 	_ = cms.LoadLatestVersion()

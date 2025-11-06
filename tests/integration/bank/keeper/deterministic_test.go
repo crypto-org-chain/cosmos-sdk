@@ -31,6 +31,7 @@ import (
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
 var (
@@ -65,10 +66,11 @@ type deterministicFixture struct {
 func initDeterministicFixture(t *testing.T) *deterministicFixture {
 	keys := storetypes.NewKVStoreKeys(authtypes.StoreKey, banktypes.StoreKey)
 	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey)
+	memKeys := storetypes.NewMemoryStoreKeys(stakingtypes.CacheStoreKey)
 	cdc := moduletestutil.MakeTestEncodingConfig(auth.AppModuleBasic{}, bank.AppModuleBasic{}).Codec
 
 	logger := log.NewTestLogger(t)
-	cms := integration.CreateMultiStore(keys, okeys, logger)
+	cms := integration.CreateMultiStore(keys, okeys, memKeys, logger)
 
 	newCtx := sdk.NewContext(cms, cmtproto.Header{}, true, logger)
 
