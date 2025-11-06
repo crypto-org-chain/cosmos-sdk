@@ -56,7 +56,7 @@ func initFixture(t testing.TB) *fixture {
 		banktypes.ObjectStoreKey,
 	)
 	memKeys := storetypes.NewMemoryStoreKeys(stakingtypes.CacheStoreKey)
-	
+
 	cdc := moduletestutil.MakeTestEncodingConfig(auth.AppModuleBasic{}, bank.AppModuleBasic{}, gov.AppModuleBasic{}).Codec
 
 	logger := log.NewTestLogger(t)
