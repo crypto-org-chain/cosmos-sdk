@@ -230,7 +230,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 	k := keeper.NewKeeper(
 		in.Cdc,
 		in.StoreService,
-		in.CacheStoreService, // Memory store for cache (optional, can be nil)
+		in.CacheStoreService, // Memory store for cache
 		in.AccountKeeper,
 		in.BankKeeper,
 		authority.String(),
