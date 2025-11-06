@@ -43,7 +43,7 @@ func NewEntry[V ~[]E, E any](
 	cacheType EntryType,
 ) *Entry[V, E] {
 	if storeService == nil {
-		panic(fmt.Sprintf("store service should not be nil for cache type %s", cacheType))
+		panic(fmt.Sprintf("storeService is nil for cache type %s", cacheType))
 	}
 	if loadFromStore == nil {
 		panic(fmt.Sprintf("loadFromStore is nil for cache type %s", cacheType))
@@ -110,7 +110,6 @@ func (e *Entry[V, E]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key s
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.setEntryUnsafe(ctx, cdc, key, value)
-
 }
 
 // setEntryUnsafe works the same as setEntry but the caller is responsible for holding the lock
@@ -143,7 +142,6 @@ func (e *Entry[V, E]) setEntryUnsafe(ctx context.Context, cdc codec.BinaryCodec,
 	}
 
 	return nil
-
 }
 
 func (e *Entry[V, E]) deleteEntry(ctx context.Context, key string) error {
@@ -175,7 +173,6 @@ func (e *Entry[V, E]) clearUnsafe(ctx context.Context) error {
 	store := e.storeService.OpenMemoryStore(ctx)
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
-
 	if err != nil {
 		return err
 	}
@@ -269,7 +266,7 @@ type ValidatorsQueueCache struct {
 
 func NewValidatorsQueueCache(
 	size uint,
-	cacheStoreService corestoretypes.MemoryStoreService,
+	memStoreService corestoretypes.MemoryStoreService,
 	loadUnbondingValidators func(ctx context.Context) (map[string][]string, error),
 	loadUnbondingDelegations func(ctx context.Context) (map[string][]types.DVPair, error),
 	loadRedelegations func(ctx context.Context) (map[string][]types.DVVTriplet, error),
@@ -278,19 +275,19 @@ func NewValidatorsQueueCache(
 ) *ValidatorsQueueCache {
 	return NewCache(
 		NewEntry(
-			cacheStoreService,
+			memStoreService,
 			size,
 			loadUnbondingValidators,
 			UnbondingValidators,
 		),
 		NewEntry(
-			cacheStoreService,
+			memStoreService,
 			size,
 			loadUnbondingDelegations,
 			UnbondingDelegations,
 		),
 		NewEntry(
-			cacheStoreService,
+			memStoreService,
 			size,
 			loadRedelegations,
 			Redelegations,
