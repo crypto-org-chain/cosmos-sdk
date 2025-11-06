@@ -29,6 +29,7 @@ type Entry[V ~[]E, E any] struct {
 
 	dirty atomic.Bool
 	full  atomic.Bool
+	count atomic.Uint64 // track number of entries only if max > 0
 
 	max uint
 
@@ -122,6 +123,15 @@ func (e *Entry[V, E]) setEntryUnsafe(ctx context.Context, cdc codec.BinaryCodec,
 	store := e.storeService.OpenMemoryStore(ctx)
 	storeKey := e.getStoreKey(key)
 
+	exists := false
+	if e.max > 0 {
+		existingBz, err := store.Get(storeKey)
+		if err != nil {
+			return err
+		}
+		exists = existingBz != nil
+	}
+
 	bz, err := marshal(cdc, e.cacheType, value)
 	if err != nil {
 		return err
@@ -131,12 +141,10 @@ func (e *Entry[V, E]) setEntryUnsafe(ctx context.Context, cdc codec.BinaryCodec,
 		return err
 	}
 
-	if e.max > 0 {
-		count, err := e.countEntries(ctx)
-		if err != nil {
-			return err
-		}
-		if count >= e.max {
+	// Only increment counter if this is a new key
+	if e.max > 0 && !exists {
+		newCount := e.count.Add(1)
+		if newCount >= uint64(e.max) {
 			e.full.Store(true)
 		}
 	}
@@ -151,16 +159,23 @@ func (e *Entry[V, E]) deleteEntry(ctx context.Context, key string) error {
 	store := e.storeService.OpenMemoryStore(ctx)
 	storeKey := e.getStoreKey(key)
 
+	exists := false
+	if e.max > 0 {
+		existingBz, err := store.Get(storeKey)
+		if err != nil {
+			return err
+		}
+		exists = existingBz != nil
+	}
+
 	if err := store.Delete(storeKey); err != nil {
 		return err
 	}
 
-	if e.max > 0 {
-		count, err := e.countEntries(ctx)
-		if err != nil {
-			return err
-		}
-		if count < e.max {
+	// Only decrement counter if the key actually existed
+	if e.max > 0 && exists {
+		newCount := e.count.Add(^uint64(0)) // Subtract 1 using two's complement
+		if newCount < uint64(e.max) {
 			e.full.Store(false)
 		}
 	}
@@ -184,25 +199,9 @@ func (e *Entry[V, E]) clearUnsafe(ctx context.Context) error {
 		}
 	}
 
+	e.count.Store(0)
 	e.full.Store(false)
 	return nil
-}
-
-func (e *Entry[V, E]) countEntries(ctx context.Context) (uint, error) {
-	store := e.storeService.OpenMemoryStore(ctx)
-	prefix := e.getPrefix()
-	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
-	if err != nil {
-		return 0, err
-	}
-	defer iter.Close()
-
-	count := uint(0)
-	for ; iter.Valid(); iter.Next() {
-		count++
-	}
-
-	return count, nil
 }
 
 func (e *Entry[V, E]) getStoreKey(key string) []byte {
@@ -316,34 +315,29 @@ func NewCache(
 // Unbonding Validators Queue
 
 func (c *ValidatorsQueueCache) checkReloadUnbondingValidatorsQueue(ctx context.Context) error {
-	if c.unbondingValidatorsQueue.dirty.Load() {
-		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
-		if err := c.loadUnbondingValidatorsQueue(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *ValidatorsQueueCache) loadUnbondingValidatorsQueue(ctx context.Context) error {
-	data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
-	if err != nil {
-		return err
-	}
 	c.unbondingValidatorsQueue.mu.Lock()
 	defer c.unbondingValidatorsQueue.mu.Unlock()
 
-	if err := c.unbondingValidatorsQueue.clearUnsafe(ctx); err != nil {
-		return err
-	}
-
-	for key, value := range data {
-		if err := c.unbondingValidatorsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+	if c.unbondingValidatorsQueue.dirty.Load() {
+		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
+		data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
+		if err != nil {
 			return err
 		}
+
+		if err := c.unbondingValidatorsQueue.clearUnsafe(ctx); err != nil {
+			return err
+		}
+
+		for key, value := range data {
+			if err := c.unbondingValidatorsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+				return err
+			}
+		}
+
+		c.unbondingValidatorsQueue.dirty.Store(false)
 	}
 
-	c.unbondingValidatorsQueue.dirty.Store(false)
 	return nil
 }
 
@@ -382,35 +376,28 @@ func (c *ValidatorsQueueCache) DeleteUnbondingValidatorQueueEntry(ctx context.Co
 // Unbonding Delegations
 
 func (c *ValidatorsQueueCache) checkReloadUnbondingDelegationsQueue(ctx context.Context) error {
-	if c.unbondingDelegationsQueue.dirty.Load() {
-		c.logger(ctx).Info("Unbonding delegations queue is dirty. Reinitializing cache from store.")
-		if err := c.loadUnbondingDelegationsQueue(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *ValidatorsQueueCache) loadUnbondingDelegationsQueue(ctx context.Context) error {
-	data, err := c.unbondingDelegationsQueue.loadFromStore(ctx)
-	if err != nil {
-		return err
-	}
-
 	c.unbondingDelegationsQueue.mu.Lock()
 	defer c.unbondingDelegationsQueue.mu.Unlock()
 
-	if err := c.unbondingDelegationsQueue.clearUnsafe(ctx); err != nil {
-		return err
-	}
+	if c.unbondingDelegationsQueue.dirty.Load() {
+		c.logger(ctx).Info("Unbonding delegations queue is dirty. Reinitializing cache from store.")
 
-	for key, value := range data {
-		if err := c.unbondingDelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+		data, err := c.unbondingDelegationsQueue.loadFromStore(ctx)
+		if err != nil {
 			return err
 		}
-	}
 
-	c.unbondingDelegationsQueue.dirty.Store(false)
+		if err := c.unbondingDelegationsQueue.clearUnsafe(ctx); err != nil {
+			return err
+		}
+
+		for key, value := range data {
+			if err := c.unbondingDelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+				return err
+			}
+		}
+		c.unbondingDelegationsQueue.dirty.Store(false)
+	}
 	return nil
 }
 
@@ -449,35 +436,28 @@ func (c *ValidatorsQueueCache) DeleteUnbondingDelegationQueueEntry(ctx context.C
 // Redelegations Queue
 
 func (c *ValidatorsQueueCache) checkReloadRedelegationsQueue(ctx context.Context) error {
-	if c.redelegationsQueue.dirty.Load() {
-		c.logger(ctx).Info("Redelegations queue is dirty. Reinitializing cache from store.")
-		if err := c.loadRedelegationsQueue(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *ValidatorsQueueCache) loadRedelegationsQueue(ctx context.Context) error {
-	data, err := c.redelegationsQueue.loadFromStore(ctx)
-	if err != nil {
-		return err
-	}
-
 	c.redelegationsQueue.mu.Lock()
 	defer c.redelegationsQueue.mu.Unlock()
 
-	if err := c.redelegationsQueue.clearUnsafe(ctx); err != nil {
-		return err
-	}
-
-	for key, value := range data {
-		if err := c.redelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+	if c.redelegationsQueue.dirty.Load() {
+		c.logger(ctx).Info("Redelegations queue is dirty. Reinitializing cache from store.")
+		data, err := c.redelegationsQueue.loadFromStore(ctx)
+		if err != nil {
 			return err
 		}
-	}
 
-	c.redelegationsQueue.dirty.Store(false)
+		if err := c.redelegationsQueue.clearUnsafe(ctx); err != nil {
+			return err
+		}
+
+		for key, value := range data {
+			if err := c.redelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+				return err
+			}
+		}
+
+		c.redelegationsQueue.dirty.Store(false)
+	}
 	return nil
 }
 
