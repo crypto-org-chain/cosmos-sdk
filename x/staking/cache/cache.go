@@ -43,6 +43,9 @@ func NewCacheEntry[V ~[]E, E any](
 	loadFromStore func(ctx context.Context) (map[string]V, error),
 	cacheType CacheEntryType,
 ) *CacheEntry[V, E] {
+	if loadFromStore == nil {
+		panic(fmt.Sprintf("loadFromStore is nil for cache type %s", cacheType))
+	}
 	entry := &CacheEntry[V, E]{
 		storeService:  storeService,
 		max:           max,
