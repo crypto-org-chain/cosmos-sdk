@@ -55,13 +55,13 @@ func NewCacheEntry[V ~[]E, E any](
 
 func (e *CacheEntry[V, E]) getEntry(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger, key string) (V, error) {
 	if e.full.Load() {
-		return V{}, types.ErrCacheMaxSizeReached
+		return make(V, 0), types.ErrCacheMaxSizeReached
 	}
 
 	// If cache is dirty, reload from store
 	if e.dirty.Load() {
 		if err := e.reload(ctx, cdc, logger); err != nil {
-			return V{}, err
+			return make(V, 0), err
 		}
 	}
 
@@ -70,11 +70,11 @@ func (e *CacheEntry[V, E]) getEntry(ctx context.Context, cdc codec.BinaryCodec, 
 
 	bz, err := store.Get(storeKey)
 	if err != nil {
-		return V{}, err
+		return make(V, 0), err
 	}
 
 	if bz == nil {
-		return V{}, nil
+		return make(V, 0), nil
 	}
 
 	return unmarshal[V](cdc, e.cacheType, bz)
