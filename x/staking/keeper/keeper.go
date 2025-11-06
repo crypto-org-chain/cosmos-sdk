@@ -81,9 +81,6 @@ func NewKeeper(
 	}
 
 	if maxCacheSize >= 0 {
-		if cacheStoreService == nil {
-			panic("staking cache store service should not be nil when cache is enabled (>=0)")
-		}
 		k.cache = cache.NewValidatorsQueueCache(
 			uint(maxCacheSize),
 			cacheStoreService,
