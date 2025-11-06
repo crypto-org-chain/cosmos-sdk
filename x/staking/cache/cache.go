@@ -315,28 +315,35 @@ func NewCache(
 // Unbonding Validators Queue
 
 func (c *ValidatorsQueueCache) checkReloadUnbondingValidatorsQueue(ctx context.Context) error {
+	if !c.unbondingValidatorsQueue.dirty.Load() {
+		return nil
+	}
+
 	c.unbondingValidatorsQueue.mu.Lock()
 	defer c.unbondingValidatorsQueue.mu.Unlock()
 
-	if c.unbondingValidatorsQueue.dirty.Load() {
-		c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
-		data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
-		if err != nil {
-			return err
-		}
-
-		if err := c.unbondingValidatorsQueue.clearUnsafe(ctx); err != nil {
-			return err
-		}
-
-		for key, value := range data {
-			if err := c.unbondingValidatorsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
-				return err
-			}
-		}
-
-		c.unbondingValidatorsQueue.dirty.Store(false)
+	// Double-check - another goroutine might have reloaded while we waited
+	if !c.unbondingValidatorsQueue.dirty.Load() {
+		return nil
 	}
+
+	c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
+	data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := c.unbondingValidatorsQueue.clearUnsafe(ctx); err != nil {
+		return err
+	}
+
+	for key, value := range data {
+		if err := c.unbondingValidatorsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+			return err
+		}
+	}
+
+	c.unbondingValidatorsQueue.dirty.Store(false)
 
 	return nil
 }
@@ -376,28 +383,35 @@ func (c *ValidatorsQueueCache) DeleteUnbondingValidatorQueueEntry(ctx context.Co
 // Unbonding Delegations
 
 func (c *ValidatorsQueueCache) checkReloadUnbondingDelegationsQueue(ctx context.Context) error {
+	if !c.unbondingDelegationsQueue.dirty.Load() {
+		return nil
+	}
+
 	c.unbondingDelegationsQueue.mu.Lock()
 	defer c.unbondingDelegationsQueue.mu.Unlock()
 
-	if c.unbondingDelegationsQueue.dirty.Load() {
-		c.logger(ctx).Info("Unbonding delegations queue is dirty. Reinitializing cache from store.")
-
-		data, err := c.unbondingDelegationsQueue.loadFromStore(ctx)
-		if err != nil {
-			return err
-		}
-
-		if err := c.unbondingDelegationsQueue.clearUnsafe(ctx); err != nil {
-			return err
-		}
-
-		for key, value := range data {
-			if err := c.unbondingDelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
-				return err
-			}
-		}
-		c.unbondingDelegationsQueue.dirty.Store(false)
+	// Double-check - another goroutine might have reloaded while we waited
+	if !c.unbondingDelegationsQueue.dirty.Load() {
+		return nil
 	}
+
+	c.logger(ctx).Info("Unbonding delegations queue is dirty. Reinitializing cache from store.")
+
+	data, err := c.unbondingDelegationsQueue.loadFromStore(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := c.unbondingDelegationsQueue.clearUnsafe(ctx); err != nil {
+		return err
+	}
+
+	for key, value := range data {
+		if err := c.unbondingDelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+			return err
+		}
+	}
+	c.unbondingDelegationsQueue.dirty.Store(false)
 	return nil
 }
 
@@ -436,28 +450,35 @@ func (c *ValidatorsQueueCache) DeleteUnbondingDelegationQueueEntry(ctx context.C
 // Redelegations Queue
 
 func (c *ValidatorsQueueCache) checkReloadRedelegationsQueue(ctx context.Context) error {
+	if !c.redelegationsQueue.dirty.Load() {
+		return nil
+	}
+
 	c.redelegationsQueue.mu.Lock()
 	defer c.redelegationsQueue.mu.Unlock()
 
-	if c.redelegationsQueue.dirty.Load() {
-		c.logger(ctx).Info("Redelegations queue is dirty. Reinitializing cache from store.")
-		data, err := c.redelegationsQueue.loadFromStore(ctx)
-		if err != nil {
-			return err
-		}
-
-		if err := c.redelegationsQueue.clearUnsafe(ctx); err != nil {
-			return err
-		}
-
-		for key, value := range data {
-			if err := c.redelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
-				return err
-			}
-		}
-
-		c.redelegationsQueue.dirty.Store(false)
+	// Double-check - another goroutine might have reloaded while we waited
+	if !c.redelegationsQueue.dirty.Load() {
+		return nil
 	}
+
+	c.logger(ctx).Info("Redelegations queue is dirty. Reinitializing cache from store.")
+	data, err := c.redelegationsQueue.loadFromStore(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := c.redelegationsQueue.clearUnsafe(ctx); err != nil {
+		return err
+	}
+
+	for key, value := range data {
+		if err := c.redelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+			return err
+		}
+	}
+
+	c.redelegationsQueue.dirty.Store(false)
 	return nil
 }
 
