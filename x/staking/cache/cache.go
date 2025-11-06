@@ -58,7 +58,6 @@ func (e *CacheEntry[V, E]) getEntry(ctx context.Context, cdc codec.BinaryCodec, 
 		return make(V, 0), types.ErrCacheMaxSizeReached
 	}
 
-	// If cache is dirty, reload from store
 	if e.dirty.Load() {
 		if err := e.reload(ctx, cdc, logger); err != nil {
 			return make(V, 0), err
@@ -157,7 +156,6 @@ func (e *CacheEntry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec, lo
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
-	// If cache is dirty, reload from main store first
 	if e.dirty.Load() {
 		if err := e.reload(ctx, cdc, logger); err != nil {
 			return nil, err
@@ -176,7 +174,7 @@ func (e *CacheEntry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec, lo
 
 	prefixLen := len([]byte(e.cacheType))
 	for ; iter.Valid(); iter.Next() {
-		key := string(iter.Key()[prefixLen:])
+		key := string(iter.Key()[prefixLen:]) // Remove prefix to get the actual key
 
 		value, err := unmarshal[V](cdc, e.cacheType, iter.Value())
 		if err != nil {
@@ -208,12 +206,10 @@ func (e *CacheEntry[V, E]) reload(ctx context.Context, cdc codec.BinaryCodec, lo
 		return err
 	}
 
-	// Clear existing data in cache
 	if err := e.clear(ctx); err != nil {
 		return err
 	}
 
-	// Load all entries into the cache store
 	for key, value := range data {
 		if err := e.setEntry(ctx, cdc, key, value); err != nil {
 			return err
