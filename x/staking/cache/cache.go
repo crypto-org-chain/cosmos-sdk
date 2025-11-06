@@ -26,6 +26,7 @@ const (
 type CacheEntry[V ~[]E, E any] struct {
 	// protects bulk load operations to prevent concurrent reloads
 	loadMu sync.Mutex
+	mu     sync.Mutex
 
 	storeService corestoretypes.MemoryStoreService
 
@@ -60,6 +61,9 @@ func NewCacheEntry[V ~[]E, E any](
 }
 
 func (e *CacheEntry[V, E]) getEntry(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger, key string) (V, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if e.full.Load() {
 		return make(V, 0), types.ErrCacheMaxSizeReached
 	}
@@ -86,6 +90,9 @@ func (e *CacheEntry[V, E]) getEntry(ctx context.Context, cdc codec.BinaryCodec, 
 }
 
 func (e *CacheEntry[V, E]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if e.full.Load() {
 		e.dirty.Store(true)
 		return types.ErrCacheMaxSizeReached
@@ -117,6 +124,9 @@ func (e *CacheEntry[V, E]) setEntry(ctx context.Context, cdc codec.BinaryCodec, 
 }
 
 func (e *CacheEntry[V, E]) deleteEntry(ctx context.Context, key string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	store := e.storeService.OpenMemoryStore(ctx)
 	storeKey := e.getStoreKey(key)
 
@@ -138,6 +148,9 @@ func (e *CacheEntry[V, E]) deleteEntry(ctx context.Context, key string) error {
 }
 
 func (e *CacheEntry[V, E]) clear(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	store := e.storeService.OpenMemoryStore(ctx)
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
@@ -157,6 +170,9 @@ func (e *CacheEntry[V, E]) clear(ctx context.Context) error {
 }
 
 func (e *CacheEntry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) (map[string]V, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if e.full.Load() {
 		return nil, types.ErrCacheMaxSizeReached
 	}
