@@ -206,7 +206,7 @@ type ModuleInputs struct {
 	Cdc                   codec.Codec
 	StoreService          store.KVStoreService
 	CacheStoreService     store.MemoryStoreService `optional:"true"` // Memory store for cache
-	MaxCacheSize          int                  `optional:"true"`
+	MaxCacheSize          int                      `optional:"true"`
 
 	// LegacySubspace is used solely for migration of x/params managed parameters
 	LegacySubspace exported.Subspace `optional:"true"`

@@ -141,7 +141,6 @@ func (e *CacheEntry[V, E]) clear(ctx context.Context) error {
 	store := e.storeService.OpenMemoryStore(ctx)
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
-
 	if err != nil {
 		return err
 	}

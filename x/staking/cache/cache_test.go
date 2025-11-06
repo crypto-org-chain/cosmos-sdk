@@ -38,7 +38,6 @@ func newTestingCache(
 	redelegationsLoader func(ctx context.Context) (map[string][]types.DVVTriplet, error),
 	cacheSize uint,
 ) *cache.ValidatorsQueueCache {
-
 	logger := func(ctx context.Context) log.Logger {
 		return log.NewNopLogger()
 	}
@@ -61,9 +60,11 @@ func newTestingCache(
 func noOpValidatorsLoader(ctx context.Context) (map[string][]string, error) {
 	return map[string][]string{}, nil
 }
+
 func noOpDelegationsLoader(ctx context.Context) (map[string][]types.DVPair, error) {
 	return map[string][]types.DVPair{}, nil
 }
+
 func noOpRedelegationsLoader(ctx context.Context) (map[string][]types.DVVTriplet, error) {
 	return map[string][]types.DVVTriplet{}, nil
 }
@@ -150,7 +151,6 @@ func TestValidatorsQueueCache_LoadFromStore(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, redelgations, 1)
 	require.Equal(t, []types.DVVTriplet{{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}}, redelgations["time1"])
-
 }
 
 func TestValidatorsQueueCache_FullPreventsLoad(t *testing.T) {
