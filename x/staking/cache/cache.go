@@ -15,12 +15,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-type CacheEntryType string
+type EntryType string
 
 const (
-	UnbondingValidators  CacheEntryType = "unbonding_validators"
-	UnbondingDelegations CacheEntryType = "unbonding_delegations"
-	Redelegations        CacheEntryType = "redelegations"
+	UnbondingValidators  EntryType = "unbonding_validators"
+	UnbondingDelegations EntryType = "unbonding_delegations"
+	Redelegations        EntryType = "redelegations"
 )
 
 type CacheEntry[V ~[]E, E any] struct {
@@ -34,14 +34,14 @@ type CacheEntry[V ~[]E, E any] struct {
 	max           uint
 	loadFromStore func(ctx context.Context) (map[string]V, error)
 
-	cacheType CacheEntryType
+	cacheType EntryType
 }
 
 func NewCacheEntry[V ~[]E, E any](
 	storeService corestoretypes.MemoryStoreService,
 	max uint,
 	loadFromStore func(ctx context.Context) (map[string]V, error),
-	cacheType CacheEntryType,
+	cacheType EntryType,
 ) *CacheEntry[V, E] {
 	if storeService == nil {
 		panic(fmt.Sprintf("store service should not be nil for cache type %s", cacheType))
@@ -251,7 +251,7 @@ func (e *CacheEntry[V, E]) getPrefix() []byte {
 	return []byte(e.cacheType)
 }
 
-func marshal[V any](cdc codec.BinaryCodec, cacheType CacheEntryType, value V) ([]byte, error) {
+func marshal[V any](cdc codec.BinaryCodec, cacheType EntryType, value V) ([]byte, error) {
 	switch cacheType {
 	case UnbondingValidators:
 		addrs := any(value).([]string)
@@ -267,7 +267,7 @@ func marshal[V any](cdc codec.BinaryCodec, cacheType CacheEntryType, value V) ([
 	}
 }
 
-func unmarshal[V any](cdc codec.BinaryCodec, cacheType CacheEntryType, bz []byte) (V, error) {
+func unmarshal[V any](cdc codec.BinaryCodec, cacheType EntryType, bz []byte) (V, error) {
 	var zero V
 	switch cacheType {
 	case UnbondingValidators:
