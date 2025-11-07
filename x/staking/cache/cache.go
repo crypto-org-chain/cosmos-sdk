@@ -395,56 +395,91 @@ func (c *ValidatorsQueueCache) checkReloadUnbondingDelegationsQueue(ctx context.
 		return nil
 	}
 
-	c.logger(ctx).Info("Unbonding delegations queue is dirty. Reinitializing cache from store.")
+	c.logger(ctx).Info("[DELEGATION_QUEUE] Unbonding delegations queue is dirty. Reinitializing cache from store.")
 
 	data, err := c.unbondingDelegationsQueue.loadFromStore(ctx)
 	if err != nil {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to load unbonding delegations from store", "error", err)
 		return err
 	}
 
+	c.logger(ctx).Info("[DELEGATION_QUEUE] Loaded unbonding delegations from store", "entriesCount", len(data))
+
 	if err := c.unbondingDelegationsQueue.clearUnsafe(ctx); err != nil {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to clear unbonding delegations cache", "error", err)
 		return err
 	}
 
 	for key, value := range data {
 		if err := c.unbondingDelegationsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+			c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to set unbonding delegation entry", "key", key, "error", err)
 			return err
 		}
 	}
 	c.unbondingDelegationsQueue.dirty.Store(false)
+	c.logger(ctx).Info("[DELEGATION_QUEUE] Completed reloading unbonding delegations cache", "entriesCount", len(data))
 	return nil
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue(ctx context.Context) (map[string][]types.DVPair, error) {
 	if c.unbondingDelegationsQueue.full.Load() {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Cache max size reached for unbonding delegations queue")
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
 	if err := c.checkReloadUnbondingDelegationsQueue(ctx); err != nil {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to reload unbonding delegations queue", "error", err)
 		return nil, err
 	}
 
-	return c.unbondingDelegationsQueue.get(ctx, c.cdc)
+	result, err := c.unbondingDelegationsQueue.get(ctx, c.cdc)
+	if err != nil {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to get unbonding delegations queue", "error", err)
+		return nil, err
+	}
+
+	c.logger(ctx).Info("[DELEGATION_QUEUE] Retrieved unbonding delegations queue from cache", "entriesCount", len(result))
+	return result, nil
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueueEntry(ctx context.Context, endTime time.Time) ([]types.DVPair, error) {
 	if c.unbondingDelegationsQueue.full.Load() {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Cache max size reached for unbonding delegations entry")
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
 	if err := c.checkReloadUnbondingDelegationsQueue(ctx); err != nil {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to reload unbonding delegations for entry", "endTime", endTime, "error", err)
 		return nil, err
 	}
 
-	return c.unbondingDelegationsQueue.getEntry(ctx, c.cdc, sdk.FormatTimeString(endTime))
+	key := sdk.FormatTimeString(endTime)
+	result, err := c.unbondingDelegationsQueue.getEntry(ctx, c.cdc, key)
+	if err != nil {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to get unbonding delegations entry", "key", key, "error", err)
+		return nil, err
+	}
+
+	c.logger(ctx).Info("[DELEGATION_QUEUE] Retrieved unbonding delegations entry from cache", "key", key, "pairsCount", len(result))
+	return result, nil
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingDelegationsQueueEntry(ctx context.Context, key string, delegations []types.DVPair) error {
-	return c.unbondingDelegationsQueue.setEntry(ctx, c.cdc, key, delegations)
+	c.logger(ctx).Info("[DELEGATION_QUEUE] Setting unbonding delegations entry in cache", "key", key, "pairsCount", len(delegations))
+	err := c.unbondingDelegationsQueue.setEntry(ctx, c.cdc, key, delegations)
+	if err != nil {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to set unbonding delegations entry", "key", key, "error", err)
+	}
+	return err
 }
 
 func (c *ValidatorsQueueCache) DeleteUnbondingDelegationQueueEntry(ctx context.Context, key string) error {
-	return c.unbondingDelegationsQueue.deleteEntry(ctx, key)
+	c.logger(ctx).Info("[DELEGATION_QUEUE] Deleting unbonding delegations entry from cache", "key", key)
+	err := c.unbondingDelegationsQueue.deleteEntry(ctx, key)
+	if err != nil {
+		c.logger(ctx).Error("[DELEGATION_QUEUE] Failed to delete unbonding delegations entry", "key", key, "error", err)
+	}
+	return err
 }
 
 // Redelegations Queue

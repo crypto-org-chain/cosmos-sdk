@@ -514,16 +514,20 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 
 	timeSlice, err := k.GetUBDQueueTimeSlice(ctx, completionTime)
 	if err != nil {
+		k.Logger(ctx).Error("[DELEGATION_QUEUE] Failed to get UBD queue timeslice", "completionTime", completionTime, "error", err)
 		return err
 	}
 
 	if len(timeSlice) == 0 {
+		k.Logger(ctx).Info("[DELEGATION_QUEUE] Inserting first UBD into queue", "completionTime", completionTime, "delegator", ubd.DelegatorAddress, "validator", ubd.ValidatorAddress)
 		if err = k.SetUBDQueueTimeSlice(ctx, completionTime, []types.DVPair{dvPair}); err != nil {
+			k.Logger(ctx).Error("[DELEGATION_QUEUE] Failed to set UBD queue timeslice", "completionTime", completionTime, "error", err)
 			return err
 		}
 		return nil
 	}
 
+	k.Logger(ctx).Info("[DELEGATION_QUEUE] Appending UBD to existing queue", "completionTime", completionTime, "existingCount", len(timeSlice), "delegator", ubd.DelegatorAddress, "validator", ubd.ValidatorAddress)
 	timeSlice = append(timeSlice, dvPair)
 	return k.SetUBDQueueTimeSlice(ctx, completionTime, timeSlice)
 }
@@ -545,7 +549,15 @@ func (k Keeper) UBDQueueIteratorAll(ctx context.Context) (corestore.Iterator, er
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
 	unbondingDelegations, err := k.GetUBDs(ctx, currTime)
 	if err != nil {
+		k.Logger(ctx).Error("[DELEGATION_QUEUE] Failed to get unbonding delegations", "error", err, "currTime", currTime)
 		return matureUnbonds, err
+	}
+
+	k.Logger(ctx).Info("[DELEGATION_QUEUE] Dequeuing mature unbonding delegations", "currTime", currTime, "totalEntries", len(unbondingDelegations))
+
+	// Log exact contents of unbondingDelegations for debugging
+	for key, pairs := range unbondingDelegations {
+		k.Logger(ctx).Info("[DELEGATION_QUEUE] Unbonding delegation entry", "timestamp", key, "pairsCount", len(pairs), "pairs", pairs)
 	}
 
 	keys := make([]string, 0, len(unbondingDelegations))
@@ -561,27 +573,32 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 	for _, key := range keys {
 		t, err := sdk.ParseTime(key)
 		if err != nil {
+			k.Logger(ctx).Error("[DELEGATION_QUEUE] Failed to parse time key", "key", key, "error", err)
 			return matureUnbonds, err
 		}
 
 		if nonMature := t.After(currTime); nonMature {
+			k.Logger(ctx).Info("[DELEGATION_QUEUE] Reached non-mature unbonding delegations", "time", t, "currTime", currTime, "processedCount", len(matureUnbonds))
 			return matureUnbonds, nil
 		}
 		pairs := unbondingDelegations[key]
+		k.Logger(ctx).Info("[DELEGATION_QUEUE] Processing mature unbonding delegation timeslice", "time", t, "pairsCount", len(pairs))
 		matureUnbonds = append(matureUnbonds, pairs...)
 
 		err = store.Delete(types.GetUnbondingDelegationTimeKey(t))
 		if err != nil {
+			k.Logger(ctx).Error("[DELEGATION_QUEUE] Failed to delete unbonding delegation time key from store", "time", t, "error", err)
 			return matureUnbonds, err
 		}
 
 		if k.cache != nil {
 			if err := k.cache.DeleteUnbondingDelegationQueueEntry(ctx, key); err != nil {
-				k.Logger(ctx).Error("DeleteUnbondingDelegationQueueEntry in cache failed", "error", err)
+				k.Logger(ctx).Error("[DELEGATION_QUEUE] DeleteUnbondingDelegationQueueEntry in cache failed", "error", err, "key", key)
 			}
 		}
 	}
 
+	k.Logger(ctx).Info("[DELEGATION_QUEUE] Completed dequeuing mature unbonding delegations", "totalMature", len(matureUnbonds))
 	return matureUnbonds, nil
 }
 
@@ -590,11 +607,18 @@ func (k Keeper) GetUBDs(ctx context.Context, endTime time.Time) (map[string][]ty
 	if k.cache != nil {
 		pairs, err := k.cache.GetUnbondingDelegationsQueue(ctx)
 		if err == nil {
+			k.Logger(ctx).Info("[DELEGATION_QUEUE] GetUBDs: retrieved from CACHE", "entriesCount", len(pairs))
 			return pairs, nil
 		}
-		k.Logger(ctx).Error("GetUnbondingDelegationsQueue from cache failed", "error", err)
+		k.Logger(ctx).Error("[DELEGATION_QUEUE] GetUBDs: cache failed, falling back to STORE", "error", err)
+	} else {
+		k.Logger(ctx).Info("[DELEGATION_QUEUE] GetUBDs: no cache, reading from STORE")
 	}
-	return k.GetUnbondingDelegationsQueueFromStore(ctx, endTime)
+	pairs, err := k.GetUnbondingDelegationsQueueFromStore(ctx, endTime)
+	if err == nil {
+		k.Logger(ctx).Info("[DELEGATION_QUEUE] GetUBDs: retrieved from STORE", "entriesCount", len(pairs))
+	}
+	return pairs, err
 }
 
 // GetAllUnbondingDelegationsQueueFromStore gets unbonding delegations from the store
@@ -991,7 +1015,7 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 
 		if k.cache != nil {
 			if err := k.cache.DeleteRedelegationsQueueEntry(ctx, key); err != nil {
-				k.Logger(ctx).Error("DeleteRedelegationsQueueEntry in cache failed", "error", err)
+				k.Logger(ctx).Error("[DELEGATION_QUEUE] DeleteRedelegationsQueueEntry in cache failed", "error", err, "key", key)
 			}
 		}
 	}
