@@ -564,23 +564,7 @@ func (rs *Store) WorkingHash() []byte {
 		return storeInfos[i].Name < storeInfos[j].Name
 	})
 
-	appHash := types.CommitInfo{StoreInfos: storeInfos}.Hash()
-
-	// Log all individual store hashes for debugging
-	if rs.logger != nil {
-		rs.logger.Error("STORE::::Computing app hash from store hashes", "num_stores", len(storeInfos), "app_hash", fmt.Sprintf("%X", appHash))
-		for _, si := range storeInfos {
-			rs.logger.Error("STORE::::Individual store hash", "store_name", si.Name, "hash", fmt.Sprintf("%X", si.GetHash()))
-		}
-	} else {
-		// Fallback if logger is nil
-		fmt.Printf("STORE::::Computing app hash from store hashes num_stores=%d app_hash=%X\n", len(storeInfos), appHash)
-		for _, si := range storeInfos {
-			fmt.Printf("STORE::::Individual store hash store_name=%s hash=%X\n", si.Name, si.GetHash())
-		}
-	}
-
-	return appHash
+	return types.CommitInfo{StoreInfos: storeInfos}.Hash()
 }
 
 // CacheWrap implements CacheWrapper/Store/CommitStore.

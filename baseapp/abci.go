@@ -911,7 +911,6 @@ func (app *BaseApp) FinalizeBlock(req *abci.RequestFinalizeBlock) (res *abci.Res
 	}()
 
 	if app.optimisticExec.Initialized() {
-		app.logger.Error("BASEAPP::::FinalizeBlock: Using optimistic execution", "height", req.Height)
 		// check if the hash we got is the same as the one we are executing
 		aborted := app.optimisticExec.AbortIfNeeded(req)
 		// Wait for the OE to finish, regardless of whether it was aborted or not
@@ -920,27 +919,21 @@ func (app *BaseApp) FinalizeBlock(req *abci.RequestFinalizeBlock) (res *abci.Res
 		// only return if we are not aborting
 		if !aborted {
 			if res != nil {
-				app.logger.Error("BASEAPP::::FinalizeBlock (OE): About to compute app hash", "height", req.Height)
 				res.AppHash = app.workingHash()
-				app.logger.Error("BASEAPP::::FinalizeBlock (OE): App hash set in response", "height", req.Height, "app_hash", fmt.Sprintf("%X", res.AppHash))
 			}
 
 			return res, err
 		}
 
-		app.logger.Error("BASEAPP::::FinalizeBlock: Optimistic execution was aborted", "height", req.Height)
 		// if it was aborted, we need to reset the state
 		app.finalizeBlockState = nil
 		app.optimisticExec.Reset()
 	}
 
 	// if no OE is running, just run the block (this is either a block replay or a OE that got aborted)
-	app.logger.Error("BASEAPP::::FinalizeBlock: About to run internalFinalizeBlock", "height", req.Height)
 	res, err = app.internalFinalizeBlock(context.Background(), req)
 	if res != nil {
-		app.logger.Error("BASEAPP::::FinalizeBlock: About to compute app hash", "height", req.Height)
 		res.AppHash = app.workingHash()
-		app.logger.Error("BASEAPP::::FinalizeBlock: App hash set in response", "height", req.Height, "app_hash", fmt.Sprintf("%X", res.AppHash))
 	}
 
 	return res, err
@@ -1027,8 +1020,6 @@ func (app *BaseApp) Commit() (*abci.ResponseCommit, error) {
 // state transitions will be flushed to disk and as a result, but we already have
 // an application Merkle root.
 func (app *BaseApp) workingHash() []byte {
-	app.logger.Error("BASEAPP::::=== COMPUTING APP HASH - workingHash() called ===")
-
 	// Write the FinalizeBlock state into branched storage and commit the MultiStore.
 	// The write to the FinalizeBlock state writes all state transitions to the root
 	// MultiStore (app.cms) so when Commit() is called it persists those values.
@@ -1036,7 +1027,7 @@ func (app *BaseApp) workingHash() []byte {
 
 	// Get the hash of all writes in order to return the apphash to the comet in finalizeBlock.
 	commitHash := app.cms.WorkingHash()
-	app.logger.Error("BASEAPP::::=== APP HASH COMPUTED ===", "workingHash", fmt.Sprintf("%X", commitHash))
+	app.logger.Debug("hash of all writes", "workingHash", fmt.Sprintf("%X", commitHash))
 
 	return commitHash
 }
