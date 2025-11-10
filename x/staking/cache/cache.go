@@ -12,8 +12,14 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
+
+func gaslessContext(ctx context.Context) context.Context {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	return sdkCtx.WithGasMeter(baseapp.NewNoopGasMeter())
+}
 
 type EntryType string
 
@@ -65,7 +71,7 @@ func (e *Entry[V, E]) get(ctx context.Context, cdc codec.BinaryCodec) (map[strin
 
 	result := make(map[string]V)
 
-	store := e.storeService.OpenMemoryStore(ctx)
+	store := e.storeService.OpenMemoryStore(gaslessContext(ctx))
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	if err != nil {
@@ -92,7 +98,7 @@ func (e *Entry[V, E]) getEntry(ctx context.Context, cdc codec.BinaryCodec, key s
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	store := e.storeService.OpenMemoryStore(ctx)
+	store := e.storeService.OpenMemoryStore(gaslessContext(ctx))
 	storeKey := e.getStoreKey(key)
 
 	bz, err := store.Get(storeKey)
@@ -120,7 +126,7 @@ func (e *Entry[V, E]) setEntryUnsafe(ctx context.Context, cdc codec.BinaryCodec,
 		return types.ErrCacheMaxSizeReached
 	}
 
-	store := e.storeService.OpenMemoryStore(ctx)
+	store := e.storeService.OpenMemoryStore(gaslessContext(ctx))
 	storeKey := e.getStoreKey(key)
 
 	exists := false
@@ -156,7 +162,7 @@ func (e *Entry[V, E]) deleteEntry(ctx context.Context, key string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	store := e.storeService.OpenMemoryStore(ctx)
+	store := e.storeService.OpenMemoryStore(gaslessContext(ctx))
 	storeKey := e.getStoreKey(key)
 
 	exists := false

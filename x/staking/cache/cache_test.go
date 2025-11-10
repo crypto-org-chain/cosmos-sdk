@@ -3,13 +3,13 @@ package cache_test
 import (
 	"context"
 	"fmt"
-	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	storetypes "cosmossdk.io/store/types"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/testutil"
 
@@ -26,27 +26,11 @@ import (
 // This must be a single instance because the context's multistore tracks stores by key instance
 var testMemKey = storetypes.NewMemoryStoreKey(types.CacheStoreKey)
 
-// noopGasMeter is a thread-safe gas meter that doesn't track anything
-// Used for concurrent tests where gas metering would cause races
-type noopGasMeter struct{}
-
-func (noopGasMeter) GasConsumed() storetypes.Gas                         { return 0 }
-func (noopGasMeter) GasConsumedToLimit() storetypes.Gas                  { return 0 }
-func (noopGasMeter) GasRemaining() storetypes.Gas                        { return math.MaxUint64 }
-func (noopGasMeter) Limit() storetypes.Gas                               { return math.MaxUint64 }
-func (noopGasMeter) ConsumeGas(amount storetypes.Gas, descriptor string) {}
-func (noopGasMeter) RefundGas(amount storetypes.Gas, descriptor string)  {}
-func (noopGasMeter) IsPastLimit() bool                                   { return false }
-func (noopGasMeter) IsOutOfGas() bool                                    { return false }
-func (noopGasMeter) String() string                                      { return "noopGasMeter" }
-
 func createTestContext(t *testing.T) context.Context {
 	key := storetypes.NewKVStoreKey("test_kv")
 	tkey := storetypes.NewTransientStoreKey("transient_test")
 	testCtx := testutil.DefaultContextWithMemoryStore(t, key, tkey, testMemKey)
-	// Use no-op gas meter for concurrent tests to avoid races
-	// Standard gas meters are not thread-safe
-	return testCtx.Ctx.WithGasMeter(noopGasMeter{})
+	return testCtx.Ctx.WithGasMeter(baseapp.NewNoopGasMeter())
 }
 
 func newTestingCache(
