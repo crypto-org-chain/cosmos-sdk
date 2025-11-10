@@ -4,10 +4,6 @@ import storetypes "cosmossdk.io/store/types"
 
 type noopGasMeter struct{}
 
-func NewNoopGasMeter() storetypes.GasMeter {
-	return noopGasMeter{}
-}
-
 var _ storetypes.GasMeter = noopGasMeter{}
 
 func (noopGasMeter) GasConsumed() storetypes.Gas        { return 0 }
