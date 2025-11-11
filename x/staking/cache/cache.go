@@ -56,12 +56,16 @@ func NewEntry[V ~[]E, E any](
 		cacheType:     cacheType,
 	}
 	entry.dirty.Store(true)
+	fmt.Printf("[%s] NewEntry: max=%d, dirty=true, full=false, count=0\n", cacheType, max)
 	return entry
 }
 
 func (e *Entry[V, E]) get(ctx context.Context, cdc codec.BinaryCodec) (map[string]V, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+
+	fmt.Printf("[%s] get: full=%v, dirty=%v, count=%d\n",
+		e.cacheType, e.full.Load(), e.dirty.Load(), e.count.Load())
 
 	result := make(map[string]V)
 
@@ -85,6 +89,7 @@ func (e *Entry[V, E]) get(ctx context.Context, cdc codec.BinaryCodec) (map[strin
 		result[key] = value
 	}
 
+	fmt.Printf("[%s] get: returning %d entries\n", e.cacheType, len(result))
 	return result, nil
 }
 
@@ -115,7 +120,11 @@ func (e *Entry[V, E]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key s
 
 // setEntryUnsafe works the same as setEntry but the caller is responsible for holding the lock
 func (e *Entry[V, E]) setEntryUnsafe(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
+	fmt.Printf("[%s] setEntryUnsafe: key=%s, full=%v, dirty=%v, count=%d, max=%d\n",
+		e.cacheType, key, e.full.Load(), e.dirty.Load(), e.count.Load(), e.max)
+
 	if e.full.Load() {
+		fmt.Printf("[%s] setEntryUnsafe: cache is full, returning error\n", e.cacheType)
 		return types.ErrCacheMaxSizeReached
 	}
 
@@ -143,19 +152,26 @@ func (e *Entry[V, E]) setEntryUnsafe(ctx context.Context, cdc codec.BinaryCodec,
 	// Only increment counter if this is a new key
 	if e.max > 0 && !exists {
 		newCount := e.count.Add(1)
+		fmt.Printf("[%s] setEntryUnsafe: incremented count to %d (max=%d, exists=%v)\n",
+			e.cacheType, newCount, e.max, exists)
 		if newCount >= uint64(e.max) {
 			e.dirty.Store(true)
 			e.full.Store(true)
+			fmt.Printf("[%s] setEntryUnsafe: cache now FULL and DIRTY\n", e.cacheType)
 			return types.ErrCacheMaxSizeReached
 		}
 	}
 
+	fmt.Printf("[%s] setEntryUnsafe: successfully set key=%s, count=%d\n", e.cacheType, key, e.count.Load())
 	return nil
 }
 
 func (e *Entry[V, E]) deleteEntry(ctx context.Context, key string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	fmt.Printf("[%s] deleteEntry: key=%s, full=%v, dirty=%v, count=%d, max=%d\n",
+		e.cacheType, key, e.full.Load(), e.dirty.Load(), e.count.Load(), e.max)
 
 	store := e.storeService.OpenMemoryStore(ctx)
 	storeKey := e.getStoreKey(key)
@@ -176,16 +192,25 @@ func (e *Entry[V, E]) deleteEntry(ctx context.Context, key string) error {
 	// Only decrement counter if the key actually existed
 	if e.max > 0 && exists {
 		newCount := e.count.Add(^uint64(0)) // Subtract 1 using two's complement
+		fmt.Printf("[%s] deleteEntry: decremented count to %d (existed=%v)\n",
+			e.cacheType, newCount, exists)
 		if newCount < uint64(e.max) {
 			e.full.Store(false)
+			fmt.Printf("[%s] deleteEntry: cache is no longer FULL (count=%d < max=%d), but dirty=%v\n",
+				e.cacheType, newCount, e.max, e.dirty.Load())
 		}
 	}
 
+	fmt.Printf("[%s] deleteEntry: successfully deleted key=%s, count=%d, full=%v, dirty=%v\n",
+		e.cacheType, key, e.count.Load(), e.full.Load(), e.dirty.Load())
 	return nil
 }
 
 // clearUnsafe clears the cache but the caller is responsible for holding the lock
 func (e *Entry[V, E]) clearUnsafe(ctx context.Context) error {
+	fmt.Printf("[%s] clearUnsafe: clearing cache, count=%d, full=%v, dirty=%v\n",
+		e.cacheType, e.count.Load(), e.full.Load(), e.dirty.Load())
+
 	store := e.storeService.OpenMemoryStore(ctx)
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
@@ -194,14 +219,18 @@ func (e *Entry[V, E]) clearUnsafe(ctx context.Context) error {
 	}
 	defer iter.Close()
 
+	deletedCount := 0
 	for ; iter.Valid(); iter.Next() {
 		if err := store.Delete(iter.Key()); err != nil {
 			return err
 		}
+		deletedCount++
 	}
 
 	e.count.Store(0)
 	e.full.Store(false)
+	fmt.Printf("[%s] clearUnsafe: cleared %d entries, count=0, full=false\n",
+		e.cacheType, deletedCount)
 	return nil
 }
 
@@ -316,7 +345,10 @@ func NewCache(
 // Unbonding Validators Queue
 
 func (c *ValidatorsQueueCache) checkReloadUnbondingValidatorsQueue(ctx context.Context) error {
+	fmt.Printf("[unbonding_validators] checkReload: checking dirty flag=%v\n", c.unbondingValidatorsQueue.dirty.Load())
+
 	if !c.unbondingValidatorsQueue.dirty.Load() {
+		fmt.Printf("[unbonding_validators] checkReload: not dirty, skipping reload\n")
 		return nil
 	}
 
@@ -325,36 +357,52 @@ func (c *ValidatorsQueueCache) checkReloadUnbondingValidatorsQueue(ctx context.C
 
 	// Double-check - another goroutine might have reloaded while we waited
 	if !c.unbondingValidatorsQueue.dirty.Load() {
+		fmt.Printf("[unbonding_validators] checkReload: no longer dirty after acquiring lock, skipping reload\n")
 		return nil
 	}
 
+	fmt.Printf("[unbonding_validators] checkReload: STARTING RELOAD from persistent store\n")
 	c.logger(ctx).Info("Unbonding validators queue is dirty. Reinitializing cache from store.")
 	data, err := c.unbondingValidatorsQueue.loadFromStore(ctx)
 	if err != nil {
+		fmt.Printf("[unbonding_validators] checkReload: ERROR loading from store: %v\n", err)
 		return err
 	}
+	fmt.Printf("[unbonding_validators] checkReload: loaded %d entries from persistent store\n", len(data))
 
 	if err := c.unbondingValidatorsQueue.clearUnsafe(ctx); err != nil {
+		fmt.Printf("[unbonding_validators] checkReload: ERROR clearing cache: %v\n", err)
 		return err
 	}
+	fmt.Printf("[unbonding_validators] checkReload: cleared cache\n")
 
 	for key, value := range data {
+		fmt.Printf("[unbonding_validators] checkReload: setting entry key=%s during reload\n", key)
 		if err := c.unbondingValidatorsQueue.setEntryUnsafe(ctx, c.cdc, key, value); err != nil {
+			fmt.Printf("[unbonding_validators] checkReload: ERROR setting entry key=%s: %v\n", key, err)
 			return err
 		}
 	}
 
 	c.unbondingValidatorsQueue.dirty.Store(false)
+	fmt.Printf("[unbonding_validators] checkReload: RELOAD COMPLETE, dirty=false, count=%d\n",
+		c.unbondingValidatorsQueue.count.Load())
 
 	return nil
 }
 
 func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context) (map[string][]string, error) {
+	fmt.Printf("[unbonding_validators] GetUnbondingValidatorsQueue: full=%v, dirty=%v, count=%d\n",
+		c.unbondingValidatorsQueue.full.Load(), c.unbondingValidatorsQueue.dirty.Load(),
+		c.unbondingValidatorsQueue.count.Load())
+
 	if c.unbondingValidatorsQueue.full.Load() {
+		fmt.Printf("[unbonding_validators] GetUnbondingValidatorsQueue: cache is FULL, returning error\n")
 		return nil, types.ErrCacheMaxSizeReached
 	}
 
 	if err := c.checkReloadUnbondingValidatorsQueue(ctx); err != nil {
+		fmt.Printf("[unbonding_validators] GetUnbondingValidatorsQueue: reload failed with error: %v\n", err)
 		return nil, err
 	}
 
@@ -374,10 +422,12 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueEntry(ctx context.Cont
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingValidatorQueueEntry(ctx context.Context, key string, addrs []string) error {
+	fmt.Printf("[unbonding_validators] SetUnbondingValidatorQueueEntry: key=%s\n", key)
 	return c.unbondingValidatorsQueue.setEntry(ctx, c.cdc, key, addrs)
 }
 
 func (c *ValidatorsQueueCache) DeleteUnbondingValidatorQueueEntry(ctx context.Context, key string) error {
+	fmt.Printf("[unbonding_validators] DeleteUnbondingValidatorQueueEntry: key=%s\n", key)
 	return c.unbondingValidatorsQueue.deleteEntry(ctx, key)
 }
 
