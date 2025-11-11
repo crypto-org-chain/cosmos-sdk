@@ -342,7 +342,7 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	ctx := createTestContext(t)
 
-	cache := noOpLoadNewTestingCache(2)
+	cache := noOpLoadNewTestingCache(3)
 
 	// clear dirty flags first
 	errs := clearDirtyFlags(ctx, cache)
