@@ -3,6 +3,7 @@ package cache_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
