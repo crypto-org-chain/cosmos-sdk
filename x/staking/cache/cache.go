@@ -116,7 +116,6 @@ func (e *Entry[V, E]) setEntry(ctx context.Context, cdc codec.BinaryCodec, key s
 // setEntryUnsafe works the same as setEntry but the caller is responsible for holding the lock
 func (e *Entry[V, E]) setEntryUnsafe(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
 	if e.full.Load() {
-		e.dirty.Store(true)
 		return types.ErrCacheMaxSizeReached
 	}
 
@@ -145,7 +144,9 @@ func (e *Entry[V, E]) setEntryUnsafe(ctx context.Context, cdc codec.BinaryCodec,
 	if e.max > 0 && !exists {
 		newCount := e.count.Add(1)
 		if newCount >= uint64(e.max) {
+			e.dirty.Store(true)
 			e.full.Store(true)
+			return types.ErrCacheMaxSizeReached
 		}
 	}
 
