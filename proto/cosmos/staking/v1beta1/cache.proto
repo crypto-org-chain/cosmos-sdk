@@ -1,0 +1,20 @@
+syntax = "proto3";
+package cosmos.staking.v1beta1;
+
+option go_package = "github.com/cosmos/cosmos-sdk/x/staking/types";
+
+import "gogoproto/gogo.proto";
+
+// CacheMetadata represents the metadata state for a cache entry
+// It tracks whether the cache needs to be reloaded (dirty) and whether
+// it has reached its maximum capacity (full)
+message CacheMetadata {
+  option (gogoproto.equal)           = true;
+  option (gogoproto.goproto_getters) = false;
+
+  // is_dirty indicates whether the cache needs to be reloaded from the persistent store
+  bool is_dirty = 1;
+
+  // is_full indicates whether the cache has reached its maximum size
+  bool is_full = 2;
+}
