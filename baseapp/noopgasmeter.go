@@ -6,6 +6,10 @@ type noopGasMeter struct{}
 
 var _ storetypes.GasMeter = noopGasMeter{}
 
+func NewNoopGasMeter() storetypes.GasMeter {
+	return noopGasMeter{}
+}
+
 func (noopGasMeter) GasConsumed() storetypes.Gas        { return 0 }
 func (noopGasMeter) GasConsumedToLimit() storetypes.Gas { return 0 }
 func (noopGasMeter) GasRemaining() storetypes.Gas       { return 0 }
