@@ -221,7 +221,7 @@ func TestValidatorsQueueCache_GetEntry(t *testing.T) {
 	endHeight := int64(1000)
 	valKey := types.GetCacheValidatorQueueKey(endTime, endHeight)
 
-	cache.SetUnbondingValidatorQueue(ctx, valKey, []string{"val1", "val2"})
+	cache.SetUnbondingValidatorsQueue(ctx, valKey, []string{"val1", "val2"})
 	valEntry, err := cache.GetUnbondingValidatorsQueue(ctx, endTime, endHeight)
 	require.NoError(t, err)
 	require.Equal(t, []string{"val1", "val2"}, valEntry)
@@ -261,16 +261,16 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	// Test unbonding validators queue
-	err := cache.SetUnbondingValidatorQueue(ctx, "key1", []string{"val1"})
+	err := cache.SetUnbondingValidatorsQueue(ctx, "key1", []string{"val1"})
 	require.NoError(t, err)
-	err = cache.SetUnbondingValidatorQueue(ctx, "key2", []string{"val2"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val2"})
 	require.NoError(t, err)
 
 	valData, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, valData, 2)
 
-	cache.DeleteUnbondingValidatorQueue(ctx, "key1")
+	cache.DeleteUnbondingValidatorsQueue(ctx, "key1")
 	valData, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, valData, 1)
@@ -290,7 +290,7 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, delData, 2)
 
-	cache.DeleteUnbondingDelegationQueue(ctx, "time1")
+	cache.DeleteUnbondingDelegationsQueue(ctx, "time1")
 	delData, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, delData, 1)
@@ -327,13 +327,13 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	// Test unbonding validators queue
-	err := cache.SetUnbondingValidatorQueue(ctx, "key1", []string{"val1"})
+	err := cache.SetUnbondingValidatorsQueue(ctx, "key1", []string{"val1"})
 	require.NoError(t, err)
-	err = cache.SetUnbondingValidatorQueue(ctx, "key2", []string{"val2"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val2"})
 	require.NoError(t, err)
 
 	// Try to add one more - should mark as full and dirty
-	err = cache.SetUnbondingValidatorQueue(ctx, "key3", []string{"val3"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, "key3", []string{"val3"})
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
 	// Test unbonding delegations queue
@@ -389,7 +389,7 @@ func TestValidatorsQueueCache_UnbondingValidators(t *testing.T) {
 	require.Len(t, data["key1"], 2)
 
 	// Set individual entry
-	err = cache.SetUnbondingValidatorQueue(ctx, "key2", []string{"val3", "val4"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val3", "val4"})
 	require.NoError(t, err)
 
 	data, err = cache.GetUnbondingValidatorsQueueAll(ctx)
@@ -397,7 +397,7 @@ func TestValidatorsQueueCache_UnbondingValidators(t *testing.T) {
 	require.Len(t, data, 2)
 
 	// Delete entry
-	cache.DeleteUnbondingValidatorQueue(ctx, "key1")
+	cache.DeleteUnbondingValidatorsQueue(ctx, "key1")
 	data, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
@@ -419,7 +419,7 @@ func TestValidatorsQueueCache_UnbondingValidatorsEntry(t *testing.T) {
 
 	// Set entry
 	validators := []string{"val1", "val2", "val3"}
-	err := cache.SetUnbondingValidatorQueue(ctx, keyStr, validators)
+	err := cache.SetUnbondingValidatorsQueue(ctx, keyStr, validators)
 	require.NoError(t, err)
 
 	// Get specific entry
@@ -459,7 +459,7 @@ func TestValidatorsQueueCache_UnbondingDelegations(t *testing.T) {
 	require.Len(t, data, 2)
 
 	// Delete entry
-	cache.DeleteUnbondingDelegationQueue(ctx, "time1")
+	cache.DeleteUnbondingDelegationsQueue(ctx, "time1")
 	data, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
@@ -577,12 +577,12 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit_SizeOne(t *testi
 	require.Len(t, errs, 0)
 
 	// Step 1: Add one entry - cache becomes full immediately
-	err := cache.SetUnbondingValidatorQueue(ctx, "key0", []string{"val0"})
+	err := cache.SetUnbondingValidatorsQueue(ctx, "key0", []string{"val0"})
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
 
 	// Step 2: Delete the entry - cache is no longer full but is marked dirty
-	err = cache.DeleteUnbondingValidatorQueue(ctx, "key0")
+	err = cache.DeleteUnbondingValidatorsQueue(ctx, "key0")
 	require.NoError(t, err)
 
 	// Step 3: Try to read - should trigger reload because cache was marked dirty. Reload should fail because cache is instantly full upon reload.
@@ -653,13 +653,13 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit(t *testing.T) {
 
 			// Step 1: Add entries to the cache up to 1 less than the max
 			for i := 0; i < tc.numEntries-1; i++ {
-				err := cache.SetUnbondingValidatorQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
+				err := cache.SetUnbondingValidatorsQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
 				require.NoError(t, err)
 			}
 			require.Equal(t, 0, reloadCount, "should not have loaded yet")
 
 			// Step 2: Try to add another entry - should fail if cache is full
-			err := cache.SetUnbondingValidatorQueue(ctx, "extra_key", []string{"extra_val"})
+			err := cache.SetUnbondingValidatorsQueue(ctx, "extra_key", []string{"extra_val"})
 			if tc.expectFull {
 				require.Error(t, err)
 				require.Equal(t, types.ErrCacheMaxSizeReached, err)
@@ -668,7 +668,7 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit(t *testing.T) {
 			}
 
 			// Step 3: Delete one entry - cache is no longer full (if it was) but still dirty (if it was marked)
-			err = cache.DeleteUnbondingValidatorQueue(ctx, "key0")
+			err = cache.DeleteUnbondingValidatorsQueue(ctx, "key0")
 			require.NoError(t, err)
 
 			// Step 4: Try to read - should trigger reload only if cache was marked dirty
@@ -707,7 +707,7 @@ func TestCacheEntry_ConcurrentReads(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	for i := 0; i < 100; i++ {
-		err := cache.SetUnbondingValidatorQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
+		err := cache.SetUnbondingValidatorsQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
 		require.NoError(t, err)
 	}
 
@@ -749,7 +749,7 @@ func TestCacheEntry_ConcurrentWrites(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < writesPerWriter; j++ {
 				key := fmt.Sprintf("key_%d_%d", id, j)
-				cache.SetUnbondingValidatorQueue(ctx, key, []string{fmt.Sprintf("val_%d", id)})
+				cache.SetUnbondingValidatorsQueue(ctx, key, []string{fmt.Sprintf("val_%d", id)})
 			}
 		}(i)
 	}
@@ -775,7 +775,7 @@ func TestCacheEntry_ConcurrentReadWrite(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	for i := 0; i < 100; i++ {
-		err := cache.SetUnbondingValidatorQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
+		err := cache.SetUnbondingValidatorsQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
 		require.NoError(t, err)
 	}
 
@@ -801,7 +801,7 @@ func TestCacheEntry_ConcurrentReadWrite(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("new_key_%d_%d", id, j)
-				cache.SetUnbondingValidatorQueue(ctx, key, []string{fmt.Sprintf("val_%d", id)})
+				cache.SetUnbondingValidatorsQueue(ctx, key, []string{fmt.Sprintf("val_%d", id)})
 			}
 		}(i)
 	}
@@ -834,7 +834,7 @@ func TestCacheEntry_ConcurrentSetAndDelete(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("key_%d", id%10) // Reuse some keys
-				cache.SetUnbondingValidatorQueue(ctx, key, []string{fmt.Sprintf("val_%d_%d", id, j)})
+				cache.SetUnbondingValidatorsQueue(ctx, key, []string{fmt.Sprintf("val_%d_%d", id, j)})
 			}
 		}(i)
 	}
@@ -846,7 +846,7 @@ func TestCacheEntry_ConcurrentSetAndDelete(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("key_%d", id%10)
-				cache.DeleteUnbondingValidatorQueue(ctx, key)
+				cache.DeleteUnbondingValidatorsQueue(ctx, key)
 			}
 		}(i)
 	}
@@ -925,7 +925,7 @@ func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("v_%d_%d", id, j)
-				cache.SetUnbondingValidatorQueue(ctx, key, []string{fmt.Sprintf("addr_%d", id)})
+				cache.SetUnbondingValidatorsQueue(ctx, key, []string{fmt.Sprintf("addr_%d", id)})
 			}
 		}(i)
 	}

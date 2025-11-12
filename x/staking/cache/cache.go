@@ -138,11 +138,11 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context, 
 	return c.unbondingValidatorsQueue.get(ctx, c.cdc, types.GetCacheValidatorQueueKey(endTime, endHeight))
 }
 
-func (c *ValidatorsQueueCache) SetUnbondingValidatorQueue(ctx context.Context, key string, addrs []string) error {
+func (c *ValidatorsQueueCache) SetUnbondingValidatorsQueue(ctx context.Context, key string, addrs []string) error {
 	return c.unbondingValidatorsQueue.set(ctx, c.cdc, key, addrs)
 }
 
-func (c *ValidatorsQueueCache) DeleteUnbondingValidatorQueue(ctx context.Context, key string) error {
+func (c *ValidatorsQueueCache) DeleteUnbondingValidatorsQueue(ctx context.Context, key string) error {
 	return c.unbondingValidatorsQueue.delete(ctx, c.cdc, key)
 }
 
@@ -218,7 +218,7 @@ func (c *ValidatorsQueueCache) SetUnbondingDelegationsQueue(ctx context.Context,
 	return c.unbondingDelegationsQueue.set(ctx, c.cdc, key, delegations)
 }
 
-func (c *ValidatorsQueueCache) DeleteUnbondingDelegationQueue(ctx context.Context, key string) error {
+func (c *ValidatorsQueueCache) DeleteUnbondingDelegationsQueue(ctx context.Context, key string) error {
 	return c.unbondingDelegationsQueue.delete(ctx, c.cdc, key)
 }
 
