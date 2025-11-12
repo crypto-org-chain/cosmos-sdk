@@ -7,7 +7,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-func marshal[V any](cdc codec.BinaryCodec, cacheType EntryType, value V) ([]byte, error) {
+func marshal[V any](cdc codec.BinaryCodec, cacheType Type, value V) ([]byte, error) {
 	switch cacheType {
 	case UnbondingValidators:
 		addrs := any(value).([]string)
@@ -23,7 +23,7 @@ func marshal[V any](cdc codec.BinaryCodec, cacheType EntryType, value V) ([]byte
 	}
 }
 
-func unmarshal[V any](cdc codec.BinaryCodec, cacheType EntryType, bz []byte) (V, error) {
+func unmarshal[V any](cdc codec.BinaryCodec, cacheType Type, bz []byte) (V, error) {
 	var zero V
 	switch cacheType {
 	case UnbondingValidators:

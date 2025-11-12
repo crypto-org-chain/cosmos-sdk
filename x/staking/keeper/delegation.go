@@ -466,7 +466,7 @@ func (k Keeper) SetUnbondingDelegationEntry(
 // certain time.
 func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvPairs []types.DVPair, err error) {
 	if k.cache != nil {
-		cachedPairs, err := k.cache.GetUnbondingDelegationsQueueEntry(ctx, timestamp)
+		cachedPairs, err := k.cache.GetUnbondingDelegationsQueue(ctx, timestamp)
 		if err == nil {
 			return cachedPairs, nil
 		}
@@ -499,7 +499,7 @@ func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, k
 	}
 
 	if k.cache != nil {
-		err = k.cache.SetUnbondingDelegationsQueueEntry(ctx, sdk.FormatTimeString(timestamp), keys)
+		err = k.cache.SetUnbondingDelegationsQueue(ctx, sdk.FormatTimeString(timestamp), keys)
 		if err != nil {
 			k.Logger(ctx).Error("SetUnbondingDelegationsQueueEntry to cache failed", "error", err)
 		}
@@ -576,7 +576,7 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 		}
 
 		if k.cache != nil {
-			if err := k.cache.DeleteUnbondingDelegationQueueEntry(ctx, key); err != nil {
+			if err := k.cache.DeleteUnbondingDelegationQueue(ctx, key); err != nil {
 				k.Logger(ctx).Error("DeleteUnbondingDelegationQueueEntry in cache failed", "error", err)
 			}
 		}
@@ -588,7 +588,7 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 // GetUBDs gets unbonding delegations from the cache or the store
 func (k Keeper) GetUBDs(ctx context.Context, endTime time.Time) (map[string][]types.DVPair, error) {
 	if k.cache != nil {
-		pairs, err := k.cache.GetUnbondingDelegationsQueue(ctx)
+		pairs, err := k.cache.GetUnbondingDelegationsQueueAll(ctx)
 		if err == nil {
 			return pairs, nil
 		}
@@ -872,7 +872,7 @@ func (k Keeper) RemoveRedelegation(ctx context.Context, red types.Redelegation) 
 // expire at a certain time.
 func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time) (dvvTriplets []types.DVVTriplet, err error) {
 	if k.cache != nil {
-		cachedTriplets, err := k.cache.GetRedelegationsQueueEntry(ctx, timestamp)
+		cachedTriplets, err := k.cache.GetRedelegationsQueue(ctx, timestamp)
 		if err == nil {
 			return cachedTriplets, nil
 		}
@@ -911,7 +911,7 @@ func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 	}
 
 	if k.cache != nil {
-		err = k.cache.SetRedelegationsQueueEntry(ctx, sdk.FormatTimeString(timestamp), keys)
+		err = k.cache.SetRedelegationsQueue(ctx, sdk.FormatTimeString(timestamp), keys)
 		if err != nil {
 			k.Logger(ctx).Error("SetRedelegationsQueueEntry to cache failed", "error", err)
 		}
@@ -990,7 +990,7 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 		}
 
 		if k.cache != nil {
-			if err := k.cache.DeleteRedelegationsQueueEntry(ctx, key); err != nil {
+			if err := k.cache.DeleteRedelegationsQueue(ctx, key); err != nil {
 				k.Logger(ctx).Error("DeleteRedelegationsQueueEntry in cache failed", "error", err)
 			}
 		}
@@ -1530,7 +1530,7 @@ func (k Keeper) ValidateUnbondAmount(
 // GetPendingRedelegations gets pending redelegations from the cache or the store
 func (k Keeper) GetPendingRedelegations(ctx context.Context, currTime time.Time) (map[string][]types.DVVTriplet, error) {
 	if k.cache != nil {
-		redelegations, err := k.cache.GetRedelegationsQueue(ctx)
+		redelegations, err := k.cache.GetRedelegationsQueueAll(ctx)
 		if err == nil {
 			return redelegations, nil
 		}

@@ -93,13 +93,13 @@ func noOpLoadNewTestingCache(size uint) *cache.ValidatorsQueueCache {
 func clearDirtyFlags(ctx context.Context, cache *cache.ValidatorsQueueCache) []error {
 	var errs []error
 
-	if _, err := cache.GetUnbondingValidatorsQueue(ctx); err != nil {
+	if _, err := cache.GetUnbondingValidatorsQueueAll(ctx); err != nil {
 		errs = append(errs, err)
 	}
-	if _, err := cache.GetUnbondingDelegationsQueue(ctx); err != nil {
+	if _, err := cache.GetUnbondingDelegationsQueueAll(ctx); err != nil {
 		errs = append(errs, err)
 	}
-	if _, err := cache.GetRedelegationsQueue(ctx); err != nil {
+	if _, err := cache.GetRedelegationsQueueAll(ctx); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -153,18 +153,18 @@ func TestValidatorsQueueCache_LoadFromStore(t *testing.T) {
 	cache := newTestingCache(validatorsLoader, delegationsLoader, redelegationsLoader, 100)
 
 	// Initially dirty, should load from store
-	unbondingValidators, err := cache.GetUnbondingValidatorsQueue(ctx)
+	unbondingValidators, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, unbondingValidators, 2)
 	require.Equal(t, []string{"val1", "val2"}, unbondingValidators["time1"])
 	require.Equal(t, []string{"val3"}, unbondingValidators["time2"])
 
-	unbondingDelegations, err := cache.GetUnbondingDelegationsQueue(ctx)
+	unbondingDelegations, err := cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, unbondingDelegations, 1)
 	require.Equal(t, []types.DVPair{{DelegatorAddress: "del1", ValidatorAddress: "val1"}}, unbondingDelegations["time1"])
 
-	redelgations, err := cache.GetRedelegationsQueue(ctx)
+	redelgations, err := cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, redelgations, 1)
 	require.Equal(t, []types.DVVTriplet{{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}}, redelgations["time1"])
@@ -206,17 +206,17 @@ func TestValidatorsQueueCache_FullPreventsLoad(t *testing.T) {
 	cache := newTestingCache(validatorsLoader, delegationsLoader, redelegationsLoader, 3)
 
 	// Try to load unbonding validators - should fail due to exceeding max
-	_, err := cache.GetUnbondingValidatorsQueue(ctx)
+	_, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
 
 	// Try to load unbonding delegations - should fail due to exceeding max
-	_, err = cache.GetUnbondingDelegationsQueue(ctx)
+	_, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
 
 	// Try to load redelegations - should fail due to exceeding max
-	_, err = cache.GetRedelegationsQueue(ctx)
+	_, err = cache.GetRedelegationsQueueAll(ctx)
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
 }
@@ -235,8 +235,8 @@ func TestValidatorsQueueCache_GetEntry(t *testing.T) {
 	endHeight := int64(1000)
 	valKey := types.GetCacheValidatorQueueKey(endTime, endHeight)
 
-	cache.SetUnbondingValidatorQueueEntry(ctx, valKey, []string{"val1", "val2"})
-	valEntry, err := cache.GetUnbondingValidatorsQueueEntry(ctx, endTime, endHeight)
+	cache.SetUnbondingValidatorQueue(ctx, valKey, []string{"val1", "val2"})
+	valEntry, err := cache.GetUnbondingValidatorsQueue(ctx, endTime, endHeight)
 	require.NoError(t, err)
 	require.Equal(t, []string{"val1", "val2"}, valEntry)
 
@@ -248,11 +248,11 @@ func TestValidatorsQueueCache_GetEntry(t *testing.T) {
 	}
 
 	// clear dirty flags first
-	_, err = cache.GetUnbondingDelegationsQueue(ctx)
+	_, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 
-	cache.SetUnbondingDelegationsQueueEntry(ctx, delKey, delPairs)
-	delEntry, err := cache.GetUnbondingDelegationsQueueEntry(ctx, endTime)
+	cache.SetUnbondingDelegationsQueue(ctx, delKey, delPairs)
+	delEntry, err := cache.GetUnbondingDelegationsQueue(ctx, endTime)
 	require.NoError(t, err)
 	require.Equal(t, delPairs, delEntry)
 
@@ -264,11 +264,11 @@ func TestValidatorsQueueCache_GetEntry(t *testing.T) {
 	}
 
 	// clear dirty flags first
-	_, err = cache.GetRedelegationsQueue(ctx)
+	_, err = cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 
-	cache.SetRedelegationsQueueEntry(ctx, redKey, redTriplets)
-	redEntry, err := cache.GetRedelegationsQueueEntry(ctx, endTime)
+	cache.SetRedelegationsQueue(ctx, redKey, redTriplets)
+	redEntry, err := cache.GetRedelegationsQueue(ctx, endTime)
 	require.NoError(t, err)
 	require.Equal(t, redTriplets, redEntry)
 }
@@ -283,57 +283,57 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	// Test unbonding validators queue
-	err := cache.SetUnbondingValidatorQueueEntry(ctx, "key1", []string{"val1"})
+	err := cache.SetUnbondingValidatorQueue(ctx, "key1", []string{"val1"})
 	require.NoError(t, err)
-	err = cache.SetUnbondingValidatorQueueEntry(ctx, "key2", []string{"val2"})
+	err = cache.SetUnbondingValidatorQueue(ctx, "key2", []string{"val2"})
 	require.NoError(t, err)
 
-	valData, err := cache.GetUnbondingValidatorsQueue(ctx)
+	valData, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, valData, 2)
 
-	cache.DeleteUnbondingValidatorQueueEntry(ctx, "key1")
-	valData, err = cache.GetUnbondingValidatorsQueue(ctx)
+	cache.DeleteUnbondingValidatorQueue(ctx, "key1")
+	valData, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, valData, 1)
 	require.NotContains(t, valData, "key1")
 
 	// Test unbonding delegations queue
-	err = cache.SetUnbondingDelegationsQueueEntry(ctx, "time1", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, "time1", []types.DVPair{
 		{DelegatorAddress: "del1", ValidatorAddress: "val1"},
 	})
 	require.NoError(t, err)
-	err = cache.SetUnbondingDelegationsQueueEntry(ctx, "time2", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, "time2", []types.DVPair{
 		{DelegatorAddress: "del2", ValidatorAddress: "val2"},
 	})
 	require.NoError(t, err)
 
-	delData, err := cache.GetUnbondingDelegationsQueue(ctx)
+	delData, err := cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, delData, 2)
 
-	cache.DeleteUnbondingDelegationQueueEntry(ctx, "time1")
-	delData, err = cache.GetUnbondingDelegationsQueue(ctx)
+	cache.DeleteUnbondingDelegationQueue(ctx, "time1")
+	delData, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, delData, 1)
 	require.NotContains(t, delData, "time1")
 
 	// Test redelegations queue
-	err = cache.SetRedelegationsQueueEntry(ctx, "time1", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, "time1", []types.DVVTriplet{
 		{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"},
 	})
 	require.NoError(t, err)
-	err = cache.SetRedelegationsQueueEntry(ctx, "time2", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, "time2", []types.DVVTriplet{
 		{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"},
 	})
 	require.NoError(t, err)
 
-	redData, err := cache.GetRedelegationsQueue(ctx)
+	redData, err := cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, redData, 2)
 
-	cache.DeleteRedelegationsQueueEntry(ctx, "time1")
-	redData, err = cache.GetRedelegationsQueue(ctx)
+	cache.DeleteRedelegationsQueue(ctx, "time1")
+	redData, err = cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, redData, 1)
 	require.NotContains(t, redData, "time1")
@@ -349,44 +349,44 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	// Test unbonding validators queue
-	err := cache.SetUnbondingValidatorQueueEntry(ctx, "key1", []string{"val1"})
+	err := cache.SetUnbondingValidatorQueue(ctx, "key1", []string{"val1"})
 	require.NoError(t, err)
-	err = cache.SetUnbondingValidatorQueueEntry(ctx, "key2", []string{"val2"})
+	err = cache.SetUnbondingValidatorQueue(ctx, "key2", []string{"val2"})
 	require.NoError(t, err)
 
 	// Try to add one more - should mark as full and dirty
-	err = cache.SetUnbondingValidatorQueueEntry(ctx, "key3", []string{"val3"})
+	err = cache.SetUnbondingValidatorQueue(ctx, "key3", []string{"val3"})
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
 	// Test unbonding delegations queue
-	err = cache.SetUnbondingDelegationsQueueEntry(ctx, "time1", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, "time1", []types.DVPair{
 		{DelegatorAddress: "del1", ValidatorAddress: "val1"},
 	})
 	require.NoError(t, err)
-	err = cache.SetUnbondingDelegationsQueueEntry(ctx, "time2", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, "time2", []types.DVPair{
 		{DelegatorAddress: "del2", ValidatorAddress: "val2"},
 	})
 	require.NoError(t, err)
 
 	// Try to add one more - should mark as full and dirty
-	err = cache.SetUnbondingDelegationsQueueEntry(ctx, "time3", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, "time3", []types.DVPair{
 		{DelegatorAddress: "del3", ValidatorAddress: "val3"},
 	})
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheMaxSizeReached, err)
 
 	// Test redelegations queue
-	err = cache.SetRedelegationsQueueEntry(ctx, "time1", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, "time1", []types.DVVTriplet{
 		{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"},
 	})
 	require.NoError(t, err)
-	err = cache.SetRedelegationsQueueEntry(ctx, "time2", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, "time2", []types.DVVTriplet{
 		{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"},
 	})
 	require.NoError(t, err)
 
 	// Try to add one more - should mark as full and dirty
-	err = cache.SetRedelegationsQueueEntry(ctx, "time3", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, "time3", []types.DVVTriplet{
 		{DelegatorAddress: "del3", ValidatorSrcAddress: "val3", ValidatorDstAddress: "val4"},
 	})
 	require.Error(t, err)
@@ -405,22 +405,22 @@ func TestValidatorsQueueCache_UnbondingValidators(t *testing.T) {
 	cache := newTestingCache(validatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, 100)
 
 	// Load from store
-	data, err := cache.GetUnbondingValidatorsQueue(ctx)
+	data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
 	require.Len(t, data["key1"], 2)
 
 	// Set individual entry
-	err = cache.SetUnbondingValidatorQueueEntry(ctx, "key2", []string{"val3", "val4"})
+	err = cache.SetUnbondingValidatorQueue(ctx, "key2", []string{"val3", "val4"})
 	require.NoError(t, err)
 
-	data, err = cache.GetUnbondingValidatorsQueue(ctx)
+	data, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 2)
 
 	// Delete entry
-	cache.DeleteUnbondingValidatorQueueEntry(ctx, "key1")
-	data, err = cache.GetUnbondingValidatorsQueue(ctx)
+	cache.DeleteUnbondingValidatorQueue(ctx, "key1")
+	data, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
 	require.NotContains(t, data, "key1")
@@ -441,11 +441,11 @@ func TestValidatorsQueueCache_UnbondingValidatorsEntry(t *testing.T) {
 
 	// Set entry
 	validators := []string{"val1", "val2", "val3"}
-	err := cache.SetUnbondingValidatorQueueEntry(ctx, keyStr, validators)
+	err := cache.SetUnbondingValidatorQueue(ctx, keyStr, validators)
 	require.NoError(t, err)
 
 	// Get specific entry
-	entry, err := cache.GetUnbondingValidatorsQueueEntry(ctx, endTime, endHeight)
+	entry, err := cache.GetUnbondingValidatorsQueue(ctx, endTime, endHeight)
 	require.NoError(t, err)
 	require.Equal(t, validators, entry)
 }
@@ -465,24 +465,24 @@ func TestValidatorsQueueCache_UnbondingDelegations(t *testing.T) {
 	cache := newTestingCache(noOpValidatorsLoader, delegationsLoader, noOpRedelegationsLoader, 100)
 
 	// Load from store
-	data, err := cache.GetUnbondingDelegationsQueue(ctx)
+	data, err := cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
 	require.Len(t, data["time1"], 2)
 
 	// Set individual entry
-	err = cache.SetUnbondingDelegationsQueueEntry(ctx, "time2", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, "time2", []types.DVPair{
 		{DelegatorAddress: "del3", ValidatorAddress: "val3"},
 	})
 	require.NoError(t, err)
 
-	data, err = cache.GetUnbondingDelegationsQueue(ctx)
+	data, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 2)
 
 	// Delete entry
-	cache.DeleteUnbondingDelegationQueueEntry(ctx, "time1")
-	data, err = cache.GetUnbondingDelegationsQueue(ctx)
+	cache.DeleteUnbondingDelegationQueue(ctx, "time1")
+	data, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
 	require.NotContains(t, data, "time1")
@@ -504,11 +504,11 @@ func TestValidatorsQueueCache_UnbondingDelegationsEntry(t *testing.T) {
 	pairs := []types.DVPair{
 		{DelegatorAddress: "del1", ValidatorAddress: "val1"},
 	}
-	err := cache.SetUnbondingDelegationsQueueEntry(ctx, keyStr, pairs)
+	err := cache.SetUnbondingDelegationsQueue(ctx, keyStr, pairs)
 	require.NoError(t, err)
 
 	// Get specific entry
-	entry, err := cache.GetUnbondingDelegationsQueueEntry(ctx, endTime)
+	entry, err := cache.GetUnbondingDelegationsQueue(ctx, endTime)
 	require.NoError(t, err)
 	require.Equal(t, pairs, entry)
 }
@@ -527,23 +527,23 @@ func TestValidatorsQueueCache_Redelegations(t *testing.T) {
 	cache := newTestingCache(noOpValidatorsLoader, noOpDelegationsLoader, redelegationsLoader, 100)
 
 	// Load from store
-	data, err := cache.GetRedelegationsQueue(ctx)
+	data, err := cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
 
 	// Set individual entry
-	err = cache.SetRedelegationsQueueEntry(ctx, "time2", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, "time2", []types.DVVTriplet{
 		{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"},
 	})
 	require.NoError(t, err)
 
-	data, err = cache.GetRedelegationsQueue(ctx)
+	data, err = cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 2)
 
 	// Delete entry
-	cache.DeleteRedelegationsQueueEntry(ctx, "time1")
-	data, err = cache.GetRedelegationsQueue(ctx)
+	cache.DeleteRedelegationsQueue(ctx, "time1")
+	data, err = cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
 	require.NotContains(t, data, "time1")
@@ -565,11 +565,11 @@ func TestValidatorsQueueCache_RedelegationsEntry(t *testing.T) {
 	triplets := []types.DVVTriplet{
 		{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"},
 	}
-	err := cache.SetRedelegationsQueueEntry(ctx, keyStr, triplets)
+	err := cache.SetRedelegationsQueue(ctx, keyStr, triplets)
 	require.NoError(t, err)
 
 	// Get specific entry
-	entry, err := cache.GetRedelegationsQueueEntry(ctx, endTime)
+	entry, err := cache.GetRedelegationsQueue(ctx, endTime)
 	require.NoError(t, err)
 	require.Equal(t, triplets, entry)
 }
@@ -585,7 +585,7 @@ func TestCacheEntry_ConcurrentReads(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	for i := 0; i < 100; i++ {
-		err := cache.SetUnbondingValidatorQueueEntry(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
+		err := cache.SetUnbondingValidatorQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
 		require.NoError(t, err)
 	}
 
@@ -598,7 +598,7 @@ func TestCacheEntry_ConcurrentReads(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < readsPerReader; j++ {
-				data, err := cache.GetUnbondingValidatorsQueue(ctx)
+				data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 				require.NoError(t, err)
 				require.NotEmpty(t, data)
 			}
@@ -627,7 +627,7 @@ func TestCacheEntry_ConcurrentWrites(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < writesPerWriter; j++ {
 				key := fmt.Sprintf("key_%d_%d", id, j)
-				cache.SetUnbondingValidatorQueueEntry(ctx, key, []string{fmt.Sprintf("val_%d", id)})
+				cache.SetUnbondingValidatorQueue(ctx, key, []string{fmt.Sprintf("val_%d", id)})
 			}
 		}(i)
 	}
@@ -635,7 +635,7 @@ func TestCacheEntry_ConcurrentWrites(t *testing.T) {
 	wg.Wait()
 
 	// Verify data integrity
-	data, err := cache.GetUnbondingValidatorsQueue(ctx)
+	data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
 	// Each writer creates unique keys, so we expect exactly numWriters * writesPerWriter entries
@@ -653,7 +653,7 @@ func TestCacheEntry_ConcurrentReadWrite(t *testing.T) {
 	require.Len(t, errs, 0)
 
 	for i := 0; i < 100; i++ {
-		err := cache.SetUnbondingValidatorQueueEntry(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
+		err := cache.SetUnbondingValidatorQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
 		require.NoError(t, err)
 	}
 
@@ -667,7 +667,7 @@ func TestCacheEntry_ConcurrentReadWrite(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
-				_, _ = cache.GetUnbondingValidatorsQueue(ctx)
+				_, _ = cache.GetUnbondingValidatorsQueueAll(ctx)
 			}
 		}()
 	}
@@ -679,7 +679,7 @@ func TestCacheEntry_ConcurrentReadWrite(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("new_key_%d_%d", id, j)
-				cache.SetUnbondingValidatorQueueEntry(ctx, key, []string{fmt.Sprintf("val_%d", id)})
+				cache.SetUnbondingValidatorQueue(ctx, key, []string{fmt.Sprintf("val_%d", id)})
 			}
 		}(i)
 	}
@@ -687,7 +687,7 @@ func TestCacheEntry_ConcurrentReadWrite(t *testing.T) {
 	wg.Wait()
 
 	// Should complete without race conditions
-	data, err := cache.GetUnbondingValidatorsQueue(ctx)
+	data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
 }
@@ -712,7 +712,7 @@ func TestCacheEntry_ConcurrentSetAndDelete(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("key_%d", id%10) // Reuse some keys
-				cache.SetUnbondingValidatorQueueEntry(ctx, key, []string{fmt.Sprintf("val_%d_%d", id, j)})
+				cache.SetUnbondingValidatorQueue(ctx, key, []string{fmt.Sprintf("val_%d_%d", id, j)})
 			}
 		}(i)
 	}
@@ -724,7 +724,7 @@ func TestCacheEntry_ConcurrentSetAndDelete(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("key_%d", id%10)
-				cache.DeleteUnbondingValidatorQueueEntry(ctx, key)
+				cache.DeleteUnbondingValidatorQueue(ctx, key)
 			}
 		}(i)
 	}
@@ -732,7 +732,7 @@ func TestCacheEntry_ConcurrentSetAndDelete(t *testing.T) {
 	wg.Wait()
 
 	// Should complete without panic
-	_, _ = cache.GetUnbondingValidatorsQueue(ctx)
+	_, _ = cache.GetUnbondingValidatorsQueueAll(ctx)
 }
 
 func TestCacheEntry_LoadMutexPreventsMultipleReloads(t *testing.T) {
@@ -763,7 +763,7 @@ func TestCacheEntry_LoadMutexPreventsMultipleReloads(t *testing.T) {
 			defer wg.Done()
 			// All goroutines try to read at the same time
 			// This should trigger reload, but loadMu should ensure only one reload happens
-			data, err := cache.GetUnbondingValidatorsQueue(ctx)
+			data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 			require.NoError(t, err)
 			require.NotEmpty(t, data)
 		}()
@@ -776,7 +776,7 @@ func TestCacheEntry_LoadMutexPreventsMultipleReloads(t *testing.T) {
 	require.Equal(t, int32(1), loadCount.Load(), "loader should only be called once despite concurrent access")
 
 	// Verify the data is correct
-	data, err := cache.GetUnbondingValidatorsQueue(ctx)
+	data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 2)
 	require.Equal(t, []string{"val1", "val2"}, data["key1"])
@@ -803,7 +803,7 @@ func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("v_%d_%d", id, j)
-				cache.SetUnbondingValidatorQueueEntry(ctx, key, []string{fmt.Sprintf("addr_%d", id)})
+				cache.SetUnbondingValidatorQueue(ctx, key, []string{fmt.Sprintf("addr_%d", id)})
 			}
 		}(i)
 	}
@@ -815,7 +815,7 @@ func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("d_%d_%d", id, j)
-				cache.SetUnbondingDelegationsQueueEntry(ctx, key, []types.DVPair{
+				cache.SetUnbondingDelegationsQueue(ctx, key, []types.DVPair{
 					{DelegatorAddress: fmt.Sprintf("del_%d", id), ValidatorAddress: "val"},
 				})
 			}
@@ -829,7 +829,7 @@ func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
 				key := fmt.Sprintf("r_%d_%d", id, j)
-				cache.SetRedelegationsQueueEntry(ctx, key, []types.DVVTriplet{
+				cache.SetRedelegationsQueue(ctx, key, []types.DVVTriplet{
 					{DelegatorAddress: fmt.Sprintf("del_%d", id), ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"},
 				})
 			}
@@ -842,9 +842,9 @@ func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < operationsPerRoutine; j++ {
-				_, _ = cache.GetUnbondingValidatorsQueue(ctx)
-				_, _ = cache.GetUnbondingDelegationsQueue(ctx)
-				_, _ = cache.GetRedelegationsQueue(ctx)
+				_, _ = cache.GetUnbondingValidatorsQueueAll(ctx)
+				_, _ = cache.GetUnbondingDelegationsQueueAll(ctx)
+				_, _ = cache.GetRedelegationsQueueAll(ctx)
 			}
 		}()
 	}
@@ -852,9 +852,9 @@ func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 	wg.Wait()
 
 	// Verify all caches have data
-	vData, _ := cache.GetUnbondingValidatorsQueue(ctx)
-	dData, _ := cache.GetUnbondingDelegationsQueue(ctx)
-	rData, _ := cache.GetRedelegationsQueue(ctx)
+	vData, _ := cache.GetUnbondingValidatorsQueueAll(ctx)
+	dData, _ := cache.GetUnbondingDelegationsQueueAll(ctx)
+	rData, _ := cache.GetRedelegationsQueueAll(ctx)
 
 	require.NotEmpty(t, vData)
 	require.NotEmpty(t, dData)

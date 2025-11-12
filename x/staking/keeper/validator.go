@@ -448,7 +448,7 @@ func (k Keeper) GetLastValidators(ctx context.Context) (validators []types.Valid
 // complete their unbonding at a given time and height.
 func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
 	if k.cache != nil {
-		cachedAddrs, err := k.cache.GetUnbondingValidatorsQueueEntry(ctx, endTime, endHeight)
+		cachedAddrs, err := k.cache.GetUnbondingValidatorsQueue(ctx, endTime, endHeight)
 		if err == nil {
 			return cachedAddrs, nil
 		}
@@ -488,7 +488,7 @@ func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Ti
 	}
 
 	if k.cache != nil {
-		err = k.cache.SetUnbondingValidatorQueueEntry(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
+		err = k.cache.SetUnbondingValidatorQueue(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
 		if err != nil {
 			k.Logger(ctx).Error("SetUnbondingValidatorsQueue to cache failed", "error", err)
 		}
@@ -516,7 +516,7 @@ func (k Keeper) DeleteValidatorQueueTimeSlice(ctx context.Context, endTime time.
 		return err
 	}
 	if k.cache != nil {
-		if err := k.cache.DeleteUnbondingValidatorQueueEntry(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight)); err != nil {
+		if err := k.cache.DeleteUnbondingValidatorQueue(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight)); err != nil {
 			k.Logger(ctx).Error("DeleteUnbondingValidatorQueueEntry in cache failed", "error", err)
 		}
 	}
@@ -681,7 +681,7 @@ func (k Keeper) GetPubKeyByConsAddr(ctx context.Context, addr sdk.ConsAddress) (
 // GetPendingUnbondingValidators gets unbonding validators from the cache or the store
 func (k Keeper) GetPendingUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) (map[string][]string, error) {
 	if k.cache != nil {
-		addrs, err := k.cache.GetUnbondingValidatorsQueue(ctx)
+		addrs, err := k.cache.GetUnbondingValidatorsQueueAll(ctx)
 		if err == nil {
 			return addrs, nil
 		}
