@@ -40,7 +40,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
-* (x/staking) [#1733](https://github.com/crypto-org-chain/cosmos-sdk/pull/1730) Fix staking cache to in-memory KV store and ensure rollback on discarded contexts.
+* (x/staking) [#1733](https://github.com/crypto-org-chain/cosmos-sdk/pull/1730) Fix staking cache to use an in-memory KV store to ensure rollback on discarded contexts.
 * (x/staking) [#1730](https://github.com/crypto-org-chain/cosmos-sdk/pull/1730) Normalize cache validator queue key to be UTC.
 * (x/staking) [#1725](https://github.com/crypto-org-chain/cosmos-sdk/pull/1725) Optimize staking endblocker execution by caching queue entries from iterators.
 * (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
