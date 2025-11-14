@@ -40,10 +40,8 @@ func (k Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpda
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	blockTime := sdkCtx.BlockTime()
-
 	// Remove all mature unbonding delegations from the ubd queue.
-	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, blockTime)
+	matureUnbonds, err := k.DequeueAllMatureUBDQueue(ctx, sdkCtx.BlockHeader().Time)
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +70,9 @@ func (k Keeper) BlockValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpda
 			),
 		)
 	}
+
 	// Remove all mature redelegations from the red queue.
-	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, blockTime)
+	matureRedelegations, err := k.DequeueAllMatureRedelegationQueue(ctx, sdkCtx.BlockHeader().Time)
 	if err != nil {
 		return nil, err
 	}
@@ -174,13 +173,13 @@ func (k Keeper) ApplyAndReturnValidatorSetUpdates(ctx context.Context) (updates 
 		case validator.IsUnbonded():
 			validator, err = k.unbondedToBonded(ctx, validator)
 			if err != nil {
-				return updates, err
+				return
 			}
 			amtFromNotBondedToBonded = amtFromNotBondedToBonded.Add(validator.GetTokens())
 		case validator.IsUnbonding():
 			validator, err = k.unbondingToBonded(ctx, validator)
 			if err != nil {
-				return updates, err
+				return
 			}
 			amtFromNotBondedToBonded = amtFromNotBondedToBonded.Add(validator.GetTokens())
 		case validator.IsBonded():
