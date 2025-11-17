@@ -56,6 +56,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#744](https://github.com/crypto-org-chain/cosmos-sdk/pull/744) Pass raw transactions to tx executor so it can do pre-estimations.
 * [#884](https://github.com/crypto-org-chain/cosmos-sdk/pull/884) Avoid decoding tx for in PrepareProposal if it's NopMempool.
 * (x/staking) [#24354](https://github.com/cosmos/cosmos-sdk/pull/24354) Optimize validator endblock by reducing bech32 conversions, resulting in significant performance improvement
+* (x/mint) [#25562](https://github.com/cosmos/cosmos-sdk/pull/25562) Improve and test `x/mint` params validation.
 
 ## [Unreleased]
 
