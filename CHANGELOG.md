@@ -40,8 +40,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
-* (x/staking) [#1730](https://github.com/crypto-org-chain/cosmos-sdk/pull/1730) Normalize cache validator queue key to be UTC.
-* (x/staking) [#1725](https://github.com/crypto-org-chain/cosmos-sdk/pull/1725) Optimize staking endblocker execution by caching queue entries from iterators.
 * (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
 * (baseapp) [#206](https://github.com/crypto-org-chain/cosmos-sdk/pull/206) Support mount object store in baseapp, add `ObjectStore` api in context, [#585](https://github.com/crypto-org-chain/cosmos-sdk/pull/585) Skip snapshot for object store.
 * (bank) [#237](https://github.com/crypto-org-chain/cosmos-sdk/pull/237) Support virtual accounts in sending coins.
