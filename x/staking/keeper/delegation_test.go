@@ -1255,6 +1255,7 @@ func (s *KeeperTestSuite) TestGetUBDQueueTimeSlice() {
 				blockHeight,
 				time1,
 				math.NewInt(10),
+				0,
 				address.NewBech32Codec("cosmosvaloper"),
 				address.NewBech32Codec("cosmos"),
 			)
@@ -1267,6 +1268,7 @@ func (s *KeeperTestSuite) TestGetUBDQueueTimeSlice() {
 				blockHeight,
 				time2,
 				math.NewInt(20),
+				0,
 				address.NewBech32Codec("cosmosvaloper"),
 				address.NewBech32Codec("cosmos"),
 			)
@@ -1279,6 +1281,7 @@ func (s *KeeperTestSuite) TestGetUBDQueueTimeSlice() {
 				blockHeight,
 				time3,
 				math.NewInt(30),
+				0,
 				address.NewBech32Codec("cosmosvaloper"),
 				address.NewBech32Codec("cosmos"),
 			)
@@ -1397,6 +1400,7 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 				blockHeight,
 				blockTime,
 				math.NewInt(10),
+				0,
 				address.NewBech32Codec("cosmosvaloper"),
 				address.NewBech32Codec("cosmos"),
 			)
@@ -1411,6 +1415,7 @@ func (s *KeeperTestSuite) TestGetAllUnbondingDelegations() {
 				blockHeight,
 				blockTime,
 				math.NewInt(10),
+				0,
 				address.NewBech32Codec("cosmosvaloper"),
 				address.NewBech32Codec("cosmos"),
 			)
@@ -1521,6 +1526,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 				blockHeight,
 				blockTime,
 				math.NewInt(10),
+				0,
 				address.NewBech32Codec("cosmosvaloper"),
 				address.NewBech32Codec("cosmos"),
 			)
@@ -1535,6 +1541,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 				blockHeight,
 				blockTime,
 				math.NewInt(10),
+				0,
 				address.NewBech32Codec("cosmosvaloper"),
 				address.NewBech32Codec("cosmos"),
 			)
@@ -1565,6 +1572,7 @@ func (s *KeeperTestSuite) TestInsertUBDQueue() {
 				blockHeight,
 				blockTime,
 				math.NewInt(10),
+				0,
 				address.NewBech32Codec("cosmosvaloper"),
 				address.NewBech32Codec("cosmos"),
 			)
@@ -2194,7 +2202,7 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 			// insert redelegation
 			red := stakingtypes.NewRedelegation(delAddrs[0], valAddrs[0], valAddrs[1], 0,
 				time.Unix(0, 0), math.NewInt(5),
-				math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+				math.LegacyNewDec(5), 0, address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
 
 			t := blockTime
 			s.Require().NoError(keeper.InsertRedelegationQueue(ctx, red, t))
@@ -2202,7 +2210,7 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 			// insert another redelegation
 			red1 := stakingtypes.NewRedelegation(delAddrs[1], valAddrs[1], valAddrs[0], 0,
 				time.Unix(0, 0), math.NewInt(5),
-				math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+				math.LegacyNewDec(5), 0, address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
 
 			s.Require().NoError(keeper.InsertRedelegationQueue(ctx, red1, t))
 
@@ -2226,7 +2234,7 @@ func (s *KeeperTestSuite) TestInsertRedelegationQueue() {
 			// insert another redelegation with different redelegation time and height
 			red2 := stakingtypes.NewRedelegation(delAddrs[2], valAddrs[2], valAddrs[0], 0,
 				time.Unix(0, 0), math.NewInt(5),
-				math.LegacyNewDec(5), address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+				math.LegacyNewDec(5), 0, address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
 			t2 := blockTime.Add(-1 * time.Minute)
 			s.Require().NoError(keeper.InsertRedelegationQueue(ctx, red2, t2))
 
