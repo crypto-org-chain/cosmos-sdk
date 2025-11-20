@@ -132,19 +132,13 @@ func (e *Entry[V, E]) delete(ctx context.Context, cdc codec.BinaryCodec, key str
 	}
 
 	if e.max > 0 && exist {
-		count, err := e.count(store)
+		metadata, err := e.getMetadata(store, cdc)
 		if err != nil {
 			return err
 		}
-		if count < uint64(e.max) {
-			metadata, err := e.getMetadata(store, cdc)
-			if err != nil {
-				return err
-			}
-			metadata.IsFull = false
-			if err := e.setMetadata(store, cdc, metadata); err != nil {
-				return err
-			}
+		metadata.IsFull = false
+		if err := e.setMetadata(store, cdc, metadata); err != nil {
+			return err
 		}
 	}
 	return nil
