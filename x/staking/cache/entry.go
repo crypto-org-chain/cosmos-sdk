@@ -233,6 +233,15 @@ func (e *Entry[V, E]) setMetadata(store corestoretypes.KVStore, cdc codec.Binary
 func (e *Entry[V, E]) setUnsafe(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
 	store := e.storeService.OpenMemoryStore(ctx)
 
+	metadata, err := e.getMetadata(store, cdc)
+	if err != nil {
+		return err
+	}
+
+	if metadata.IsFull {
+		return types.ErrCacheMaxSizeReached
+	}
+
 	exist := false
 	if e.max > 0 {
 		var err error
@@ -258,10 +267,6 @@ func (e *Entry[V, E]) setUnsafe(ctx context.Context, cdc codec.BinaryCodec, key 
 		}
 
 		if count >= uint64(e.max) {
-			metadata, err := e.getMetadata(store, cdc)
-			if err != nil {
-				return err
-			}
 			metadata.IsDirty = true
 			metadata.IsFull = true
 			if err := e.setMetadata(store, cdc, metadata); err != nil {
