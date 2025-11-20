@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	corestoretypes "cosmossdk.io/core/store"
+	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -50,9 +51,13 @@ func NewEntry[V ~[]E, E any](
 	return entry
 }
 
-func (e *Entry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec) (map[string]V, error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
+func (e *Entry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) (map[string]V, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if err := e.checkReload(ctx, cdc, logger); err != nil {
+		return nil, err
+	}
 
 	result := make(map[string]V)
 
@@ -79,9 +84,13 @@ func (e *Entry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec) (map[st
 	return result, nil
 }
 
-func (e *Entry[V, E]) get(ctx context.Context, cdc codec.BinaryCodec, key string) (V, error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
+func (e *Entry[V, E]) get(ctx context.Context, cdc codec.BinaryCodec, key string, logger func(ctx context.Context) log.Logger) (V, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if err := e.checkReload(ctx, cdc, logger); err != nil {
+		return make(V, 0), err
+	}
 
 	store := e.storeService.OpenMemoryStore(ctx)
 	storeKey := e.getStoreKey(key)
@@ -139,18 +148,6 @@ func (e *Entry[V, E]) delete(ctx context.Context, cdc codec.BinaryCodec, key str
 		}
 	}
 	return nil
-}
-
-func (e *Entry[V, E]) isFull(ctx context.Context, cdc codec.BinaryCodec) (bool, error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	store := e.storeService.OpenMemoryStore(ctx)
-	metadata, err := e.getMetadata(store, cdc)
-	if err != nil {
-		return false, err
-	}
-	return metadata.IsFull, nil
 }
 
 func (e *Entry[V, E]) getStoreKey(key string) []byte {
@@ -300,5 +297,45 @@ func (e *Entry[V, E]) clear(ctx context.Context, cdc codec.BinaryCodec) error {
 		return err
 	}
 	metadata.IsFull = false
+	return e.setMetadata(store, cdc, metadata)
+}
+
+// checkReload: caller MUST hold lock
+func (e *Entry[V, E]) checkReload(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) error {
+	store := e.storeService.OpenMemoryStore(ctx)
+
+	metadata, err := e.getMetadata(store, cdc)
+	if err != nil {
+		return err
+	}
+
+	if metadata.IsFull {
+		return types.ErrCacheMaxSizeReached
+	}
+
+	if !metadata.IsDirty {
+		return nil
+	}
+
+	if logger != nil {
+		logger(ctx).Info(fmt.Sprintf("%s queue is dirty. Reinitializing cache from store.", e.entryType))
+	}
+
+	data, err := e.loadFromStore(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := e.clear(ctx, cdc); err != nil {
+		return err
+	}
+
+	for key, value := range data {
+		if err := e.setUnsafe(ctx, cdc, key, value); err != nil {
+			return err
+		}
+	}
+
+	metadata.IsDirty = false
 	return e.setMetadata(store, cdc, metadata)
 }
