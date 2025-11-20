@@ -193,3 +193,8 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 
 	return valUpdates.Updates, nil
 }
+
+func (k *Keeper) disableCache(ctx context.Context, err error) {
+	k.Logger(ctx).Error("Disabling cache due to unexpected error", "error", err)
+	k.cache = nil
+}
