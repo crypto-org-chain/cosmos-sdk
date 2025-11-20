@@ -110,7 +110,52 @@ func (e *Entry[V, E]) get(ctx context.Context, cdc codec.BinaryCodec, key string
 func (e *Entry[V, E]) set(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.setUnsafe(ctx, cdc, key, value)
+	store := e.storeService.OpenMemoryStore(ctx)
+
+	metadata, err := e.getMetadata(store, cdc)
+	if err != nil {
+		return err
+	}
+
+	if metadata.IsFull {
+		return types.ErrCacheMaxSizeReached
+	}
+
+	exist := false
+	if e.max > 0 {
+		var err error
+		exist, err = e.exists(store, key)
+		if err != nil {
+			return err
+		}
+	}
+
+	bz, err := marshal(cdc, e.entryType, value)
+	if err != nil {
+		return err
+	}
+
+	if err := e.setStore(store, key, bz); err != nil {
+		return err
+	}
+
+	if e.max > 0 && !exist {
+		count, err := e.count(store)
+		if err != nil {
+			return err
+		}
+
+		if count >= uint64(e.max) {
+			metadata.IsDirty = true
+			metadata.IsFull = true
+			if err := e.setMetadata(store, cdc, metadata); err != nil {
+				return err
+			}
+			return types.ErrCacheMaxSizeReached
+		}
+	}
+
+	return nil
 }
 
 func (e *Entry[V, E]) delete(ctx context.Context, cdc codec.BinaryCodec, key string) error {
@@ -220,56 +265,6 @@ func (e *Entry[V, E]) setMetadata(store corestoretypes.KVStore, cdc codec.Binary
 	return store.Set(e.getMetaKey(), bz)
 }
 
-// setUnsafe: caller MUST hold lock
-func (e *Entry[V, E]) setUnsafe(ctx context.Context, cdc codec.BinaryCodec, key string, value V) error {
-	store := e.storeService.OpenMemoryStore(ctx)
-
-	metadata, err := e.getMetadata(store, cdc)
-	if err != nil {
-		return err
-	}
-
-	if metadata.IsFull {
-		return types.ErrCacheMaxSizeReached
-	}
-
-	exist := false
-	if e.max > 0 {
-		var err error
-		exist, err = e.exists(store, key)
-		if err != nil {
-			return err
-		}
-	}
-
-	bz, err := marshal(cdc, e.entryType, value)
-	if err != nil {
-		return err
-	}
-
-	if err := e.setStore(store, key, bz); err != nil {
-		return err
-	}
-
-	if e.max > 0 && !exist {
-		count, err := e.count(store)
-		if err != nil {
-			return err
-		}
-
-		if count >= uint64(e.max) {
-			metadata.IsDirty = true
-			metadata.IsFull = true
-			if err := e.setMetadata(store, cdc, metadata); err != nil {
-				return err
-			}
-			return types.ErrCacheMaxSizeReached
-		}
-	}
-
-	return nil
-}
-
 // clear: caller MUST hold lock
 func (e *Entry[V, E]) clear(ctx context.Context, cdc codec.BinaryCodec) error {
 	store := e.storeService.OpenMemoryStore(ctx)
@@ -320,12 +315,26 @@ func (e *Entry[V, E]) checkReload(ctx context.Context, cdc codec.BinaryCodec, lo
 		return err
 	}
 
+	size := len(data)
+	if e.max > 0 && size >= int(e.max) {
+		metadata.IsFull = true
+		if err := e.setMetadata(store, cdc, metadata); err != nil {
+			return err
+		}
+		return types.ErrCacheMaxSizeReached
+	}
+
 	if err := e.clear(ctx, cdc); err != nil {
 		return err
 	}
 
 	for key, value := range data {
-		if err := e.setUnsafe(ctx, cdc, key, value); err != nil {
+		bz, err := marshal(cdc, e.entryType, value)
+		if err != nil {
+			return err
+		}
+
+		if err := e.setStore(store, key, bz); err != nil {
 			return err
 		}
 	}
