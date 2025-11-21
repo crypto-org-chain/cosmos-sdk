@@ -23,6 +23,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
+// Metadata stores the metadata for each cache entry
 type Metadata struct {
 	IsDirty bool `protobuf:"varint,1,opt,name=is_dirty,json=isDirty,proto3" json:"is_dirty,omitempty"`
 	IsFull  bool `protobuf:"varint,2,opt,name=is_full,json=isFull,proto3" json:"is_full,omitempty"`

@@ -5,6 +5,7 @@ option go_package = "github.com/cosmos/cosmos-sdk/x/staking/types";
 
 import "gogoproto/gogo.proto";
 
+// Metadata stores the metadata for each cache entry
 message Metadata {
   option (gogoproto.equal)           = true;
   option (gogoproto.goproto_getters) = false;
