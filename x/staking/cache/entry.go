@@ -316,6 +316,7 @@ func (e *Entry[V, E]) clear(ctx context.Context, cdc codec.BinaryCodec) error {
 }
 
 // checkReload: caller MUST hold lock
+// reload happens ONLY when cache is dirty and not full
 func (e *Entry[V, E]) checkReload(ctx context.Context, store corestoretypes.KVStore, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) error {
 	metadata, err := e.getMetadata(store, cdc)
 	if err != nil {
