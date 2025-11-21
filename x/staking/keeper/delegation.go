@@ -471,7 +471,7 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 			return cachedPairs, nil
 		}
 		k.Logger(ctx).Error("GetUnbondingDelegationsQueue from cache failed", "error", err)
-		if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
+		if !errors.Is(err, types.ErrCacheExceededCapacity) {
 			k.disableCache(ctx, err)
 		}
 	}
@@ -505,7 +505,7 @@ func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, k
 		err = k.cache.SetUnbondingDelegationsQueue(ctx, sdk.FormatTimeString(timestamp), keys)
 		if err != nil {
 			k.Logger(ctx).Error("SetUnbondingDelegationsQueue to cache failed", "error", err)
-			if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
+			if !errors.Is(err, types.ErrCacheExceededCapacity) {
 				k.disableCache(ctx, err)
 			}
 		}
@@ -584,7 +584,7 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 		if k.cache != nil {
 			if err := k.cache.DeleteUnbondingDelegationsQueue(ctx, key); err != nil {
 				k.Logger(ctx).Error("DeleteUnbondingDelegationsQueue in cache failed", "error", err)
-				if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
+				if !errors.Is(err, types.ErrCacheExceededCapacity) {
 					k.disableCache(ctx, err)
 				}
 			}
@@ -602,7 +602,7 @@ func (k Keeper) GetUBDs(ctx context.Context, endTime time.Time) (map[string][]ty
 			return pairs, nil
 		}
 		k.Logger(ctx).Error("GetUnbondingDelegationsQueueAll from cache failed", "error", err)
-		if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
+		if !errors.Is(err, types.ErrCacheExceededCapacity) {
 			k.disableCache(ctx, err)
 		}
 	}
@@ -889,7 +889,7 @@ func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 			return cachedTriplets, nil
 		}
 		k.Logger(ctx).Error("GetRedelegationsQueue from cache failed", "error", err)
-		if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
+		if !errors.Is(err, types.ErrCacheExceededCapacity) {
 			k.disableCache(ctx, err)
 		}
 	}
@@ -929,7 +929,7 @@ func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 		err = k.cache.SetRedelegationsQueue(ctx, sdk.FormatTimeString(timestamp), keys)
 		if err != nil {
 			k.Logger(ctx).Error("SetRedelegationsQueue to cache failed", "error", err)
-			if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
+			if !errors.Is(err, types.ErrCacheExceededCapacity) {
 				k.disableCache(ctx, err)
 			}
 		}
@@ -1010,7 +1010,7 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 		if k.cache != nil {
 			if err := k.cache.DeleteRedelegationsQueue(ctx, key); err != nil {
 				k.Logger(ctx).Error("DeleteRedelegationsQueue in cache failed", "error", err)
-				if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
+				if !errors.Is(err, types.ErrCacheExceededCapacity) {
 					k.disableCache(ctx, err)
 				}
 			}
@@ -1556,7 +1556,7 @@ func (k Keeper) GetPendingRedelegations(ctx context.Context, currTime time.Time)
 			return redelegations, nil
 		}
 		k.Logger(ctx).Error("GetRedelegationsQueueAll from cache failed", "error", err)
-		if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
+		if !errors.Is(err, types.ErrCacheExceededCapacity) {
 			k.disableCache(ctx, err)
 		}
 	}

@@ -194,17 +194,17 @@ func TestValidatorsQueueCache_FullPreventsLoad(t *testing.T) {
 	// Try to load unbonding validators - should fail due to exceeding max
 	_, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Try to load unbonding delegations - should fail due to exceeding max
 	_, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Try to load redelegations - should fail due to exceeding max
 	_, err = cache.GetRedelegationsQueueAll(ctx)
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 }
 
 func TestValidatorsQueueCache_GetEntry(t *testing.T) {
@@ -335,13 +335,13 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	// Try to add one more - should mark as full and dirty
 	err = cache.SetUnbondingValidatorsQueue(ctx, "key3", []string{"val3"})
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	_, err = cache.GetUnbondingValidatorsQueueAll(ctx)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	_, err = cache.GetUnbondingValidatorsQueue(ctx, "key1")
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Test unbonding delegations queue
 	err = cache.SetUnbondingDelegationsQueue(ctx, "time1", []types.DVPair{
@@ -358,13 +358,13 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 		{DelegatorAddress: "del3", ValidatorAddress: "val3"},
 	})
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	_, err = cache.GetUnbondingDelegationsQueueAll(ctx)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	_, err = cache.GetUnbondingDelegationsQueue(ctx, "time1")
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Test redelegations queue
 	err = cache.SetRedelegationsQueue(ctx, "time1", []types.DVVTriplet{
@@ -381,13 +381,13 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 		{DelegatorAddress: "del3", ValidatorSrcAddress: "val3", ValidatorDstAddress: "val4"},
 	})
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	_, err = cache.GetRedelegationsQueueAll(ctx)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	_, err = cache.GetRedelegationsQueue(ctx, "time1")
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 }
 
 func TestValidatorsQueueCache_FullNoErrorIfReplaced(t *testing.T) {
@@ -694,21 +694,21 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit_SizeOne(t *testi
 
 	// Step 5: Add one new entry - cache is already full, so will be marked dirty
 	err = cache.SetUnbondingValidatorsQueue(ctx, "key1", []string{"val1"})
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Step 6: Reads should fail because cache is dirty
 	_, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Step 7: Add one new entry - cache is already full, so will be marked dirty
 	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val2"})
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Step 8: Reads should fail because cache is still dirty
 	_, err = cache.GetUnbondingValidatorsQueue(ctx, "key2")
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Step 9: Delete the entry - cache is no longer full but is still dirty
 	err = cache.DeleteUnbondingValidatorsQueue(ctx, "key0")
@@ -717,7 +717,7 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit_SizeOne(t *testi
 	// Step 10: Try to read - should trigger reload because cache was marked dirty. Reload should fail because cache is instantly full upon reload.
 	_, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.Error(t, err)
-	require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+	require.Equal(t, types.ErrCacheExceededCapacity, err)
 	require.Equal(t, 1, reloadCount, "should have reloaded after deletion")
 
 	// Step 11: Simulate some empty deletions progagated from persistent store - Should do nothing since cache does not contain these entries
@@ -807,7 +807,7 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit(t *testing.T) {
 			err := cache.SetUnbondingValidatorsQueue(ctx, "extra_key", []string{"extra_val"})
 			if tc.expectDirty {
 				require.Error(t, err)
-				require.Equal(t, types.ErrCacheIsFullAndDirty, err)
+				require.Equal(t, types.ErrCacheExceededCapacity, err)
 			} else {
 				require.NoError(t, err)
 			}

@@ -133,7 +133,7 @@ func (e *Entry[V, E]) set(ctx context.Context, cdc codec.BinaryCodec, key string
 		if err := e.setMetadata(store, cdc, metadata); err != nil {
 			return err
 		}
-		return types.ErrCacheIsFullAndDirty
+		return types.ErrCacheExceededCapacity
 	}
 
 	bz, err := marshal(cdc, e.entryType, value)
@@ -309,7 +309,7 @@ func (e *Entry[V, E]) checkReload(ctx context.Context, store corestoretypes.KVSt
 	}
 
 	if metadata.IsFull {
-		return types.ErrCacheIsFullAndDirty
+		return types.ErrCacheExceededCapacity
 	}
 
 	if logger != nil {
@@ -347,7 +347,7 @@ func (e *Entry[V, E]) checkReload(ctx context.Context, store corestoretypes.KVSt
 		if err := e.setMetadata(store, cdc, metadata); err != nil {
 			return err
 		}
-		return types.ErrCacheIsFullAndDirty
+		return types.ErrCacheExceededCapacity
 	}
 
 	metadata.IsDirty = false
