@@ -13,6 +13,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/staking/cache"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -25,6 +26,7 @@ var _ types.DelegationSet = Keeper{}
 // Keeper of the x/staking store
 type Keeper struct {
 	storeService          storetypes.KVStoreService
+	cacheStoreService     storetypes.MemoryStoreService
 	cdc                   codec.BinaryCodec
 	authKeeper            types.AccountKeeper
 	bankKeeper            types.BankKeeper
@@ -32,17 +34,21 @@ type Keeper struct {
 	authority             string
 	validatorAddressCodec addresscodec.Codec
 	consensusAddressCodec addresscodec.Codec
+
+	cache *cache.ValidatorsQueueCache
 }
 
 // NewKeeper creates a new staking Keeper instance
 func NewKeeper(
 	cdc codec.BinaryCodec,
 	storeService storetypes.KVStoreService,
+	cacheStoreService storetypes.MemoryStoreService,
 	ak types.AccountKeeper,
 	bk types.BankKeeper,
 	authority string,
 	validatorAddressCodec addresscodec.Codec,
 	consensusAddressCodec addresscodec.Codec,
+	maxCacheSize int,
 ) *Keeper {
 	// ensure bonded and not bonded module accounts are set
 	if addr := ak.GetModuleAddress(types.BondedPoolName); addr == nil {
@@ -62,8 +68,9 @@ func NewKeeper(
 		panic("validator and/or consensus address codec are nil")
 	}
 
-	return &Keeper{
+	k := &Keeper{
 		storeService:          storeService,
+		cacheStoreService:     cacheStoreService,
 		cdc:                   cdc,
 		authKeeper:            ak,
 		bankKeeper:            bk,
@@ -72,6 +79,32 @@ func NewKeeper(
 		validatorAddressCodec: validatorAddressCodec,
 		consensusAddressCodec: consensusAddressCodec,
 	}
+
+	if maxCacheSize >= 0 {
+		loadUnbondingValidators := cache.NewLoader(
+			k.GetAllUnbondingValidatorsFromStore,
+			types.SortValidatorQueueKeysByAscendingTimestampOrder,
+		)
+		loadUnbondingDelegations := cache.NewLoader(
+			k.GetAllUnbondingDelegationsQueueFromStore,
+			types.SortTimestampsByAscendingOrder,
+		)
+		loadRedelegations := cache.NewLoader(
+			k.GetAllRedelegationsQueueFromStore,
+			types.SortTimestampsByAscendingOrder,
+		)
+		k.cache = cache.NewValidatorsQueueCache(
+			uint(maxCacheSize),
+			cacheStoreService,
+			loadUnbondingValidators,
+			loadUnbondingDelegations,
+			loadRedelegations,
+			cdc,
+			k.Logger,
+		)
+	}
+
+	return k
 }
 
 // Logger returns a module-specific logger.
@@ -171,4 +204,9 @@ func (k Keeper) GetValidatorUpdates(ctx context.Context) ([]abci.ValidatorUpdate
 	}
 
 	return valUpdates.Updates, nil
+}
+
+func (k *Keeper) disableCache(ctx context.Context, err error) {
+	k.Logger(ctx).Error("Disabling cache due to unexpected error", "error", err)
+	k.cache = nil
 }

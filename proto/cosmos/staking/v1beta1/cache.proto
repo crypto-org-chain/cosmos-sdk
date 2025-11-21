@@ -1,0 +1,15 @@
+syntax = "proto3";
+package cosmos.staking.v1beta1;
+
+option go_package = "github.com/cosmos/cosmos-sdk/x/staking/types";
+
+import "gogoproto/gogo.proto";
+
+// Metadata stores the metadata for each cache entry
+message Metadata {
+  option (gogoproto.equal)           = true;
+  option (gogoproto.goproto_getters) = false;
+
+  bool is_dirty = 1;
+  bool is_full  = 2;
+}
