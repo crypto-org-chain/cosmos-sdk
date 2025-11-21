@@ -55,13 +55,23 @@ func (e *Entry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec, logger 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if err := e.checkReload(ctx, cdc, logger); err != nil {
+	store := e.storeService.OpenMemoryStore(ctx)
+
+	metadata, err := e.getMetadata(store, cdc)
+	if err != nil {
+		return nil, err
+	}
+
+	if metadata.IsFull {
+		return nil, types.ErrCacheMaxSizeReached
+	}
+
+	if err := e.checkReload(ctx, store, cdc, logger); err != nil {
 		return nil, err
 	}
 
 	result := make(map[string]V)
 
-	store := e.storeService.OpenMemoryStore(ctx)
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	if err != nil {
@@ -88,11 +98,12 @@ func (e *Entry[V, E]) get(ctx context.Context, cdc codec.BinaryCodec, key string
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if err := e.checkReload(ctx, cdc, logger); err != nil {
+	store := e.storeService.OpenMemoryStore(ctx)
+
+	if err := e.checkReload(ctx, store, cdc, logger); err != nil {
 		return make(V, 0), err
 	}
 
-	store := e.storeService.OpenMemoryStore(ctx)
 	storeKey := e.getStoreKey(key)
 
 	bz, err := store.Get(storeKey)
@@ -290,16 +301,10 @@ func (e *Entry[V, E]) clear(ctx context.Context, cdc codec.BinaryCodec) error {
 }
 
 // checkReload: caller MUST hold lock
-func (e *Entry[V, E]) checkReload(ctx context.Context, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) error {
-	store := e.storeService.OpenMemoryStore(ctx)
-
+func (e *Entry[V, E]) checkReload(ctx context.Context, store corestoretypes.KVStore, cdc codec.BinaryCodec, logger func(ctx context.Context) log.Logger) error {
 	metadata, err := e.getMetadata(store, cdc)
 	if err != nil {
 		return err
-	}
-
-	if metadata.IsFull {
-		return types.ErrCacheMaxSizeReached
 	}
 
 	if !metadata.IsDirty {
