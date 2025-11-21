@@ -2,12 +2,10 @@ package cache
 
 import (
 	"context"
-	"time"
 
 	corestoretypes "cosmossdk.io/core/store"
 	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/codec"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -74,8 +72,8 @@ func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueueAll(ctx context.Contex
 	return c.unbondingValidatorsQueue.getAll(ctx, c.cdc, c.logger)
 }
 
-func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
-	return c.unbondingValidatorsQueue.get(ctx, c.cdc, types.GetCacheValidatorQueueKey(endTime, endHeight), c.logger)
+func (c *ValidatorsQueueCache) GetUnbondingValidatorsQueue(ctx context.Context, key string) ([]string, error) {
+	return c.unbondingValidatorsQueue.get(ctx, c.cdc, key, c.logger)
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingValidatorsQueue(ctx context.Context, key string, addrs []string) error {
@@ -92,8 +90,8 @@ func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueueAll(ctx context.Conte
 	return c.unbondingDelegationsQueue.getAll(ctx, c.cdc, c.logger)
 }
 
-func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue(ctx context.Context, endTime time.Time) ([]types.DVPair, error) {
-	return c.unbondingDelegationsQueue.get(ctx, c.cdc, sdk.FormatTimeString(endTime), c.logger)
+func (c *ValidatorsQueueCache) GetUnbondingDelegationsQueue(ctx context.Context, key string) ([]types.DVPair, error) {
+	return c.unbondingDelegationsQueue.get(ctx, c.cdc, key, c.logger)
 }
 
 func (c *ValidatorsQueueCache) SetUnbondingDelegationsQueue(ctx context.Context, key string, delegations []types.DVPair) error {
@@ -110,8 +108,8 @@ func (c *ValidatorsQueueCache) GetRedelegationsQueueAll(ctx context.Context) (ma
 	return c.redelegationsQueue.getAll(ctx, c.cdc, c.logger)
 }
 
-func (c *ValidatorsQueueCache) GetRedelegationsQueue(ctx context.Context, endTime time.Time) ([]types.DVVTriplet, error) {
-	return c.redelegationsQueue.get(ctx, c.cdc, sdk.FormatTimeString(endTime), c.logger)
+func (c *ValidatorsQueueCache) GetRedelegationsQueue(ctx context.Context, key string) ([]types.DVVTriplet, error) {
+	return c.redelegationsQueue.get(ctx, c.cdc, key, c.logger)
 }
 
 func (c *ValidatorsQueueCache) SetRedelegationsQueue(ctx context.Context, key string, redelegations []types.DVVTriplet) error {

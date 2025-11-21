@@ -2546,7 +2546,7 @@ func (s *KeeperTestSuite) TestGetAndParseRedelegationTimeKey() {
 	require.Equal(blockTime, time)
 }
 
-func (s *KeeperTestSuite) TestSortRedelegationQueueKeysByAscendingOrder() {
+func (s *KeeperTestSuite) TestSortQueueKeysByAscendingOrder() {
 	require := s.Require()
 
 	currentTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)

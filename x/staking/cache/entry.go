@@ -57,15 +57,6 @@ func (e *Entry[V, E]) getAll(ctx context.Context, cdc codec.BinaryCodec, logger 
 
 	store := e.storeService.OpenMemoryStore(ctx)
 
-	metadata, err := e.getMetadata(store, cdc)
-	if err != nil {
-		return nil, err
-	}
-
-	if metadata.IsFull {
-		return nil, types.ErrCacheMaxSizeReached
-	}
-
 	if err := e.checkReload(ctx, store, cdc, logger); err != nil {
 		return nil, err
 	}
@@ -128,17 +119,21 @@ func (e *Entry[V, E]) set(ctx context.Context, cdc codec.BinaryCodec, key string
 		return err
 	}
 
-	if metadata.IsFull {
-		return types.ErrCacheMaxSizeReached
-	}
-
 	exist := false
-	if e.max > 0 {
+	if e.isBounded() {
 		var err error
 		exist, err = e.exists(store, key)
 		if err != nil {
 			return err
 		}
+	}
+
+	if metadata.IsFull && !exist {
+		metadata.IsDirty = true
+		if err := e.setMetadata(store, cdc, metadata); err != nil {
+			return err
+		}
+		return types.ErrCacheIsFullAndDirty
 	}
 
 	bz, err := marshal(cdc, e.entryType, value)
@@ -150,19 +145,17 @@ func (e *Entry[V, E]) set(ctx context.Context, cdc codec.BinaryCodec, key string
 		return err
 	}
 
-	if e.max > 0 && !exist {
+	if e.isBounded() && !exist {
 		count, err := e.count(store)
 		if err != nil {
 			return err
 		}
 
-		if count >= uint64(e.max) {
-			metadata.IsDirty = true
+		if count == e.max {
 			metadata.IsFull = true
 			if err := e.setMetadata(store, cdc, metadata); err != nil {
 				return err
 			}
-			return types.ErrCacheMaxSizeReached
 		}
 	}
 
@@ -175,7 +168,7 @@ func (e *Entry[V, E]) delete(ctx context.Context, cdc codec.BinaryCodec, key str
 
 	store := e.storeService.OpenMemoryStore(ctx)
 	exist := false
-	if e.max > 0 {
+	if e.isBounded() {
 		var err error
 		exist, err = e.exists(store, key)
 		if err != nil {
@@ -187,7 +180,7 @@ func (e *Entry[V, E]) delete(ctx context.Context, cdc codec.BinaryCodec, key str
 		return err
 	}
 
-	if e.max > 0 && exist {
+	if e.isBounded() && exist {
 		metadata, err := e.getMetadata(store, cdc)
 		if err != nil {
 			return err
@@ -213,6 +206,10 @@ func (e *Entry[V, E]) getMetaKey() []byte {
 	return []byte(fmt.Sprintf("meta_%s", e.entryType))
 }
 
+func (e *Entry[V, E]) isBounded() bool {
+	return e.max > 0
+}
+
 // exists: caller MUST hold lock
 func (e *Entry[V, E]) exists(store corestoretypes.KVStore, key string) (bool, error) {
 	storeKey := e.getStoreKey(key)
@@ -232,7 +229,7 @@ func (e *Entry[V, E]) deleteStore(store corestoretypes.KVStore, key string) erro
 }
 
 // count: caller MUST hold lock
-func (e *Entry[V, E]) count(store corestoretypes.KVStore) (uint64, error) {
+func (e *Entry[V, E]) count(store corestoretypes.KVStore) (uint, error) {
 	prefix := e.getPrefix()
 	iter, err := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	if err != nil {
@@ -240,7 +237,7 @@ func (e *Entry[V, E]) count(store corestoretypes.KVStore) (uint64, error) {
 	}
 	defer iter.Close()
 
-	var count uint64
+	var count uint
 	for ; iter.Valid(); iter.Next() {
 		count++
 	}
@@ -311,6 +308,10 @@ func (e *Entry[V, E]) checkReload(ctx context.Context, store corestoretypes.KVSt
 		return nil
 	}
 
+	if metadata.IsFull {
+		return types.ErrCacheIsFullAndDirty
+	}
+
 	if logger != nil {
 		logger(ctx).Info(fmt.Sprintf("%s queue is dirty. Reinitializing cache from store.", e.entryType))
 	}
@@ -320,28 +321,33 @@ func (e *Entry[V, E]) checkReload(ctx context.Context, store corestoretypes.KVSt
 		return err
 	}
 
-	size := len(data)
-	if e.max > 0 && size >= int(e.max) {
-		metadata.IsFull = true
-		if err := e.setMetadata(store, cdc, metadata); err != nil {
-			return err
-		}
-		return types.ErrCacheMaxSizeReached
-	}
-
 	if err := e.clear(ctx, cdc); err != nil {
 		return err
 	}
+
+	var count uint
 
 	for key, value := range data {
 		bz, err := marshal(cdc, e.entryType, value)
 		if err != nil {
 			return err
 		}
-
 		if err := e.setStore(store, key, bz); err != nil {
 			return err
 		}
+		count++
+		if e.isBounded() && count == e.max {
+			metadata.IsFull = true
+			break
+		}
+	}
+
+	if e.isBounded() && len(data) > int(e.max) {
+		// cache will be full and still be dirty
+		if err := e.setMetadata(store, cdc, metadata); err != nil {
+			return err
+		}
+		return types.ErrCacheIsFullAndDirty
 	}
 
 	metadata.IsDirty = false

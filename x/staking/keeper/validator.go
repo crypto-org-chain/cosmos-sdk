@@ -448,12 +448,12 @@ func (k Keeper) GetLastValidators(ctx context.Context) (validators []types.Valid
 // complete their unbonding at a given time and height.
 func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, endHeight int64) ([]string, error) {
 	if k.cache != nil {
-		cachedAddrs, err := k.cache.GetUnbondingValidatorsQueue(ctx, endTime, endHeight)
+		cachedAddrs, err := k.cache.GetUnbondingValidatorsQueue(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight))
 		if err == nil {
 			return cachedAddrs, nil
 		}
 		k.Logger(ctx).Error("GetUnbondingValidatorsQueue from cache failed", "error", err)
-		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
+		if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
 			k.disableCache(ctx, err)
 		}
 	}
@@ -494,7 +494,7 @@ func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Ti
 		err = k.cache.SetUnbondingValidatorsQueue(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight), addrs)
 		if err != nil {
 			k.Logger(ctx).Error("SetUnbondingValidatorsQueue to cache failed", "error", err)
-			if !errors.Is(err, types.ErrCacheMaxSizeReached) {
+			if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
 				k.disableCache(ctx, err)
 			}
 		}
@@ -524,7 +524,7 @@ func (k Keeper) DeleteValidatorQueueTimeSlice(ctx context.Context, endTime time.
 	if k.cache != nil {
 		if err := k.cache.DeleteUnbondingValidatorsQueue(ctx, types.GetCacheValidatorQueueKey(endTime, endHeight)); err != nil {
 			k.Logger(ctx).Error("DeleteUnbondingValidatorsQueue in cache failed", "error", err)
-			if !errors.Is(err, types.ErrCacheMaxSizeReached) {
+			if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
 				k.disableCache(ctx, err)
 			}
 		}
@@ -695,7 +695,7 @@ func (k Keeper) GetPendingUnbondingValidators(ctx context.Context, endTime time.
 			return addrs, nil
 		}
 		k.Logger(ctx).Error("GetUnbondingValidatorsQueueAll from cache failed", "error", err)
-		if !errors.Is(err, types.ErrCacheMaxSizeReached) {
+		if !errors.Is(err, types.ErrCacheIsFullAndDirty) {
 			k.disableCache(ctx, err)
 		}
 	}
