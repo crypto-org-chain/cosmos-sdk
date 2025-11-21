@@ -263,27 +263,27 @@ func (e *Entry[V, E]) count(store corestoretypes.KVStore) (uint, error) {
 }
 
 // getMetadata: caller MUST hold lock
-func (e *Entry[V, E]) getMetadata(store corestoretypes.KVStore, cdc codec.BinaryCodec) (types.CacheMetadata, error) {
+func (e *Entry[V, E]) getMetadata(store corestoretypes.KVStore, cdc codec.BinaryCodec) (types.Metadata, error) {
 	bz, err := store.Get(e.getMetaKey())
 	if err != nil {
-		return types.CacheMetadata{}, err
+		return types.Metadata{}, err
 	}
 	if bz == nil {
-		return types.CacheMetadata{
+		return types.Metadata{
 			IsDirty: true,
 			IsFull:  false,
 		}, nil
 	}
 
-	var metadata types.CacheMetadata
+	var metadata types.Metadata
 	if err := cdc.Unmarshal(bz, &metadata); err != nil {
-		return types.CacheMetadata{}, err
+		return types.Metadata{}, err
 	}
 	return metadata, nil
 }
 
 // setMetadata: caller MUST hold lock
-func (e *Entry[V, E]) setMetadata(store corestoretypes.KVStore, cdc codec.BinaryCodec, metadata types.CacheMetadata) error {
+func (e *Entry[V, E]) setMetadata(store corestoretypes.KVStore, cdc codec.BinaryCodec, metadata types.Metadata) error {
 	bz, err := cdc.Marshal(&metadata)
 	if err != nil {
 		return err

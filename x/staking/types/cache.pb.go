@@ -23,28 +23,23 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
-// CacheMetadata represents the metadata state for a cache entry
-// It tracks whether the cache needs to be reloaded (dirty) and whether
-// it has reached its maximum capacity (full)
-type CacheMetadata struct {
-	// is_dirty indicates whether the cache needs to be reloaded from the persistent store
+type Metadata struct {
 	IsDirty bool `protobuf:"varint,1,opt,name=is_dirty,json=isDirty,proto3" json:"is_dirty,omitempty"`
-	// is_full indicates whether the cache has reached its maximum size
-	IsFull bool `protobuf:"varint,2,opt,name=is_full,json=isFull,proto3" json:"is_full,omitempty"`
+	IsFull  bool `protobuf:"varint,2,opt,name=is_full,json=isFull,proto3" json:"is_full,omitempty"`
 }
 
-func (m *CacheMetadata) Reset()         { *m = CacheMetadata{} }
-func (m *CacheMetadata) String() string { return proto.CompactTextString(m) }
-func (*CacheMetadata) ProtoMessage()    {}
-func (*CacheMetadata) Descriptor() ([]byte, []int) {
+func (m *Metadata) Reset()         { *m = Metadata{} }
+func (m *Metadata) String() string { return proto.CompactTextString(m) }
+func (*Metadata) ProtoMessage()    {}
+func (*Metadata) Descriptor() ([]byte, []int) {
 	return fileDescriptor_9ea0295ff831f04b, []int{0}
 }
-func (m *CacheMetadata) XXX_Unmarshal(b []byte) error {
+func (m *Metadata) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *CacheMetadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *Metadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_CacheMetadata.Marshal(b, m, deterministic)
+		return xxx_messageInfo_Metadata.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -54,20 +49,20 @@ func (m *CacheMetadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return b[:n], nil
 	}
 }
-func (m *CacheMetadata) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CacheMetadata.Merge(m, src)
+func (m *Metadata) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Metadata.Merge(m, src)
 }
-func (m *CacheMetadata) XXX_Size() int {
+func (m *Metadata) XXX_Size() int {
 	return m.Size()
 }
-func (m *CacheMetadata) XXX_DiscardUnknown() {
-	xxx_messageInfo_CacheMetadata.DiscardUnknown(m)
+func (m *Metadata) XXX_DiscardUnknown() {
+	xxx_messageInfo_Metadata.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_CacheMetadata proto.InternalMessageInfo
+var xxx_messageInfo_Metadata proto.InternalMessageInfo
 
 func init() {
-	proto.RegisterType((*CacheMetadata)(nil), "cosmos.staking.v1beta1.CacheMetadata")
+	proto.RegisterType((*Metadata)(nil), "cosmos.staking.v1beta1.Metadata")
 }
 
 func init() {
@@ -75,31 +70,31 @@ func init() {
 }
 
 var fileDescriptor_9ea0295ff831f04b = []byte{
-	// 218 bytes of a gzipped FileDescriptorProto
+	// 215 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x52, 0x4a, 0xce, 0x2f, 0xce,
 	0xcd, 0x2f, 0xd6, 0x2f, 0x2e, 0x49, 0xcc, 0xce, 0xcc, 0x4b, 0xd7, 0x2f, 0x33, 0x4c, 0x4a, 0x2d,
 	0x49, 0x34, 0xd4, 0x4f, 0x4e, 0x4c, 0xce, 0x48, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x12,
 	0x83, 0xa8, 0xd1, 0x83, 0xaa, 0xd1, 0x83, 0xaa, 0x91, 0x12, 0x49, 0xcf, 0x4f, 0xcf, 0x07, 0x2b,
-	0xd1, 0x07, 0xb1, 0x20, 0xaa, 0x95, 0x7c, 0xb9, 0x78, 0x9d, 0x41, 0x9a, 0x7d, 0x53, 0x4b, 0x12,
-	0x53, 0x12, 0x4b, 0x12, 0x85, 0x24, 0xb9, 0x38, 0x32, 0x8b, 0xe3, 0x53, 0x32, 0x8b, 0x4a, 0x2a,
-	0x25, 0x18, 0x15, 0x18, 0x35, 0x38, 0x82, 0xd8, 0x33, 0x8b, 0x5d, 0x40, 0x5c, 0x21, 0x71, 0x2e,
-	0xf6, 0xcc, 0xe2, 0xf8, 0xb4, 0xd2, 0x9c, 0x1c, 0x09, 0x26, 0xb0, 0x0c, 0x5b, 0x66, 0xb1, 0x5b,
-	0x69, 0x4e, 0x8e, 0x15, 0x47, 0xc7, 0x02, 0x79, 0x86, 0x17, 0x0b, 0xe4, 0x19, 0x9d, 0xdc, 0x4e,
-	0x3c, 0x92, 0x63, 0xbc, 0xf0, 0x48, 0x8e, 0xf1, 0xc1, 0x23, 0x39, 0xc6, 0x09, 0x8f, 0xe5, 0x18,
-	0x2e, 0x3c, 0x96, 0x63, 0xb8, 0xf1, 0x58, 0x8e, 0x21, 0x4a, 0x27, 0x3d, 0xb3, 0x24, 0xa3, 0x34,
-	0x49, 0x2f, 0x39, 0x3f, 0x57, 0x1f, 0xea, 0x0b, 0x08, 0xa5, 0x5b, 0x9c, 0x92, 0xad, 0x5f, 0x01,
-	0xf7, 0x52, 0x49, 0x65, 0x41, 0x6a, 0x71, 0x12, 0x1b, 0xd8, 0x75, 0xc6, 0x80, 0x00, 0x00, 0x00,
-	0xff, 0xff, 0xa2, 0xaa, 0x31, 0x1b, 0xf1, 0x00, 0x00, 0x00,
+	0xd1, 0x07, 0xb1, 0x20, 0xaa, 0x95, 0x3c, 0xb8, 0x38, 0x7c, 0x53, 0x4b, 0x12, 0x53, 0x12, 0x4b,
+	0x12, 0x85, 0x24, 0xb9, 0x38, 0x32, 0x8b, 0xe3, 0x53, 0x32, 0x8b, 0x4a, 0x2a, 0x25, 0x18, 0x15,
+	0x18, 0x35, 0x38, 0x82, 0xd8, 0x33, 0x8b, 0x5d, 0x40, 0x5c, 0x21, 0x71, 0x2e, 0xf6, 0xcc, 0xe2,
+	0xf8, 0xb4, 0xd2, 0x9c, 0x1c, 0x09, 0x26, 0xb0, 0x0c, 0x5b, 0x66, 0xb1, 0x5b, 0x69, 0x4e, 0x8e,
+	0x15, 0x47, 0xc7, 0x02, 0x79, 0x86, 0x17, 0x0b, 0xe4, 0x19, 0x9d, 0xdc, 0x4e, 0x3c, 0x92, 0x63,
+	0xbc, 0xf0, 0x48, 0x8e, 0xf1, 0xc1, 0x23, 0x39, 0xc6, 0x09, 0x8f, 0xe5, 0x18, 0x2e, 0x3c, 0x96,
+	0x63, 0xb8, 0xf1, 0x58, 0x8e, 0x21, 0x4a, 0x27, 0x3d, 0xb3, 0x24, 0xa3, 0x34, 0x49, 0x2f, 0x39,
+	0x3f, 0x57, 0x1f, 0xea, 0x01, 0x08, 0xa5, 0x5b, 0x9c, 0x92, 0xad, 0x5f, 0x01, 0xf7, 0x4d, 0x49,
+	0x65, 0x41, 0x6a, 0x71, 0x12, 0x1b, 0xd8, 0x61, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0x90,
+	0x64, 0x71, 0x3b, 0xec, 0x00, 0x00, 0x00,
 }
 
-func (this *CacheMetadata) Equal(that interface{}) bool {
+func (this *Metadata) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
 	}
 
-	that1, ok := that.(*CacheMetadata)
+	that1, ok := that.(*Metadata)
 	if !ok {
-		that2, ok := that.(CacheMetadata)
+		that2, ok := that.(Metadata)
 		if ok {
 			that1 = &that2
 		} else {
@@ -119,7 +114,7 @@ func (this *CacheMetadata) Equal(that interface{}) bool {
 	}
 	return true
 }
-func (m *CacheMetadata) Marshal() (dAtA []byte, err error) {
+func (m *Metadata) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -129,12 +124,12 @@ func (m *CacheMetadata) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *CacheMetadata) MarshalTo(dAtA []byte) (int, error) {
+func (m *Metadata) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *CacheMetadata) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *Metadata) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -173,7 +168,7 @@ func encodeVarintCache(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return base
 }
-func (m *CacheMetadata) Size() (n int) {
+func (m *Metadata) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -194,7 +189,7 @@ func sovCache(x uint64) (n int) {
 func sozCache(x uint64) (n int) {
 	return sovCache(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *CacheMetadata) Unmarshal(dAtA []byte) error {
+func (m *Metadata) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -217,10 +212,10 @@ func (m *CacheMetadata) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: CacheMetadata: wiretype end group for non-group")
+			return fmt.Errorf("proto: Metadata: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: CacheMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: Metadata: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

@@ -14,27 +14,27 @@ import (
 )
 
 var (
-	md_CacheMetadata          protoreflect.MessageDescriptor
-	fd_CacheMetadata_is_dirty protoreflect.FieldDescriptor
-	fd_CacheMetadata_is_full  protoreflect.FieldDescriptor
+	md_Metadata          protoreflect.MessageDescriptor
+	fd_Metadata_is_dirty protoreflect.FieldDescriptor
+	fd_Metadata_is_full  protoreflect.FieldDescriptor
 )
 
 func init() {
 	file_cosmos_staking_v1beta1_cache_proto_init()
-	md_CacheMetadata = File_cosmos_staking_v1beta1_cache_proto.Messages().ByName("CacheMetadata")
-	fd_CacheMetadata_is_dirty = md_CacheMetadata.Fields().ByName("is_dirty")
-	fd_CacheMetadata_is_full = md_CacheMetadata.Fields().ByName("is_full")
+	md_Metadata = File_cosmos_staking_v1beta1_cache_proto.Messages().ByName("Metadata")
+	fd_Metadata_is_dirty = md_Metadata.Fields().ByName("is_dirty")
+	fd_Metadata_is_full = md_Metadata.Fields().ByName("is_full")
 }
 
-var _ protoreflect.Message = (*fastReflection_CacheMetadata)(nil)
+var _ protoreflect.Message = (*fastReflection_Metadata)(nil)
 
-type fastReflection_CacheMetadata CacheMetadata
+type fastReflection_Metadata Metadata
 
-func (x *CacheMetadata) ProtoReflect() protoreflect.Message {
-	return (*fastReflection_CacheMetadata)(x)
+func (x *Metadata) ProtoReflect() protoreflect.Message {
+	return (*fastReflection_Metadata)(x)
 }
 
-func (x *CacheMetadata) slowProtoReflect() protoreflect.Message {
+func (x *Metadata) slowProtoReflect() protoreflect.Message {
 	mi := &file_cosmos_staking_v1beta1_cache_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -46,43 +46,43 @@ func (x *CacheMetadata) slowProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-var _fastReflection_CacheMetadata_messageType fastReflection_CacheMetadata_messageType
-var _ protoreflect.MessageType = fastReflection_CacheMetadata_messageType{}
+var _fastReflection_Metadata_messageType fastReflection_Metadata_messageType
+var _ protoreflect.MessageType = fastReflection_Metadata_messageType{}
 
-type fastReflection_CacheMetadata_messageType struct{}
+type fastReflection_Metadata_messageType struct{}
 
-func (x fastReflection_CacheMetadata_messageType) Zero() protoreflect.Message {
-	return (*fastReflection_CacheMetadata)(nil)
+func (x fastReflection_Metadata_messageType) Zero() protoreflect.Message {
+	return (*fastReflection_Metadata)(nil)
 }
-func (x fastReflection_CacheMetadata_messageType) New() protoreflect.Message {
-	return new(fastReflection_CacheMetadata)
+func (x fastReflection_Metadata_messageType) New() protoreflect.Message {
+	return new(fastReflection_Metadata)
 }
-func (x fastReflection_CacheMetadata_messageType) Descriptor() protoreflect.MessageDescriptor {
-	return md_CacheMetadata
+func (x fastReflection_Metadata_messageType) Descriptor() protoreflect.MessageDescriptor {
+	return md_Metadata
 }
 
 // Descriptor returns message descriptor, which contains only the protobuf
 // type information for the message.
-func (x *fastReflection_CacheMetadata) Descriptor() protoreflect.MessageDescriptor {
-	return md_CacheMetadata
+func (x *fastReflection_Metadata) Descriptor() protoreflect.MessageDescriptor {
+	return md_Metadata
 }
 
 // Type returns the message type, which encapsulates both Go and protobuf
 // type information. If the Go type information is not needed,
 // it is recommended that the message descriptor be used instead.
-func (x *fastReflection_CacheMetadata) Type() protoreflect.MessageType {
-	return _fastReflection_CacheMetadata_messageType
+func (x *fastReflection_Metadata) Type() protoreflect.MessageType {
+	return _fastReflection_Metadata_messageType
 }
 
 // New returns a newly allocated and mutable empty message.
-func (x *fastReflection_CacheMetadata) New() protoreflect.Message {
-	return new(fastReflection_CacheMetadata)
+func (x *fastReflection_Metadata) New() protoreflect.Message {
+	return new(fastReflection_Metadata)
 }
 
 // Interface unwraps the message reflection interface and
 // returns the underlying ProtoMessage interface.
-func (x *fastReflection_CacheMetadata) Interface() protoreflect.ProtoMessage {
-	return (*CacheMetadata)(x)
+func (x *fastReflection_Metadata) Interface() protoreflect.ProtoMessage {
+	return (*Metadata)(x)
 }
 
 // Range iterates over every populated field in an undefined order,
@@ -90,16 +90,16 @@ func (x *fastReflection_CacheMetadata) Interface() protoreflect.ProtoMessage {
 // Range returns immediately if f returns false.
 // While iterating, mutating operations may only be performed
 // on the current field descriptor.
-func (x *fastReflection_CacheMetadata) Range(f func(protoreflect.FieldDescriptor, protoreflect.Value) bool) {
+func (x *fastReflection_Metadata) Range(f func(protoreflect.FieldDescriptor, protoreflect.Value) bool) {
 	if x.IsDirty != false {
 		value := protoreflect.ValueOfBool(x.IsDirty)
-		if !f(fd_CacheMetadata_is_dirty, value) {
+		if !f(fd_Metadata_is_dirty, value) {
 			return
 		}
 	}
 	if x.IsFull != false {
 		value := protoreflect.ValueOfBool(x.IsFull)
-		if !f(fd_CacheMetadata_is_full, value) {
+		if !f(fd_Metadata_is_full, value) {
 			return
 		}
 	}
@@ -116,17 +116,17 @@ func (x *fastReflection_CacheMetadata) Range(f func(protoreflect.FieldDescriptor
 // In other cases (aside from the nullable cases above),
 // a proto3 scalar field is populated if it contains a non-zero value, and
 // a repeated field is populated if it is non-empty.
-func (x *fastReflection_CacheMetadata) Has(fd protoreflect.FieldDescriptor) bool {
+func (x *fastReflection_Metadata) Has(fd protoreflect.FieldDescriptor) bool {
 	switch fd.FullName() {
-	case "cosmos.staking.v1beta1.CacheMetadata.is_dirty":
+	case "cosmos.staking.v1beta1.Metadata.is_dirty":
 		return x.IsDirty != false
-	case "cosmos.staking.v1beta1.CacheMetadata.is_full":
+	case "cosmos.staking.v1beta1.Metadata.is_full":
 		return x.IsFull != false
 	default:
 		if fd.IsExtension() {
-			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.CacheMetadata"))
+			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.Metadata"))
 		}
-		panic(fmt.Errorf("message cosmos.staking.v1beta1.CacheMetadata does not contain field %s", fd.FullName()))
+		panic(fmt.Errorf("message cosmos.staking.v1beta1.Metadata does not contain field %s", fd.FullName()))
 	}
 }
 
@@ -136,17 +136,17 @@ func (x *fastReflection_CacheMetadata) Has(fd protoreflect.FieldDescriptor) bool
 // associated with the given field number.
 //
 // Clear is a mutating operation and unsafe for concurrent use.
-func (x *fastReflection_CacheMetadata) Clear(fd protoreflect.FieldDescriptor) {
+func (x *fastReflection_Metadata) Clear(fd protoreflect.FieldDescriptor) {
 	switch fd.FullName() {
-	case "cosmos.staking.v1beta1.CacheMetadata.is_dirty":
+	case "cosmos.staking.v1beta1.Metadata.is_dirty":
 		x.IsDirty = false
-	case "cosmos.staking.v1beta1.CacheMetadata.is_full":
+	case "cosmos.staking.v1beta1.Metadata.is_full":
 		x.IsFull = false
 	default:
 		if fd.IsExtension() {
-			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.CacheMetadata"))
+			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.Metadata"))
 		}
-		panic(fmt.Errorf("message cosmos.staking.v1beta1.CacheMetadata does not contain field %s", fd.FullName()))
+		panic(fmt.Errorf("message cosmos.staking.v1beta1.Metadata does not contain field %s", fd.FullName()))
 	}
 }
 
@@ -156,19 +156,19 @@ func (x *fastReflection_CacheMetadata) Clear(fd protoreflect.FieldDescriptor) {
 // the default value of a bytes scalar is guaranteed to be a copy.
 // For unpopulated composite types, it returns an empty, read-only view
 // of the value; to obtain a mutable reference, use Mutable.
-func (x *fastReflection_CacheMetadata) Get(descriptor protoreflect.FieldDescriptor) protoreflect.Value {
+func (x *fastReflection_Metadata) Get(descriptor protoreflect.FieldDescriptor) protoreflect.Value {
 	switch descriptor.FullName() {
-	case "cosmos.staking.v1beta1.CacheMetadata.is_dirty":
+	case "cosmos.staking.v1beta1.Metadata.is_dirty":
 		value := x.IsDirty
 		return protoreflect.ValueOfBool(value)
-	case "cosmos.staking.v1beta1.CacheMetadata.is_full":
+	case "cosmos.staking.v1beta1.Metadata.is_full":
 		value := x.IsFull
 		return protoreflect.ValueOfBool(value)
 	default:
 		if descriptor.IsExtension() {
-			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.CacheMetadata"))
+			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.Metadata"))
 		}
-		panic(fmt.Errorf("message cosmos.staking.v1beta1.CacheMetadata does not contain field %s", descriptor.FullName()))
+		panic(fmt.Errorf("message cosmos.staking.v1beta1.Metadata does not contain field %s", descriptor.FullName()))
 	}
 }
 
@@ -182,17 +182,17 @@ func (x *fastReflection_CacheMetadata) Get(descriptor protoreflect.FieldDescript
 // empty, read-only value, then it panics.
 //
 // Set is a mutating operation and unsafe for concurrent use.
-func (x *fastReflection_CacheMetadata) Set(fd protoreflect.FieldDescriptor, value protoreflect.Value) {
+func (x *fastReflection_Metadata) Set(fd protoreflect.FieldDescriptor, value protoreflect.Value) {
 	switch fd.FullName() {
-	case "cosmos.staking.v1beta1.CacheMetadata.is_dirty":
+	case "cosmos.staking.v1beta1.Metadata.is_dirty":
 		x.IsDirty = value.Bool()
-	case "cosmos.staking.v1beta1.CacheMetadata.is_full":
+	case "cosmos.staking.v1beta1.Metadata.is_full":
 		x.IsFull = value.Bool()
 	default:
 		if fd.IsExtension() {
-			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.CacheMetadata"))
+			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.Metadata"))
 		}
-		panic(fmt.Errorf("message cosmos.staking.v1beta1.CacheMetadata does not contain field %s", fd.FullName()))
+		panic(fmt.Errorf("message cosmos.staking.v1beta1.Metadata does not contain field %s", fd.FullName()))
 	}
 }
 
@@ -206,44 +206,44 @@ func (x *fastReflection_CacheMetadata) Set(fd protoreflect.FieldDescriptor, valu
 // It panics if the field does not contain a composite type.
 //
 // Mutable is a mutating operation and unsafe for concurrent use.
-func (x *fastReflection_CacheMetadata) Mutable(fd protoreflect.FieldDescriptor) protoreflect.Value {
+func (x *fastReflection_Metadata) Mutable(fd protoreflect.FieldDescriptor) protoreflect.Value {
 	switch fd.FullName() {
-	case "cosmos.staking.v1beta1.CacheMetadata.is_dirty":
-		panic(fmt.Errorf("field is_dirty of message cosmos.staking.v1beta1.CacheMetadata is not mutable"))
-	case "cosmos.staking.v1beta1.CacheMetadata.is_full":
-		panic(fmt.Errorf("field is_full of message cosmos.staking.v1beta1.CacheMetadata is not mutable"))
+	case "cosmos.staking.v1beta1.Metadata.is_dirty":
+		panic(fmt.Errorf("field is_dirty of message cosmos.staking.v1beta1.Metadata is not mutable"))
+	case "cosmos.staking.v1beta1.Metadata.is_full":
+		panic(fmt.Errorf("field is_full of message cosmos.staking.v1beta1.Metadata is not mutable"))
 	default:
 		if fd.IsExtension() {
-			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.CacheMetadata"))
+			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.Metadata"))
 		}
-		panic(fmt.Errorf("message cosmos.staking.v1beta1.CacheMetadata does not contain field %s", fd.FullName()))
+		panic(fmt.Errorf("message cosmos.staking.v1beta1.Metadata does not contain field %s", fd.FullName()))
 	}
 }
 
 // NewField returns a new value that is assignable to the field
 // for the given descriptor. For scalars, this returns the default value.
 // For lists, maps, and messages, this returns a new, empty, mutable value.
-func (x *fastReflection_CacheMetadata) NewField(fd protoreflect.FieldDescriptor) protoreflect.Value {
+func (x *fastReflection_Metadata) NewField(fd protoreflect.FieldDescriptor) protoreflect.Value {
 	switch fd.FullName() {
-	case "cosmos.staking.v1beta1.CacheMetadata.is_dirty":
+	case "cosmos.staking.v1beta1.Metadata.is_dirty":
 		return protoreflect.ValueOfBool(false)
-	case "cosmos.staking.v1beta1.CacheMetadata.is_full":
+	case "cosmos.staking.v1beta1.Metadata.is_full":
 		return protoreflect.ValueOfBool(false)
 	default:
 		if fd.IsExtension() {
-			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.CacheMetadata"))
+			panic(fmt.Errorf("proto3 declared messages do not support extensions: cosmos.staking.v1beta1.Metadata"))
 		}
-		panic(fmt.Errorf("message cosmos.staking.v1beta1.CacheMetadata does not contain field %s", fd.FullName()))
+		panic(fmt.Errorf("message cosmos.staking.v1beta1.Metadata does not contain field %s", fd.FullName()))
 	}
 }
 
 // WhichOneof reports which field within the oneof is populated,
 // returning nil if none are populated.
 // It panics if the oneof descriptor does not belong to this message.
-func (x *fastReflection_CacheMetadata) WhichOneof(d protoreflect.OneofDescriptor) protoreflect.FieldDescriptor {
+func (x *fastReflection_Metadata) WhichOneof(d protoreflect.OneofDescriptor) protoreflect.FieldDescriptor {
 	switch d.FullName() {
 	default:
-		panic(fmt.Errorf("%s is not a oneof field in cosmos.staking.v1beta1.CacheMetadata", d.FullName()))
+		panic(fmt.Errorf("%s is not a oneof field in cosmos.staking.v1beta1.Metadata", d.FullName()))
 	}
 	panic("unreachable")
 }
@@ -251,7 +251,7 @@ func (x *fastReflection_CacheMetadata) WhichOneof(d protoreflect.OneofDescriptor
 // GetUnknown retrieves the entire list of unknown fields.
 // The caller may only mutate the contents of the RawFields
 // if the mutated bytes are stored back into the message with SetUnknown.
-func (x *fastReflection_CacheMetadata) GetUnknown() protoreflect.RawFields {
+func (x *fastReflection_Metadata) GetUnknown() protoreflect.RawFields {
 	return x.unknownFields
 }
 
@@ -262,7 +262,7 @@ func (x *fastReflection_CacheMetadata) GetUnknown() protoreflect.RawFields {
 // An empty RawFields may be passed to clear the fields.
 //
 // SetUnknown is a mutating operation and unsafe for concurrent use.
-func (x *fastReflection_CacheMetadata) SetUnknown(fields protoreflect.RawFields) {
+func (x *fastReflection_Metadata) SetUnknown(fields protoreflect.RawFields) {
 	x.unknownFields = fields
 }
 
@@ -274,7 +274,7 @@ func (x *fastReflection_CacheMetadata) SetUnknown(fields protoreflect.RawFields)
 // message type, but the details are implementation dependent.
 // Validity is not part of the protobuf data model, and may not
 // be preserved in marshaling or other operations.
-func (x *fastReflection_CacheMetadata) IsValid() bool {
+func (x *fastReflection_Metadata) IsValid() bool {
 	return x != nil
 }
 
@@ -284,9 +284,9 @@ func (x *fastReflection_CacheMetadata) IsValid() bool {
 // The returned methods type is identical to
 // "google.golang.org/protobuf/runtime/protoiface".Methods.
 // Consult the protoiface package documentation for details.
-func (x *fastReflection_CacheMetadata) ProtoMethods() *protoiface.Methods {
+func (x *fastReflection_Metadata) ProtoMethods() *protoiface.Methods {
 	size := func(input protoiface.SizeInput) protoiface.SizeOutput {
-		x := input.Message.Interface().(*CacheMetadata)
+		x := input.Message.Interface().(*Metadata)
 		if x == nil {
 			return protoiface.SizeOutput{
 				NoUnkeyedLiterals: input.NoUnkeyedLiterals,
@@ -314,7 +314,7 @@ func (x *fastReflection_CacheMetadata) ProtoMethods() *protoiface.Methods {
 	}
 
 	marshal := func(input protoiface.MarshalInput) (protoiface.MarshalOutput, error) {
-		x := input.Message.Interface().(*CacheMetadata)
+		x := input.Message.Interface().(*Metadata)
 		if x == nil {
 			return protoiface.MarshalOutput{
 				NoUnkeyedLiterals: input.NoUnkeyedLiterals,
@@ -364,7 +364,7 @@ func (x *fastReflection_CacheMetadata) ProtoMethods() *protoiface.Methods {
 		}, nil
 	}
 	unmarshal := func(input protoiface.UnmarshalInput) (protoiface.UnmarshalOutput, error) {
-		x := input.Message.Interface().(*CacheMetadata)
+		x := input.Message.Interface().(*Metadata)
 		if x == nil {
 			return protoiface.UnmarshalOutput{
 				NoUnkeyedLiterals: input.NoUnkeyedLiterals,
@@ -396,10 +396,10 @@ func (x *fastReflection_CacheMetadata) ProtoMethods() *protoiface.Methods {
 			fieldNum := int32(wire >> 3)
 			wireType := int(wire & 0x7)
 			if wireType == 4 {
-				return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, fmt.Errorf("proto: CacheMetadata: wiretype end group for non-group")
+				return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, fmt.Errorf("proto: Metadata: wiretype end group for non-group")
 			}
 			if fieldNum <= 0 {
-				return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, fmt.Errorf("proto: CacheMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
+				return protoiface.UnmarshalOutput{NoUnkeyedLiterals: input.NoUnkeyedLiterals, Flags: input.Flags}, fmt.Errorf("proto: Metadata: illegal tag %d (wire type %d)", fieldNum, wire)
 			}
 			switch fieldNum {
 			case 1:
@@ -490,22 +490,17 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// CacheMetadata represents the metadata state for a cache entry
-// It tracks whether the cache needs to be reloaded (dirty) and whether
-// it has reached its maximum capacity (full)
-type CacheMetadata struct {
+type Metadata struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// is_dirty indicates whether the cache needs to be reloaded from the persistent store
 	IsDirty bool `protobuf:"varint,1,opt,name=is_dirty,json=isDirty,proto3" json:"is_dirty,omitempty"`
-	// is_full indicates whether the cache has reached its maximum size
-	IsFull bool `protobuf:"varint,2,opt,name=is_full,json=isFull,proto3" json:"is_full,omitempty"`
+	IsFull  bool `protobuf:"varint,2,opt,name=is_full,json=isFull,proto3" json:"is_full,omitempty"`
 }
 
-func (x *CacheMetadata) Reset() {
-	*x = CacheMetadata{}
+func (x *Metadata) Reset() {
+	*x = Metadata{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_cosmos_staking_v1beta1_cache_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -513,25 +508,25 @@ func (x *CacheMetadata) Reset() {
 	}
 }
 
-func (x *CacheMetadata) String() string {
+func (x *Metadata) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CacheMetadata) ProtoMessage() {}
+func (*Metadata) ProtoMessage() {}
 
-// Deprecated: Use CacheMetadata.ProtoReflect.Descriptor instead.
-func (*CacheMetadata) Descriptor() ([]byte, []int) {
+// Deprecated: Use Metadata.ProtoReflect.Descriptor instead.
+func (*Metadata) Descriptor() ([]byte, []int) {
 	return file_cosmos_staking_v1beta1_cache_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *CacheMetadata) GetIsDirty() bool {
+func (x *Metadata) GetIsDirty() bool {
 	if x != nil {
 		return x.IsDirty
 	}
 	return false
 }
 
-func (x *CacheMetadata) GetIsFull() bool {
+func (x *Metadata) GetIsFull() bool {
 	if x != nil {
 		return x.IsFull
 	}
@@ -546,26 +541,26 @@ var file_cosmos_staking_v1beta1_cache_proto_rawDesc = []byte{
 	0x72, 0x6f, 0x74, 0x6f, 0x12, 0x16, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2e, 0x73, 0x74, 0x61,
 	0x6b, 0x69, 0x6e, 0x67, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x1a, 0x14, 0x67, 0x6f,
 	0x67, 0x6f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x67, 0x6f, 0x67, 0x6f, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x22, 0x4d, 0x0a, 0x0d, 0x43, 0x61, 0x63, 0x68, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64,
-	0x61, 0x74, 0x61, 0x12, 0x19, 0x0a, 0x08, 0x69, 0x73, 0x5f, 0x64, 0x69, 0x72, 0x74, 0x79, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x69, 0x73, 0x44, 0x69, 0x72, 0x74, 0x79, 0x12, 0x17,
-	0x0a, 0x07, 0x69, 0x73, 0x5f, 0x66, 0x75, 0x6c, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52,
-	0x06, 0x69, 0x73, 0x46, 0x75, 0x6c, 0x6c, 0x3a, 0x08, 0x88, 0xa0, 0x1f, 0x00, 0xe8, 0xa0, 0x1f,
-	0x01, 0x42, 0xda, 0x01, 0x0a, 0x1a, 0x63, 0x6f, 0x6d, 0x2e, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73,
-	0x2e, 0x73, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31,
-	0x42, 0x0a, 0x43, 0x61, 0x63, 0x68, 0x65, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x36,
-	0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x73, 0x64, 0x6b, 0x2e, 0x69, 0x6f, 0x2f, 0x61, 0x70, 0x69,
-	0x2f, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2f, 0x73, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x2f,
-	0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x3b, 0x73, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x76,
-	0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0xa2, 0x02, 0x03, 0x43, 0x53, 0x58, 0xaa, 0x02, 0x16, 0x43,
-	0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2e, 0x53, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x2e, 0x56, 0x31,
-	0x62, 0x65, 0x74, 0x61, 0x31, 0xca, 0x02, 0x16, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x5c, 0x53,
-	0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x5c, 0x56, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0xe2, 0x02,
-	0x22, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x5c, 0x53, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x5c,
-	0x56, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65, 0x74, 0x61, 0x64,
-	0x61, 0x74, 0x61, 0xea, 0x02, 0x18, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x3a, 0x3a, 0x53, 0x74,
-	0x61, 0x6b, 0x69, 0x6e, 0x67, 0x3a, 0x3a, 0x56, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x74, 0x6f, 0x22, 0x48, 0x0a, 0x08, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x12, 0x19,
+	0x0a, 0x08, 0x69, 0x73, 0x5f, 0x64, 0x69, 0x72, 0x74, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x07, 0x69, 0x73, 0x44, 0x69, 0x72, 0x74, 0x79, 0x12, 0x17, 0x0a, 0x07, 0x69, 0x73, 0x5f,
+	0x66, 0x75, 0x6c, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x69, 0x73, 0x46, 0x75,
+	0x6c, 0x6c, 0x3a, 0x08, 0x88, 0xa0, 0x1f, 0x00, 0xe8, 0xa0, 0x1f, 0x01, 0x42, 0xda, 0x01, 0x0a,
+	0x1a, 0x63, 0x6f, 0x6d, 0x2e, 0x63, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x2e, 0x73, 0x74, 0x61, 0x6b,
+	0x69, 0x6e, 0x67, 0x2e, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x42, 0x0a, 0x43, 0x61, 0x63,
+	0x68, 0x65, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x36, 0x63, 0x6f, 0x73, 0x6d, 0x6f,
+	0x73, 0x73, 0x64, 0x6b, 0x2e, 0x69, 0x6f, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x63, 0x6f, 0x73, 0x6d,
+	0x6f, 0x73, 0x2f, 0x73, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x2f, 0x76, 0x31, 0x62, 0x65, 0x74,
+	0x61, 0x31, 0x3b, 0x73, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x76, 0x31, 0x62, 0x65, 0x74, 0x61,
+	0x31, 0xa2, 0x02, 0x03, 0x43, 0x53, 0x58, 0xaa, 0x02, 0x16, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73,
+	0x2e, 0x53, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x2e, 0x56, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31,
+	0xca, 0x02, 0x16, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x5c, 0x53, 0x74, 0x61, 0x6b, 0x69, 0x6e,
+	0x67, 0x5c, 0x56, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0xe2, 0x02, 0x22, 0x43, 0x6f, 0x73, 0x6d,
+	0x6f, 0x73, 0x5c, 0x53, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67, 0x5c, 0x56, 0x31, 0x62, 0x65, 0x74,
+	0x61, 0x31, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02,
+	0x18, 0x43, 0x6f, 0x73, 0x6d, 0x6f, 0x73, 0x3a, 0x3a, 0x53, 0x74, 0x61, 0x6b, 0x69, 0x6e, 0x67,
+	0x3a, 0x3a, 0x56, 0x31, 0x62, 0x65, 0x74, 0x61, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -582,7 +577,7 @@ func file_cosmos_staking_v1beta1_cache_proto_rawDescGZIP() []byte {
 
 var file_cosmos_staking_v1beta1_cache_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_cosmos_staking_v1beta1_cache_proto_goTypes = []interface{}{
-	(*CacheMetadata)(nil), // 0: cosmos.staking.v1beta1.CacheMetadata
+	(*Metadata)(nil), // 0: cosmos.staking.v1beta1.Metadata
 }
 var file_cosmos_staking_v1beta1_cache_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -599,7 +594,7 @@ func file_cosmos_staking_v1beta1_cache_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_cosmos_staking_v1beta1_cache_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CacheMetadata); i {
+			switch v := v.(*Metadata); i {
 			case 0:
 				return &v.state
 			case 1:
