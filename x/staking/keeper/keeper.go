@@ -81,12 +81,24 @@ func NewKeeper(
 	}
 
 	if maxCacheSize >= 0 {
+		loadUnbondingValidators := cache.NewLoader(
+			k.GetAllUnbondingValidatorsFromStore,
+			types.SortValidatorQueueKeysByAscendingTimestampOrder,
+		)
+		loadUnbondingDelegations := cache.NewLoader(
+			k.GetAllUnbondingDelegationsQueueFromStore,
+			types.SortTimestampsByAscendingOrder,
+		)
+		loadRedelegations := cache.NewLoader(
+			k.GetAllRedelegationsQueueFromStore,
+			types.SortTimestampsByAscendingOrder,
+		)
 		k.cache = cache.NewValidatorsQueueCache(
 			uint(maxCacheSize),
 			cacheStoreService,
-			k.GetAllUnbondingValidatorsFromStore,
-			k.GetAllUnbondingDelegationsQueueFromStore,
-			k.GetAllRedelegationsQueueFromStore,
+			loadUnbondingValidators,
+			loadUnbondingDelegations,
+			loadRedelegations,
 			cdc,
 			k.Logger,
 		)

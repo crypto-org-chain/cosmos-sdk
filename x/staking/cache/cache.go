@@ -20,9 +20,9 @@ type ValidatorsQueueCache struct {
 func NewValidatorsQueueCache(
 	size uint,
 	memStoreService corestoretypes.MemoryStoreService,
-	loadUnbondingValidators func(ctx context.Context) (map[string][]string, error),
-	loadUnbondingDelegations func(ctx context.Context) (map[string][]types.DVPair, error),
-	loadRedelegations func(ctx context.Context) (map[string][]types.DVVTriplet, error),
+	loadUnbondingValidators Loader[[]string],
+	loadUnbondingDelegations Loader[[]types.DVPair],
+	loadRedelegations Loader[[]types.DVVTriplet],
 	cdc codec.BinaryCodec,
 	logger func(ctx context.Context) log.Logger,
 ) *ValidatorsQueueCache {

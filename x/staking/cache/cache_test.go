@@ -36,9 +36,9 @@ func createTestContext(t *testing.T) context.Context {
 }
 
 func newTestingCache(
-	validatorsLoader func(ctx context.Context) (map[string][]string, error),
-	delegationsLoader func(ctx context.Context) (map[string][]types.DVPair, error),
-	redelegationsLoader func(ctx context.Context) (map[string][]types.DVVTriplet, error),
+	validatorsLoader cache.Loader[[]string],
+	delegationsLoader cache.Loader[[]types.DVPair],
+	redelegationsLoader cache.Loader[[]types.DVVTriplet],
 	cacheSize uint,
 ) *cache.ValidatorsQueueCache {
 	logger := func(ctx context.Context) log.Logger {
@@ -73,7 +73,12 @@ func noOpRedelegationsLoader(ctx context.Context) (map[string][]types.DVVTriplet
 }
 
 func noOpLoadNewTestingCache(size uint) *cache.ValidatorsQueueCache {
-	return newTestingCache(noOpValidatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, size)
+	return newTestingCache(
+		cache.NewLoader(noOpValidatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		size,
+	)
 }
 
 func clearDirtyFlags(ctx context.Context, cache *cache.ValidatorsQueueCache) []error {
@@ -92,25 +97,45 @@ func clearDirtyFlags(ctx context.Context, cache *cache.ValidatorsQueueCache) []e
 	return errs
 }
 
+func makeValidatorKey(baseTime time.Time, offsetSeconds int, height int64) string {
+	t := baseTime.Add(time.Duration(offsetSeconds) * time.Second)
+	return types.GetCacheValidatorQueueKey(t, height)
+}
+
+func makeTimeKey(baseTime time.Time, offsetSeconds int) string {
+	t := baseTime.Add(time.Duration(offsetSeconds) * time.Second)
+	return sdk.FormatTimeString(t)
+}
+
 func TestValidatorsQueueCache_Initialization(t *testing.T) {
+	baseTime := time.Now().UTC()
+	valKey1 := makeValidatorKey(baseTime, 0, 100)
+	valKey2 := makeValidatorKey(baseTime, 10, 200)
+	timeKey1 := makeTimeKey(baseTime, 0)
+
 	validatorsLoader := func(ctx context.Context) (map[string][]string, error) {
 		return map[string][]string{
-			"time1": {"val1", "val2"},
-			"time2": {"val3"},
+			valKey1: {"val1", "val2"},
+			valKey2: {"val3"},
 		}, nil
 	}
 	delegationsLoader := func(ctx context.Context) (map[string][]types.DVPair, error) {
 		return map[string][]types.DVPair{
-			"time1": {{DelegatorAddress: "del1", ValidatorAddress: "val1"}},
+			timeKey1: {{DelegatorAddress: "del1", ValidatorAddress: "val1"}},
 		}, nil
 	}
 	redelegationsLoader := func(ctx context.Context) (map[string][]types.DVVTriplet, error) {
 		return map[string][]types.DVVTriplet{
-			"time1": {{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}},
+			timeKey1: {{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}},
 		}, nil
 	}
 
-	cache := newTestingCache(validatorsLoader, delegationsLoader, redelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(validatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(delegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(redelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	require.NotNil(t, cache)
 }
@@ -118,78 +143,103 @@ func TestValidatorsQueueCache_Initialization(t *testing.T) {
 func TestValidatorsQueueCache_LoadFromStore(t *testing.T) {
 	ctx := createTestContext(t)
 
+	baseTime := time.Now().UTC()
+	valKey1 := makeValidatorKey(baseTime, 0, 100)
+	valKey2 := makeValidatorKey(baseTime, 10, 200)
+	timeKey1 := makeTimeKey(baseTime, 0)
+
 	validatorsLoader := func(ctx context.Context) (map[string][]string, error) {
 		return map[string][]string{
-			"time1": {"val1", "val2"},
-			"time2": {"val3"},
+			valKey1: {"val1", "val2"},
+			valKey2: {"val3"},
 		}, nil
 	}
 
 	delegationsLoader := func(ctx context.Context) (map[string][]types.DVPair, error) {
 		return map[string][]types.DVPair{
-			"time1": {{DelegatorAddress: "del1", ValidatorAddress: "val1"}},
+			timeKey1: {{DelegatorAddress: "del1", ValidatorAddress: "val1"}},
 		}, nil
 	}
 	redelegationsLoader := func(ctx context.Context) (map[string][]types.DVVTriplet, error) {
 		return map[string][]types.DVVTriplet{
-			"time1": {{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}},
+			timeKey1: {{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}},
 		}, nil
 	}
 
-	cache := newTestingCache(validatorsLoader, delegationsLoader, redelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(validatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(delegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(redelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	// Initially dirty, should load from store
 	unbondingValidators, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, unbondingValidators, 2)
-	require.Equal(t, []string{"val1", "val2"}, unbondingValidators["time1"])
-	require.Equal(t, []string{"val3"}, unbondingValidators["time2"])
+	require.Equal(t, []string{"val1", "val2"}, unbondingValidators[valKey1])
+	require.Equal(t, []string{"val3"}, unbondingValidators[valKey2])
 
 	unbondingDelegations, err := cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, unbondingDelegations, 1)
-	require.Equal(t, []types.DVPair{{DelegatorAddress: "del1", ValidatorAddress: "val1"}}, unbondingDelegations["time1"])
+	require.Equal(t, []types.DVPair{{DelegatorAddress: "del1", ValidatorAddress: "val1"}}, unbondingDelegations[timeKey1])
 
 	redelgations, err := cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, redelgations, 1)
-	require.Equal(t, []types.DVVTriplet{{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}}, redelgations["time1"])
+	require.Equal(t, []types.DVVTriplet{{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}}, redelgations[timeKey1])
 }
 
 func TestValidatorsQueueCache_FullPreventsLoad(t *testing.T) {
 	ctx := createTestContext(t)
 
+	baseTime := time.Now().UTC()
+	valKey1 := makeValidatorKey(baseTime, 0, 100)
+	valKey2 := makeValidatorKey(baseTime, 10, 200)
+	valKey3 := makeValidatorKey(baseTime, 20, 300)
+	valKey4 := makeValidatorKey(baseTime, 30, 400)
+	timeKey1 := makeTimeKey(baseTime, 0)
+	timeKey2 := makeTimeKey(baseTime, 10)
+	timeKey3 := makeTimeKey(baseTime, 20)
+	timeKey4 := makeTimeKey(baseTime, 30)
+
 	validatorsLoader := func(ctx context.Context) (map[string][]string, error) {
 		// Return too much data (4 keys > max 3)
 		return map[string][]string{
-			"time1": {"val1"},
-			"time2": {"val2"},
-			"time3": {"val3"},
-			"time4": {"val4"},
+			valKey1: {"val1"},
+			valKey2: {"val2"},
+			valKey3: {"val3"},
+			valKey4: {"val4"},
 		}, nil
 	}
 
 	delegationsLoader := func(ctx context.Context) (map[string][]types.DVPair, error) {
 		// Return too much data (4 keys > max 3)
 		return map[string][]types.DVPair{
-			"time1": {{DelegatorAddress: "del1", ValidatorAddress: "val1"}},
-			"time2": {{DelegatorAddress: "del2", ValidatorAddress: "val2"}},
-			"time3": {{DelegatorAddress: "del3", ValidatorAddress: "val3"}},
-			"time4": {{DelegatorAddress: "del4", ValidatorAddress: "val4"}},
+			timeKey1: {{DelegatorAddress: "del1", ValidatorAddress: "val1"}},
+			timeKey2: {{DelegatorAddress: "del2", ValidatorAddress: "val2"}},
+			timeKey3: {{DelegatorAddress: "del3", ValidatorAddress: "val3"}},
+			timeKey4: {{DelegatorAddress: "del4", ValidatorAddress: "val4"}},
 		}, nil
 	}
 
 	redelegationsLoader := func(ctx context.Context) (map[string][]types.DVVTriplet, error) {
 		// Return too much data (4 keys > max 3)
 		return map[string][]types.DVVTriplet{
-			"time1": {{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}},
-			"time2": {{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"}},
-			"time3": {{DelegatorAddress: "del3", ValidatorSrcAddress: "val3", ValidatorDstAddress: "val4"}},
-			"time4": {{DelegatorAddress: "del4", ValidatorSrcAddress: "val4", ValidatorDstAddress: "val5"}},
+			timeKey1: {{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"}},
+			timeKey2: {{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"}},
+			timeKey3: {{DelegatorAddress: "del3", ValidatorSrcAddress: "val3", ValidatorDstAddress: "val4"}},
+			timeKey4: {{DelegatorAddress: "del4", ValidatorSrcAddress: "val4", ValidatorDstAddress: "val5"}},
 		}, nil
 	}
 
-	cache := newTestingCache(validatorsLoader, delegationsLoader, redelegationsLoader, 3)
+	cache := newTestingCache(
+		cache.NewLoader(validatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(delegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(redelegationsLoader, types.SortTimestampsByAscendingOrder),
+		3,
+	)
 
 	// Try to load unbonding validators - should fail due to exceeding max
 	_, err := cache.GetUnbondingValidatorsQueueAll(ctx)
@@ -260,28 +310,34 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 	errs := clearDirtyFlags(ctx, cache)
 	require.Len(t, errs, 0)
 
+	baseTime := time.Now().UTC()
+	valKey1 := makeValidatorKey(baseTime, 0, 100)
+	valKey2 := makeValidatorKey(baseTime, 10, 200)
+	timeKey1 := makeTimeKey(baseTime, 0)
+	timeKey2 := makeTimeKey(baseTime, 10)
+
 	// Test unbonding validators queue
-	err := cache.SetUnbondingValidatorsQueue(ctx, "key1", []string{"val1"})
+	err := cache.SetUnbondingValidatorsQueue(ctx, valKey1, []string{"val1"})
 	require.NoError(t, err)
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val2"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey2, []string{"val2"})
 	require.NoError(t, err)
 
 	valData, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, valData, 2)
 
-	cache.DeleteUnbondingValidatorsQueue(ctx, "key1")
+	cache.DeleteUnbondingValidatorsQueue(ctx, valKey1)
 	valData, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, valData, 1)
-	require.NotContains(t, valData, "key1")
+	require.NotContains(t, valData, valKey1)
 
 	// Test unbonding delegations queue
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time1", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey1, []types.DVPair{
 		{DelegatorAddress: "del1", ValidatorAddress: "val1"},
 	})
 	require.NoError(t, err)
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time2", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey2, []types.DVPair{
 		{DelegatorAddress: "del2", ValidatorAddress: "val2"},
 	})
 	require.NoError(t, err)
@@ -290,18 +346,18 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, delData, 2)
 
-	cache.DeleteUnbondingDelegationsQueue(ctx, "time1")
+	cache.DeleteUnbondingDelegationsQueue(ctx, timeKey1)
 	delData, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, delData, 1)
-	require.NotContains(t, delData, "time1")
+	require.NotContains(t, delData, timeKey1)
 
 	// Test redelegations queue
-	err = cache.SetRedelegationsQueue(ctx, "time1", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey1, []types.DVVTriplet{
 		{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"},
 	})
 	require.NoError(t, err)
-	err = cache.SetRedelegationsQueue(ctx, "time2", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey2, []types.DVVTriplet{
 		{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"},
 	})
 	require.NoError(t, err)
@@ -310,11 +366,11 @@ func TestValidatorsQueueCache_SetAndDelete(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, redData, 2)
 
-	cache.DeleteRedelegationsQueue(ctx, "time1")
+	cache.DeleteRedelegationsQueue(ctx, timeKey1)
 	redData, err = cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, redData, 1)
-	require.NotContains(t, redData, "time1")
+	require.NotContains(t, redData, timeKey1)
 }
 
 func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
@@ -326,35 +382,43 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	errs := clearDirtyFlags(ctx, cache)
 	require.Len(t, errs, 0)
 
+	baseTime := time.Now().UTC()
+	valKey1 := makeValidatorKey(baseTime, 0, 100)
+	valKey2 := makeValidatorKey(baseTime, 10, 200)
+	valKey3 := makeValidatorKey(baseTime, 20, 300)
+	timeKey1 := makeTimeKey(baseTime, 0)
+	timeKey2 := makeTimeKey(baseTime, 10)
+	timeKey3 := makeTimeKey(baseTime, 20)
+
 	// Test unbonding validators queue
-	err := cache.SetUnbondingValidatorsQueue(ctx, "key1", []string{"val1"})
+	err := cache.SetUnbondingValidatorsQueue(ctx, valKey1, []string{"val1"})
 	require.NoError(t, err)
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val2"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey2, []string{"val2"})
 	require.NoError(t, err)
 
 	// Try to add one more - should mark as full and dirty
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key3", []string{"val3"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey3, []string{"val3"})
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	_, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
-	_, err = cache.GetUnbondingValidatorsQueue(ctx, "key1")
+	_, err = cache.GetUnbondingValidatorsQueue(ctx, valKey1)
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Test unbonding delegations queue
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time1", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey1, []types.DVPair{
 		{DelegatorAddress: "del1", ValidatorAddress: "val1"},
 	})
 	require.NoError(t, err)
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time2", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey2, []types.DVPair{
 		{DelegatorAddress: "del2", ValidatorAddress: "val2"},
 	})
 	require.NoError(t, err)
 
 	// Try to add one more - should mark as full and dirty
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time3", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey3, []types.DVPair{
 		{DelegatorAddress: "del3", ValidatorAddress: "val3"},
 	})
 	require.Error(t, err)
@@ -363,21 +427,21 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	_, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
-	_, err = cache.GetUnbondingDelegationsQueue(ctx, "time1")
+	_, err = cache.GetUnbondingDelegationsQueue(ctx, timeKey1)
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Test redelegations queue
-	err = cache.SetRedelegationsQueue(ctx, "time1", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey1, []types.DVVTriplet{
 		{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"},
 	})
 	require.NoError(t, err)
-	err = cache.SetRedelegationsQueue(ctx, "time2", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey2, []types.DVVTriplet{
 		{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"},
 	})
 	require.NoError(t, err)
 
 	// Try to add one more - should mark as full and dirty
-	err = cache.SetRedelegationsQueue(ctx, "time3", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey3, []types.DVVTriplet{
 		{DelegatorAddress: "del3", ValidatorSrcAddress: "val3", ValidatorDstAddress: "val4"},
 	})
 	require.Error(t, err)
@@ -386,7 +450,7 @@ func TestValidatorsQueueCache_FullMarkedDirty(t *testing.T) {
 	_, err = cache.GetRedelegationsQueueAll(ctx)
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
-	_, err = cache.GetRedelegationsQueue(ctx, "time1")
+	_, err = cache.GetRedelegationsQueue(ctx, timeKey1)
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 }
 
@@ -399,63 +463,69 @@ func TestValidatorsQueueCache_FullNoErrorIfReplaced(t *testing.T) {
 	errs := clearDirtyFlags(ctx, cache)
 	require.Len(t, errs, 0)
 
+	baseTime := time.Now().UTC()
+	valKey1 := makeValidatorKey(baseTime, 0, 100)
+	valKey2 := makeValidatorKey(baseTime, 10, 200)
+	timeKey1 := makeTimeKey(baseTime, 0)
+	timeKey2 := makeTimeKey(baseTime, 10)
+
 	// Test unbonding validators queue
-	err := cache.SetUnbondingValidatorsQueue(ctx, "key1", []string{"val1"})
+	err := cache.SetUnbondingValidatorsQueue(ctx, valKey1, []string{"val1"})
 	require.NoError(t, err)
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val2"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey2, []string{"val2"})
 	require.NoError(t, err)
 
 	// Replace existing entry - should not mark as dirty, ie no error
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"newVal2"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey2, []string{"newVal2"})
 	require.NoError(t, err)
 
 	_, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
-	data, err := cache.GetUnbondingValidatorsQueue(ctx, "key2")
+	data, err := cache.GetUnbondingValidatorsQueue(ctx, valKey2)
 	require.NoError(t, err)
 	require.Equal(t, []string{"newVal2"}, data)
 
 	// Test unbonding delegations queue
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time1", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey1, []types.DVPair{
 		{DelegatorAddress: "del1", ValidatorAddress: "val1"},
 	})
 	require.NoError(t, err)
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time2", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey2, []types.DVPair{
 		{DelegatorAddress: "del2", ValidatorAddress: "val2"},
 	})
 	require.NoError(t, err)
 
 	// Replace existing entry - should not mark as dirty, ie no error
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time2", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey2, []types.DVPair{
 		{DelegatorAddress: "del2", ValidatorAddress: "newVal2"},
 	})
 	require.NoError(t, err)
 
 	_, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
-	data2, err := cache.GetUnbondingDelegationsQueue(ctx, "time2")
+	data2, err := cache.GetUnbondingDelegationsQueue(ctx, timeKey2)
 	require.NoError(t, err)
 	require.Equal(t, []types.DVPair{{DelegatorAddress: "del2", ValidatorAddress: "newVal2"}}, data2)
 
 	// Test redelegations queue
-	err = cache.SetRedelegationsQueue(ctx, "time1", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey1, []types.DVVTriplet{
 		{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"},
 	})
 	require.NoError(t, err)
-	err = cache.SetRedelegationsQueue(ctx, "time2", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey2, []types.DVVTriplet{
 		{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"},
 	})
 	require.NoError(t, err)
 
 	// Replace existing entry - should not mark as dirty, ie no error
-	err = cache.SetRedelegationsQueue(ctx, "time2", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey2, []types.DVVTriplet{
 		{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "newVal3"},
 	})
 	require.NoError(t, err)
 
 	_, err = cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
-	data3, err := cache.GetRedelegationsQueue(ctx, "time2")
+	data3, err := cache.GetRedelegationsQueue(ctx, timeKey2)
 	require.NoError(t, err)
 	require.Equal(t, []types.DVVTriplet{{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "newVal3"}}, data3)
 }
@@ -463,22 +533,31 @@ func TestValidatorsQueueCache_FullNoErrorIfReplaced(t *testing.T) {
 func TestValidatorsQueueCache_UnbondingValidators(t *testing.T) {
 	ctx := createTestContext(t)
 
+	baseTime := time.Now().UTC()
+	valKey1 := makeValidatorKey(baseTime, 0, 100)
+	valKey2 := makeValidatorKey(baseTime, 10, 200)
+
 	validatorsLoader := func(ctx context.Context) (map[string][]string, error) {
 		return map[string][]string{
-			"key1": {"val1", "val2"},
+			valKey1: {"val1", "val2"},
 		}, nil
 	}
 
-	cache := newTestingCache(validatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(validatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	// Load from store
 	data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
-	require.Len(t, data["key1"], 2)
+	require.Len(t, data[valKey1], 2)
 
 	// Set individual entry
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val3", "val4"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey2, []string{"val3", "val4"})
 	require.NoError(t, err)
 
 	data, err = cache.GetUnbondingValidatorsQueueAll(ctx)
@@ -486,17 +565,22 @@ func TestValidatorsQueueCache_UnbondingValidators(t *testing.T) {
 	require.Len(t, data, 2)
 
 	// Delete entry
-	cache.DeleteUnbondingValidatorsQueue(ctx, "key1")
+	cache.DeleteUnbondingValidatorsQueue(ctx, valKey1)
 	data, err = cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
-	require.NotContains(t, data, "key1")
+	require.NotContains(t, data, valKey1)
 }
 
 func TestValidatorsQueueCache_UnbondingValidatorsEntry(t *testing.T) {
 	ctx := createTestContext(t)
 
-	cache := newTestingCache(noOpValidatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(noOpValidatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	// clear dirty flags first
 	errs := clearDirtyFlags(ctx, cache)
@@ -520,25 +604,34 @@ func TestValidatorsQueueCache_UnbondingValidatorsEntry(t *testing.T) {
 func TestValidatorsQueueCache_UnbondingDelegations(t *testing.T) {
 	ctx := createTestContext(t)
 
+	baseTime := time.Now().UTC()
+	timeKey1 := makeTimeKey(baseTime, 0)
+	timeKey2 := makeTimeKey(baseTime, 10)
+
 	delegationsLoader := func(ctx context.Context) (map[string][]types.DVPair, error) {
 		return map[string][]types.DVPair{
-			"time1": {
+			timeKey1: {
 				{DelegatorAddress: "del1", ValidatorAddress: "val1"},
 				{DelegatorAddress: "del2", ValidatorAddress: "val2"},
 			},
 		}, nil
 	}
 
-	cache := newTestingCache(noOpValidatorsLoader, delegationsLoader, noOpRedelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(noOpValidatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(delegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	// Load from store
 	data, err := cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
-	require.Len(t, data["time1"], 2)
+	require.Len(t, data[timeKey1], 2)
 
 	// Set individual entry
-	err = cache.SetUnbondingDelegationsQueue(ctx, "time2", []types.DVPair{
+	err = cache.SetUnbondingDelegationsQueue(ctx, timeKey2, []types.DVPair{
 		{DelegatorAddress: "del3", ValidatorAddress: "val3"},
 	})
 	require.NoError(t, err)
@@ -548,17 +641,22 @@ func TestValidatorsQueueCache_UnbondingDelegations(t *testing.T) {
 	require.Len(t, data, 2)
 
 	// Delete entry
-	cache.DeleteUnbondingDelegationsQueue(ctx, "time1")
+	cache.DeleteUnbondingDelegationsQueue(ctx, timeKey1)
 	data, err = cache.GetUnbondingDelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
-	require.NotContains(t, data, "time1")
+	require.NotContains(t, data, timeKey1)
 }
 
 func TestValidatorsQueueCache_UnbondingDelegationsEntry(t *testing.T) {
 	ctx := createTestContext(t)
 
-	cache := newTestingCache(noOpValidatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(noOpValidatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	// clear dirty flags first
 	errs := clearDirtyFlags(ctx, cache)
@@ -583,15 +681,24 @@ func TestValidatorsQueueCache_UnbondingDelegationsEntry(t *testing.T) {
 func TestValidatorsQueueCache_Redelegations(t *testing.T) {
 	ctx := createTestContext(t)
 
+	baseTime := time.Now().UTC()
+	timeKey1 := makeTimeKey(baseTime, 0)
+	timeKey2 := makeTimeKey(baseTime, 10)
+
 	redelegationsLoader := func(ctx context.Context) (map[string][]types.DVVTriplet, error) {
 		return map[string][]types.DVVTriplet{
-			"time1": {
+			timeKey1: {
 				{DelegatorAddress: "del1", ValidatorSrcAddress: "val1", ValidatorDstAddress: "val2"},
 			},
 		}, nil
 	}
 
-	cache := newTestingCache(noOpValidatorsLoader, noOpDelegationsLoader, redelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(noOpValidatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(redelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	// Load from store
 	data, err := cache.GetRedelegationsQueueAll(ctx)
@@ -599,7 +706,7 @@ func TestValidatorsQueueCache_Redelegations(t *testing.T) {
 	require.Len(t, data, 1)
 
 	// Set individual entry
-	err = cache.SetRedelegationsQueue(ctx, "time2", []types.DVVTriplet{
+	err = cache.SetRedelegationsQueue(ctx, timeKey2, []types.DVVTriplet{
 		{DelegatorAddress: "del2", ValidatorSrcAddress: "val2", ValidatorDstAddress: "val3"},
 	})
 	require.NoError(t, err)
@@ -609,17 +716,22 @@ func TestValidatorsQueueCache_Redelegations(t *testing.T) {
 	require.Len(t, data, 2)
 
 	// Delete entry
-	cache.DeleteRedelegationsQueue(ctx, "time1")
+	cache.DeleteRedelegationsQueue(ctx, timeKey1)
 	data, err = cache.GetRedelegationsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
-	require.NotContains(t, data, "time1")
+	require.NotContains(t, data, timeKey1)
 }
 
 func TestValidatorsQueueCache_RedelegationsEntry(t *testing.T) {
 	ctx := createTestContext(t)
 
-	cache := newTestingCache(noOpValidatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(noOpValidatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	// clear dirty flags first
 	errs := clearDirtyFlags(ctx, cache)
@@ -644,9 +756,17 @@ func TestValidatorsQueueCache_RedelegationsEntry(t *testing.T) {
 func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit_SizeOne(t *testing.T) {
 	ctx := createTestContext(t)
 
+	baseTime := time.Now().UTC()
+
+	valKey0 := makeValidatorKey(baseTime, 0, 100)
+	valKey1 := makeValidatorKey(baseTime, 10, 200)
+	valKey2 := makeValidatorKey(baseTime, 20, 300)
+
 	// Track reload calls
 	reloadCount := 0
+
 	initialLoad := true
+
 	validatorsLoader := func(ctx context.Context) (map[string][]string, error) {
 		// don't return any entries on the first call to simulate the initial load
 		if initialLoad {
@@ -657,43 +777,49 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit_SizeOne(t *testi
 
 		if reloadCount == 1 {
 			return map[string][]string{
-				"key0": {"newVal0"},
-				"key1": {"val1"},
-				"key2": {"val2"},
+				valKey0: {"newVal0"},
+				valKey1: {"val1"},
+				valKey2: {"val2"},
 			}, nil
 		}
 		return map[string][]string{
-			"key1": {"val1"},
+			valKey1: {"val1"},
 		}, nil
 	}
 
-	cache := newTestingCache(validatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, 1)
+	cache := newTestingCache(
+		cache.NewLoader(validatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		1,
+	)
 
 	errs := clearDirtyFlags(ctx, cache)
+
 	require.Len(t, errs, 0)
 
 	// Step 1: Add one entry - cache becomes full immediately, but not marked dirty
-	err := cache.SetUnbondingValidatorsQueue(ctx, "key0", []string{"val0"})
+	err := cache.SetUnbondingValidatorsQueue(ctx, valKey0, []string{"val0"})
 	require.NoError(t, err)
 
 	// Step 2: Get All entries - cache is full but not marked dirty, so should return the entry
 	data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 1)
-	require.Equal(t, "val0", data["key0"][0])
+	require.Equal(t, "val0", data[valKey0][0])
 
 	// Step 3: Replace one entry - cache is already full, but this is a replace so it's allowed
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key0", []string{"newVal0"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey0, []string{"newVal0"})
 	require.NoError(t, err)
 
 	// Step 4: Reads should succeed because cache is not dirty
 	newData, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, newData, 1)
-	require.Equal(t, "newVal0", newData["key0"][0])
+	require.Equal(t, "newVal0", newData[valKey0][0])
 
 	// Step 5: Add one new entry - cache is already full, so will be marked dirty
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key1", []string{"val1"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey1, []string{"val1"})
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Step 6: Reads should fail because cache is dirty
@@ -702,16 +828,16 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit_SizeOne(t *testi
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Step 7: Add one new entry - cache is already full, so will be marked dirty
-	err = cache.SetUnbondingValidatorsQueue(ctx, "key2", []string{"val2"})
+	err = cache.SetUnbondingValidatorsQueue(ctx, valKey2, []string{"val2"})
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Step 8: Reads should fail because cache is still dirty
-	_, err = cache.GetUnbondingValidatorsQueue(ctx, "key2")
+	_, err = cache.GetUnbondingValidatorsQueue(ctx, valKey2)
 	require.Error(t, err)
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 
 	// Step 9: Delete the entry - cache is no longer full but is still dirty
-	err = cache.DeleteUnbondingValidatorsQueue(ctx, "key0")
+	err = cache.DeleteUnbondingValidatorsQueue(ctx, valKey0)
 	require.NoError(t, err)
 
 	// Step 10: Try to read - should trigger reload because cache was marked dirty. Reload should fail because cache is instantly full upon reload.
@@ -720,17 +846,19 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit_SizeOne(t *testi
 	require.Equal(t, types.ErrCacheExceededCapacity, err)
 	require.Equal(t, 1, reloadCount, "should have reloaded after deletion")
 
-	// Step 11: Simulate some empty deletions progagated from persistent store - Should do nothing since cache does not contain these entries
-	err = cache.DeleteUnbondingValidatorsQueue(ctx, "key1")
-	require.NoError(t, err)
-	err = cache.DeleteUnbondingValidatorsQueue(ctx, "key2")
+	// Step 11: Delete the entry - cache is no longer full but is still dirty
+	err = cache.DeleteUnbondingValidatorsQueue(ctx, valKey0)
 	require.NoError(t, err)
 
-	// Step 12: Try to read - should trigger reload because cache was marked dirty. Reload should pass now since no of entries in store <= max
+	// Step 12: Simulate some empty deletions progagated from persistent store - Should do nothing since cache does not contain these entries
+	err = cache.DeleteUnbondingValidatorsQueue(ctx, valKey2)
+	require.NoError(t, err)
+
+	// Step 13: Try to read - should trigger reload because cache was marked dirty. Reload should pass now since no of entries in store <= max
 	data3, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data3, 1)
-	require.Equal(t, "val1", data3["key1"][0])
+	require.Equal(t, "val1", data3[valKey1][0])
 	require.Equal(t, 2, reloadCount, "should have reloaded after deletion")
 }
 
@@ -772,6 +900,7 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := createTestContext(t)
+			baseTime := time.Now().UTC()
 
 			// Track reload calls
 			reloadCount := 0
@@ -786,25 +915,35 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit(t *testing.T) {
 				// Return entries from persistent store
 				result := make(map[string][]string)
 				for i := 0; i < tc.numEntries-1; i++ {
-					result[fmt.Sprintf("key%d", i)] = []string{fmt.Sprintf("val%d", i)}
+					key := makeValidatorKey(baseTime, i*10, int64(100+i*100))
+					result[key] = []string{fmt.Sprintf("val%d", i)}
 				}
 				return result, nil
 			}
 
-			cache := newTestingCache(validatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, tc.cacheSize)
+			cache := newTestingCache(
+				cache.NewLoader(validatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+				cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+				cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+				tc.cacheSize,
+			)
 
 			errs := clearDirtyFlags(ctx, cache)
 			require.Len(t, errs, 0)
 
 			// Step 1: Add entries to the cache up to 1 less than the max
+			var keys []string
 			for i := 0; i < tc.numEntries-1; i++ {
-				err := cache.SetUnbondingValidatorsQueue(ctx, fmt.Sprintf("key%d", i), []string{fmt.Sprintf("val%d", i)})
+				key := makeValidatorKey(baseTime, i*10, int64(100+i*100))
+				keys = append(keys, key)
+				err := cache.SetUnbondingValidatorsQueue(ctx, key, []string{fmt.Sprintf("val%d", i)})
 				require.NoError(t, err)
 			}
 			require.Equal(t, 0, reloadCount, "should not have loaded yet")
 
 			// Step 2: Try to add another entry - should fail if cache is full
-			err := cache.SetUnbondingValidatorsQueue(ctx, "extra_key", []string{"extra_val"})
+			extraKey := makeValidatorKey(baseTime, 999, 9999)
+			err := cache.SetUnbondingValidatorsQueue(ctx, extraKey, []string{"extra_val"})
 			if tc.expectDirty {
 				require.Error(t, err)
 				require.Equal(t, types.ErrCacheExceededCapacity, err)
@@ -813,7 +952,7 @@ func TestValidatorsQueueCache_FullAndDirtyBehaviorWithSizeLimit(t *testing.T) {
 			}
 
 			// Step 3: Delete one entry - cache is no longer full (if it was) but still dirty (if it was marked)
-			err = cache.DeleteUnbondingValidatorsQueue(ctx, "key0")
+			err = cache.DeleteUnbondingValidatorsQueue(ctx, keys[0])
 			require.NoError(t, err)
 
 			// Step 4: Try to read - should trigger reload only if cache was marked dirty
@@ -1005,6 +1144,10 @@ func TestCacheEntry_ConcurrentSetAndDelete(t *testing.T) {
 func TestCacheEntry_LoadMutexPreventsMultipleReloads(t *testing.T) {
 	ctx := createTestContext(t)
 
+	baseTime := time.Now().UTC()
+	valKey1 := makeValidatorKey(baseTime, 0, 100)
+	valKey2 := makeValidatorKey(baseTime, 10, 200)
+
 	// Track how many times the loader is called
 	var loadCount atomic.Int32
 	validatorsLoader := func(ctx context.Context) (map[string][]string, error) {
@@ -1012,12 +1155,17 @@ func TestCacheEntry_LoadMutexPreventsMultipleReloads(t *testing.T) {
 		// Simulate some work during loading
 		time.Sleep(50 * time.Millisecond)
 		return map[string][]string{
-			"key1": {"val1", "val2"},
-			"key2": {"val3"},
+			valKey1: {"val1", "val2"},
+			valKey2: {"val3"},
 		}, nil
 	}
 
-	cache := newTestingCache(validatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, 100)
+	cache := newTestingCache(
+		cache.NewLoader(validatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		100,
+	)
 
 	// Cache starts dirty, so first access will trigger reload
 	// Launch multiple concurrent goroutines that will all try to read when dirty
@@ -1046,14 +1194,19 @@ func TestCacheEntry_LoadMutexPreventsMultipleReloads(t *testing.T) {
 	data, err := cache.GetUnbondingValidatorsQueueAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, data, 2)
-	require.Equal(t, []string{"val1", "val2"}, data["key1"])
-	require.Equal(t, []string{"val3"}, data["key2"])
+	require.Equal(t, []string{"val1", "val2"}, data[valKey1])
+	require.Equal(t, []string{"val3"}, data[valKey2])
 }
 
 func TestValidatorsQueueCache_ConcurrentOperations(t *testing.T) {
 	ctx := createTestContext(t)
 
-	cache := newTestingCache(noOpValidatorsLoader, noOpDelegationsLoader, noOpRedelegationsLoader, 10000)
+	cache := newTestingCache(
+		cache.NewLoader(noOpValidatorsLoader, types.SortValidatorQueueKeysByAscendingTimestampOrder),
+		cache.NewLoader(noOpDelegationsLoader, types.SortTimestampsByAscendingOrder),
+		cache.NewLoader(noOpRedelegationsLoader, types.SortTimestampsByAscendingOrder),
+		10000,
+	)
 
 	// clear dirty flags first
 	errs := clearDirtyFlags(ctx, cache)

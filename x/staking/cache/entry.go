@@ -14,6 +14,21 @@ import (
 
 type Type string
 
+type Loader[V any] struct {
+	load func(ctx context.Context) (map[string]V, error)
+	sort func(keys []string)
+}
+
+func NewLoader[V any](
+	load func(ctx context.Context) (map[string]V, error),
+	sort func(keys []string),
+) Loader[V] {
+	return Loader[V]{
+		load: load,
+		sort: sort,
+	}
+}
+
 const (
 	UnbondingValidators  Type = "unbonding_validators"
 	UnbondingDelegations Type = "unbonding_delegations"
@@ -26,27 +41,30 @@ type Entry[V ~[]E, E any] struct {
 
 	max uint
 
-	loadFromStore func(ctx context.Context) (map[string]V, error)
-	entryType     Type
+	loader    Loader[V]
+	entryType Type
 }
 
 func NewEntry[V ~[]E, E any](
 	storeService corestoretypes.MemoryStoreService,
 	max uint,
-	loadFromStore func(ctx context.Context) (map[string]V, error),
+	loader Loader[V],
 	entryType Type,
 ) *Entry[V, E] {
 	if storeService == nil {
 		panic(fmt.Sprintf("storeService is nil for entry type %s", entryType))
 	}
-	if loadFromStore == nil {
-		panic(fmt.Sprintf("loadFromStore is nil for entry type %s", entryType))
+	if loader.load == nil {
+		panic(fmt.Sprintf("loader load is nil for entry type %s", entryType))
+	}
+	if loader.sort == nil {
+		panic(fmt.Sprintf("loader sort is nil for entry type %s", entryType))
 	}
 	entry := &Entry[V, E]{
-		storeService:  storeService,
-		max:           max,
-		loadFromStore: loadFromStore,
-		entryType:     entryType,
+		storeService: storeService,
+		max:          max,
+		loader:       loader,
+		entryType:    entryType,
 	}
 	return entry
 }
@@ -316,7 +334,7 @@ func (e *Entry[V, E]) checkReload(ctx context.Context, store corestoretypes.KVSt
 		logger(ctx).Info(fmt.Sprintf("%s queue is dirty. Reinitializing cache from store.", e.entryType))
 	}
 
-	data, err := e.loadFromStore(ctx)
+	data, err := e.loader.load(ctx)
 	if err != nil {
 		return err
 	}
@@ -325,9 +343,17 @@ func (e *Entry[V, E]) checkReload(ctx context.Context, store corestoretypes.KVSt
 		return err
 	}
 
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+
+	e.loader.sort(keys)
+
 	var count uint
 
-	for key, value := range data {
+	for _, key := range keys {
+		value := data[key]
 		bz, err := marshal(cdc, e.entryType, value)
 		if err != nil {
 			return err
