@@ -36,17 +36,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## [Unreleased]
-
-
-### Breaking Changes
-
-* [#25090](https://github.com/cosmos/cosmos-sdk/pull/25090) Moved deprecated modules to `./contrib`.  These modules are still available but will no longer be actively maintained or supported in the Cosmos SDK Bug Bounty program.
-  * `x/group`
-  * `x/nft`
-  * `x/circuit`
-  * `x/crisis`
-* (crypto) [#24414](https://github.com/cosmos/cosmos-sdk/pull/24414) Remove sr25519 support, since it was removed in CometBFT v1.x (see: CometBFT [#3646](https://github.com/cometbft/cometbft/pull/3646)).
+## UNRELEASED
 
 ### Features
 
