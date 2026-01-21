@@ -114,7 +114,7 @@ func (gs *GStore[V]) ReverseIterator(start, end []byte) types.GIterator[V] {
 	return gs.iterator(start, end, false)
 }
 
-// Implements KVStore.
+// CacheWrap implements KVStore.
 func (gs *GStore[V]) CacheWrap() types.CacheWrap {
 	panic("cannot CacheWrap a GasKVStore")
 }
