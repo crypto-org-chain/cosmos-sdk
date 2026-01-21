@@ -670,6 +670,19 @@ func (rs *Store) GetKVStore(key types.StoreKey) types.KVStore {
 	return store
 }
 
+// GetObjKVStore returns a mounted ObjKVStore for a given StoreKey.
+func (rs *Store) GetObjKVStore(key types.StoreKey) types.ObjKVStore {
+	s := rs.stores[key]
+	if s == nil {
+		panic(fmt.Sprintf("store does not exist for key: %s", key.Name()))
+	}
+	store, ok := s.(types.ObjKVStore)
+	if !ok {
+		panic(fmt.Sprintf("store with key %v is not ObjKVStore", key))
+	}
+
+	return store
+}
 func (rs *Store) handlePruning(version int64) error {
 	pruneHeight := rs.pruningManager.GetPruningHeight(version)
 	rs.logger.Debug("prune start", "height", version)
@@ -837,7 +850,7 @@ func (rs *Store) Snapshot(height uint64, protoWriter protoio.Writer) error {
 		switch store := rs.GetCommitKVStore(key).(type) {
 		case *iavl.Store:
 			stores = append(stores, namedStore{name: key.Name(), Store: store})
-		case *transient.Store, *mem.Store:
+		case *transient.Store, *mem.Store, *transient.ObjStore:
 			// Non-persisted stores shouldn't be snapshotted
 			continue
 		default:
@@ -1043,6 +1056,13 @@ func (rs *Store) loadCommitStoreFromParams(key types.StoreKey, id types.CommitID
 
 		return mem.NewStore(), nil
 
+	case types.StoreTypeObject:
+		if _, ok := key.(*types.ObjectStoreKey); !ok {
+			return nil, fmt.Errorf("unexpected key type for a ObjectStoreKey; got: %s, %T", key.String(), key)
+		}
+
+		return transient.NewObjStore(), nil
+
 	default:
 		panic(fmt.Sprintf("unrecognized store type %v", params.typ))
 	}
@@ -1054,7 +1074,7 @@ func (rs *Store) buildCommitInfo(version int64) *types.CommitInfo {
 	for _, key := range keys {
 		store := rs.stores[key]
 		storeType := store.GetStoreType()
-		if storeType == types.StoreTypeTransient || storeType == types.StoreTypeMemory {
+		if storeType == types.StoreTypeTransient || storeType == types.StoreTypeMemory || storeType == types.StoreTypeObject {
 			continue
 		}
 		storeInfos = append(storeInfos, types.StoreInfo{
@@ -1192,7 +1212,7 @@ func commitStores(version int64, storeMap map[types.StoreKey]types.CommitKVStore
 		}
 
 		storeType := store.GetStoreType()
-		if storeType == types.StoreTypeTransient || storeType == types.StoreTypeMemory {
+		if storeType == types.StoreTypeTransient || storeType == types.StoreTypeMemory || storeType == types.StoreTypeObject {
 			continue
 		}
 
