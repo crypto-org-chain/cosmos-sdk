@@ -251,11 +251,6 @@ func (ks keystore) Backend() string {
 	return ks.backend
 }
 
-// DB returns the db keyring used in the keystore
-func (ks keystore) DB() keyring.Keyring {
-	return ks.db
-}
-
 func (ks keystore) ExportPubKeyArmor(uid string) (string, error) {
 	k, err := ks.Key(uid)
 	if err != nil {
