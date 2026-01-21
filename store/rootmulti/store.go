@@ -68,6 +68,7 @@ type Store struct {
 	// This allows the prune command to wait for the pruning to finish before returning.
 	iavlSyncPruning   bool
 	storesParams      map[types.StoreKey]storeParams
+	// CommitStore is a common interface to unify generic CommitKVStore of different value types
 	stores            map[types.StoreKey]types.CommitStore
 	keysByName        map[string]types.StoreKey
 	initialVersion    int64
@@ -621,10 +622,6 @@ func (rs *Store) CacheMultiStoreWithVersion(version int64) (types.CacheMultiStor
 				if storeInfos[key.Name()] {
 					return nil, err
 				}
-
-				// If the store doesn't exist at this version, create a dummy one to prevent
-				// nil pointer panic in newer query APIs.
-				cacheStore = dbadapter.Store{DB: dbm.NewMemDB()}
 			}
 
 		default:
@@ -653,7 +650,7 @@ func (rs *Store) CacheMultiStoreWithVersion(version int64) (types.CacheMultiStor
 // TODO: This isn't used directly upstream. Consider returning the Store as-is
 // instead of unwrapping.
 func (rs *Store) GetStore(key types.StoreKey) types.Store {
-	store := rs.GetCommitKVStore(key)
+	store := rs.GetCommitStore(key)
 	if store == nil {
 		panic(fmt.Sprintf("store does not exist for key: %s", key.Name()))
 	}
@@ -751,7 +748,7 @@ func (rs *Store) GetStoreByName(name string) types.Store {
 		return nil
 	}
 
-	return rs.GetCommitKVStore(key)
+	return rs.GetCommitStore(key)
 }
 
 // Query calls substore.Query with the same `req` where `req.Path` is
