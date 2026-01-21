@@ -5,6 +5,7 @@ import (
 
 	"cosmossdk.io/store/cachekv/internal"
 	"cosmossdk.io/store/internal/btree"
+	"cosmossdk.io/store/tracekv"
 	"cosmossdk.io/store/types"
 )
 
@@ -38,7 +39,7 @@ type GStore[V any] struct {
 }
 
 // NewStore creates a new Store object
-func NewGStore[V any](parent types.GKVStore[V], isZero func(V) bool, valueLen func(V) int) *GStore[V] {
+func NewGStore[V any](parent types.KVStore, isZero func(V) bool, valueLen func(V) int) *GStore[V] {
 	return &GStore[V]{
 		writeSet: btree.NewBTree[V](),
 		parent:   parent,
@@ -132,7 +133,10 @@ func (store *GStore[V]) CacheWrap() types.CacheWrap {
 
 // CacheWrapWithTrace implements the CacheWrapper interface.
 func (store *GStore[V]) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
-	panic("cannot CacheWrapWithTrace a cachekv Store")
+	if store, ok := any(store).(*GStore[[]byte]); ok {
+		return NewStore(tracekv.NewStore(store, w, tc))
+	}
+	return store.CacheWrap()
 }
 
 //----------------------------------------

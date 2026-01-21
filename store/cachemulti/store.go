@@ -56,7 +56,7 @@ func NewFromKVStore(
 // NewStore creates a new Store object from a mapping of store keys to
 // CacheWrapper objects. Each CacheWrapper store is a branched store.
 func NewStore(
-	_ dbm.DB, stores map[types.StoreKey]types.CacheWrapper, _ map[string]types.StoreKey,
+	stores map[types.StoreKey]types.CacheWrapper,
 	traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
 	return NewFromKVStore(stores, traceWriter, traceContext)
