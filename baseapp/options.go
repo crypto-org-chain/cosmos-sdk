@@ -84,11 +84,6 @@ func SetIAVLDisableFastNode(disable bool) func(*BaseApp) {
 	return func(bapp *BaseApp) { bapp.cms.SetIAVLDisableFastNode(disable) }
 }
 
-// SetIAVLSyncPruning set sync/async pruning in the IAVL store.
-func SetIAVLSyncPruning(syncPruning bool) func(*BaseApp) {
-	return func(bapp *BaseApp) { bapp.cms.SetIAVLSyncPruning(syncPruning) }
-}
-
 // SetInterBlockCache provides a BaseApp option function that sets the
 // inter-block cache.
 func SetInterBlockCache(cache storetypes.MultiStorePersistentCache) func(*BaseApp) {
@@ -125,11 +120,6 @@ func SetOptimisticExecution(opts ...func(*oe.OptimisticExecution)) func(*BaseApp
 // DisableBlockGasMeter disables the block gas meter.
 func DisableBlockGasMeter() func(*BaseApp) {
 	return func(app *BaseApp) { app.SetDisableBlockGasMeter(true) }
-}
-
-// SetTxExecutor sets a custom tx executor for the BaseApp, usually for parallel execution.
-func SetTxExecutor(executor TxExecutor) func(*BaseApp) {
-	return func(app *BaseApp) { app.txExecutor = executor }
 }
 
 func (app *BaseApp) SetName(name string) {
@@ -324,7 +314,7 @@ func (app *BaseApp) SetTxEncoder(txEncoder sdk.TxEncoder) {
 // SetQueryMultiStore set a alternative MultiStore implementation to support grpc query service.
 //
 // Ref: https://github.com/cosmos/cosmos-sdk/issues/13317
-func (app *BaseApp) SetQueryMultiStore(ms storetypes.RootMultiStore) {
+func (app *BaseApp) SetQueryMultiStore(ms storetypes.MultiStore) {
 	app.qms = ms
 }
 
@@ -386,11 +376,6 @@ func (app *BaseApp) SetStreamingManager(manager storetypes.StreamingManager) {
 // SetDisableBlockGasMeter sets the disableBlockGasMeter flag for the BaseApp.
 func (app *BaseApp) SetDisableBlockGasMeter(disableBlockGasMeter bool) {
 	app.disableBlockGasMeter = disableBlockGasMeter
-}
-
-// SetTxExecutor sets a custom tx executor for the BaseApp, usually for parallel execution.
-func (app *BaseApp) SetTxExecutor(executor TxExecutor) {
-	app.txExecutor = executor
 }
 
 // SetMsgServiceRouter sets the MsgServiceRouter of a BaseApp.

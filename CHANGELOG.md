@@ -36,42 +36,23 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## [Unreleased-Upstream]
-
-### Features
-
-* (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
-* (baseapp) [#206](https://github.com/crypto-org-chain/cosmos-sdk/pull/206) Support mount object store in baseapp, add `ObjectStore` api in context, [#585](https://github.com/crypto-org-chain/cosmos-sdk/pull/585) Skip snapshot for object store.
-* (bank) [#237](https://github.com/crypto-org-chain/cosmos-sdk/pull/237) Support virtual accounts in sending coins.
-* [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API in `Context` to use new CoW branched cache store.
-* [#248](https://github.com/crypto-org-chain/cosmos-sdk/pull/248) Init btree store lazily to save allocations when no content insert into it.
-* [#252](https://github.com/crypto-org-chain/cosmos-sdk/pull/252) Add `BlockGasWanted` to `Context` to support feemarket module.
-* [#269](https://github.com/crypto-org-chain/cosmos-sdk/pull/269) Add `StreamingManager` to baseapp to extend the abci listeners.
-* (baseapp) [#565](https://github.com/crypto-org-chain/cosmos-sdk/pull/565) Support incarnation cache when executed in block-stm.
+## [Unreleased]
 
 ### Improvements
 
-* [#261](https://github.com/crypto-org-chain/cosmos-sdk/pull/261) `ctx.BlockHeader` don't do protobuf deep copy, shallow copy seems enough, reduce scope of mutex in `PriorityNonceMempool.Remove`.
-* [#507](https://github.com/crypto-org-chain/cosmos-sdk/pull/507) mempool respect gas wanted returned by ante handler
-* [#744](https://github.com/crypto-org-chain/cosmos-sdk/pull/744) Pass raw transactions to tx executor so it can do pre-estimations.
-* [#884](https://github.com/crypto-org-chain/cosmos-sdk/pull/884) Avoid decoding tx for in PrepareProposal if it's NopMempool.
-* (x/staking) [#24354](https://github.com/cosmos/cosmos-sdk/pull/24354) Optimize validator endblock by reducing bech32 conversions, resulting in significant performance improvement
-* (x/mint) [#25562](https://github.com/cosmos/cosmos-sdk/pull/25562) Improve and test `x/mint` params validation.
-
-## [Unreleased]
+* (x/gov) [#24386](https://github.com/cosmos/cosmos-sdk/pull/24386) Improve helpers to easily create governance proposals from CLI.
 
 ### Bug Fixes
 
-* (x/auth) [#23741](https://github.com/cosmos/cosmos-sdk/pull/23741) Support legacy global AccountNumber.
+* (baseapp) [#25642](https://github.com/cosmos/cosmos-sdk/pull/25642) Mark pre-block events for indexing based on local configuration.
+* (baseapp) [#23879](https://github.com/cosmos/cosmos-sdk/pull/23879) Ensure finalize block response is not empty in the defer check of FinalizeBlock to avoid panic by nil pointer.
+* (query) [#23884](https://github.com/cosmos/cosmos-sdk/pull/23884) Fix NPE in query pagination.
 
 ## [v0.50.14](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.14) - 2025-07-08
 
 ### Bug Fixes
 
 * [GHSA-p22h-3m2v-cmgh](https://github.com/cosmos/cosmos-sdk/security/advisories/GHSA-p22h-3m2v-cmgh) Fix x/distribution can halt when historical rewards overflow.
-### Bug Fixes
-
-* (x/auth) [#23741](https://github.com/cosmos/cosmos-sdk/pull/23741) Support legacy global AccountNumber.
 
 ## [v0.50.13](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.13) - 2025-03-12
 
@@ -85,27 +66,24 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * [GHSA-x5vx-95h7-rv4p](https://github.com/cosmos/cosmos-sdk/security/advisories/GHSA-x5vx-95h7-rv4p) Fix Group module can halt chain when handling a malicious proposal
 
-
 ## [v0.50.11](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.11) - 2024-12-16
 
 ### Features
 
 * (crypto/keyring) [#21653](https://github.com/cosmos/cosmos-sdk/pull/21653) New Linux-only backend that adds Linux kernel's `keyctl` support.
-* (crypto/keyring) [#20212](https://github.com/cosmos/cosmos-sdk/pull/20212) Expose the db keyring used in the keystore.
 
 ### Improvements
 
 * (server) [#21941](https://github.com/cosmos/cosmos-sdk/pull/21941) Regenerate addrbook.json for in place testnet.
-* (store) [#923](https://github.com/crypto-org-chain/cosmos-sdk/pull/923) Enable iavl async pruning.
-* (store) [#934](https://github.com/crypto-org-chain/cosmos-sdk/pull/934) Add pause pruning.
-* (baseapp) [#20208](https://github.com/cosmos/cosmos-sdk/pull/20208) Skip running validateBasic for rechecking txs.
 
 ### Bug Fixes
 
 * Fix [ABS-0043/ABS-0044](https://github.com/cosmos/cosmos-sdk/security/advisories/GHSA-8wcc-m6j2-qxvm) Limit recursion depth for unknown field detection and unpack any
-* (sims) [21906](https://github.com/cosmos/cosmos-sdk/pull/21906) Skip sims test when running dry on validators
+* (server) [#22564](https://github.com/cosmos/cosmos-sdk/pull/22564) Fix fallback genesis path in server
+* (x/group) [#22425](https://github.com/cosmos/cosmos-sdk/pull/22425) Proper address rendering in error
+* (sims) [#21906](https://github.com/cosmos/cosmos-sdk/pull/21906) Skip sims test when running dry on validators
 * (cli) [#21919](https://github.com/cosmos/cosmos-sdk/pull/21919) Query address-by-acc-num by account_id instead of id.
-* (cli) [#22656](https://github.com/cosmos/cosmos-sdk/pull/22656) Prune cmd should disable async pruning.
+* (x/group) [#22229](https://github.com/cosmos/cosmos-sdk/pull/22229) Accept `1` and `try` in CLI for group proposal exec.
 
 ## [v0.50.10](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.10) - 2024-09-20
 

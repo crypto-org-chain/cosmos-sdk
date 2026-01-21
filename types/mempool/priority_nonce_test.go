@@ -388,7 +388,7 @@ func (s *MempoolTestSuite) TestIterator() {
 			// iterate through txs
 			iterator := pool.Select(ctx, nil)
 			for iterator != nil {
-				tx := iterator.Tx().Tx.(testTx)
+				tx := iterator.Tx().(testTx)
 				require.Equal(t, tt.txs[tx.id].p, int(tx.priority))
 				require.Equal(t, tt.txs[tx.id].n, int(tx.nonce))
 				require.Equal(t, tt.txs[tx.id].a, tx.address)
@@ -464,8 +464,8 @@ func (s *MempoolTestSuite) TestIteratorConcurrency() {
 			}()
 
 			var i int
-			pool.SelectBy(ctx, nil, func(memTx mempool.Tx) bool {
-				tx := memTx.Tx.(testTx)
+			pool.SelectBy(ctx, nil, func(memTx sdk.Tx) bool {
+				tx := memTx.(testTx)
 				if tx.id < len(tt.txs) {
 					require.Equal(t, tt.txs[tx.id].p, int(tx.priority))
 					require.Equal(t, tt.txs[tx.id].n, int(tx.nonce))
@@ -939,7 +939,7 @@ func TestNextSenderTx_TxReplacement(t *testing.T) {
 		require.Equal(t, 1, mp.CountTx())
 
 		iter := mp.Select(ctx, nil)
-		require.Equal(t, tx, iter.Tx().Tx)
+		require.Equal(t, tx, iter.Tx())
 	}
 
 	// test Priority with TxReplacement
@@ -974,5 +974,5 @@ func TestNextSenderTx_TxReplacement(t *testing.T) {
 	require.Equal(t, 1, mp.CountTx())
 
 	iter := mp.Select(ctx, nil)
-	require.Equal(t, txs[3], iter.Tx().Tx)
+	require.Equal(t, txs[3], iter.Tx())
 }
