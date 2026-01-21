@@ -39,7 +39,7 @@ type GStore[V any] struct {
 }
 
 // NewStore creates a new Store object
-func NewGStore[V any](parent types.KVStore, isZero func(V) bool, valueLen func(V) int) *GStore[V] {
+func NewGStore[V any](parent types.GKVStore[V], isZero func(V) bool, valueLen func(V) int) *GStore[V] {
 	return &GStore[V]{
 		writeSet: btree.NewBTree[V](),
 		parent:   parent,
