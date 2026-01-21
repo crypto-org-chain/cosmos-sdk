@@ -7,6 +7,16 @@ import (
 	"strings"
 )
 
+// BytesIsZero returns whether the byte array is nil
+func BytesIsZero(v []byte) bool {
+	return v == nil
+}
+
+// BytesValueLen returns the length of the byte array
+func BytesValueLen(v []byte) int {
+	return len(v)
+}
+
 // KVStorePrefixIterator iterates over all the keys with a certain prefix in ascending order
 func KVStorePrefixIterator(kvs KVStore, prefix []byte) Iterator {
 	return kvs.Iterator(prefix, PrefixEndBytes(prefix))
