@@ -198,6 +198,9 @@ type BaseApp struct {
 	//
 	// SAFETY: it's safe to do if validators validate the total gas wanted in the `ProcessProposal`, which is the case in the default handler.
 	disableBlockGasMeter bool
+
+	// Optional alternative tx executor, used for block-stm parallel transaction execution.
+	txExecutor TxExecutor
 }
 
 // NewBaseApp returns a reference to an initialized BaseApp. It accepts a
@@ -318,6 +321,8 @@ func (app *BaseApp) MountStores(keys ...storetypes.StoreKey) {
 		case *storetypes.MemoryStoreKey:
 			app.MountStore(key, storetypes.StoreTypeMemory)
 
+		case *storetypes.ObjectStoreKey:
+			app.MountStore(key, storetypes.StoreTypeObject)
 		default:
 			panic(fmt.Sprintf("Unrecognized store key type :%T", key))
 		}
@@ -356,6 +361,15 @@ func (app *BaseApp) MountMemoryStores(keys map[string]*storetypes.MemoryStoreKey
 	}
 }
 
+// MountObjectStores mounts all transient object stores with the BaseApp's internal
+// commit multi-store.
+func (app *BaseApp) MountObjectStores(keys map[string]*storetypes.ObjectStoreKey) {
+	skeys := slices.Sorted(maps.Keys(keys))
+	for _, key := range skeys {
+		memKey := keys[key]
+		app.MountStore(memKey, storetypes.StoreTypeObject)
+	}
+}
 // MountStore mounts a store to the provided key in the BaseApp multistore,
 // using the default DB.
 func (app *BaseApp) MountStore(key storetypes.StoreKey, typ storetypes.StoreType) {
@@ -674,7 +688,7 @@ func (app *BaseApp) getBlockGasMeter(ctx sdk.Context) storetypes.GasMeter {
 }
 
 // retrieve the context for the tx w/ txBytes and other memoized values.
-func (app *BaseApp) getContextForTx(mode execMode, txBytes []byte) sdk.Context {
+func (app *BaseApp) getContextForTx(mode execMode, txBytes []byte, txIndex int) sdk.Context {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 
@@ -684,7 +698,8 @@ func (app *BaseApp) getContextForTx(mode execMode, txBytes []byte) sdk.Context {
 	}
 	ctx := modeState.Context().
 		WithTxBytes(txBytes).
-		WithGasMeter(storetypes.NewInfiniteGasMeter())
+		WithGasMeter(storetypes.NewInfiniteGasMeter()).
+		WithTxIndex(txIndex)
 	// WithVoteInfos(app.voteInfos) // TODO: identify if this is needed
 
 	ctx = ctx.WithIsSigverifyTx(app.sigverifyTx)
