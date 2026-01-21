@@ -1,13 +1,17 @@
 package cachemulti
 
+
 import (
 	"fmt"
 	"io"
 	"maps"
 
+	dbm "github.com/cosmos/cosmos-db"
+
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/dbadapter"
 	"cosmossdk.io/store/tracekv"
 	"cosmossdk.io/store/types"
-	dbm "github.com/cosmos/cosmos-db"
 )
 
 // storeNameCtxKey is the TraceContext metadata key that identifies
@@ -37,8 +41,8 @@ var _ types.CacheMultiStore = Store{}
 // CacheWrapper objects and a KVStore as the database. Each CacheWrapper store
 // is a branched store.
 func NewFromKVStore(
-	stores map[types.StoreKey]types.CacheWrapper,
-	traceWriter io.Writer, traceContext types.TraceContext,
+	store types.KVStore, stores map[types.StoreKey]types.CacheWrapper,
+	keys map[string]types.StoreKey, traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
 	cms := Store{
 		stores:       make(map[types.StoreKey]types.CacheWrap, len(stores)),
@@ -56,10 +60,10 @@ func NewFromKVStore(
 // NewStore creates a new Store object from a mapping of store keys to
 // CacheWrapper objects. Each CacheWrapper store is a branched store.
 func NewStore(
-	stores map[types.StoreKey]types.CacheWrapper,
+	db dbm.DB, stores map[types.StoreKey]types.CacheWrapper, keys map[string]types.StoreKey,
 	traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
-	return NewFromKVStore(stores, traceWriter, traceContext)
+	return NewFromKVStore(dbadapter.Store{DB: db}, stores, keys, traceWriter, traceContext)
 }
 
 // NewFromParent constructs a cache multistore with a parent store lazily,
