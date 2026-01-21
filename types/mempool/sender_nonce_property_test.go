@@ -96,7 +96,7 @@ func fetchAllTxs(iterator mempool.Iterator) []testTx {
 	var txs []testTx
 	for iterator != nil {
 		tx := iterator.Tx()
-		txs = append(txs, tx.Tx.(testTx))
+		txs = append(txs, tx.(testTx))
 		i := iterator.Next()
 		iterator = i
 	}
