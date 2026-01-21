@@ -28,14 +28,10 @@ func TestOptimisticExecution(t *testing.T) {
 	assert.EqualError(t, err, "test error")
 
 	assert.False(t, oe.AbortIfNeeded(
-		&abci.RequestFinalizeBlock{
-			Hash: []byte("test"),
-		},
+		[]byte("test"),
 	))
 	assert.True(t, oe.AbortIfNeeded(
-		&abci.RequestFinalizeBlock{
-			Hash: []byte("wrong_hash"),
-		},
+		[]byte("wrong_hash"),
 	))
 	oe.Reset()
 }
