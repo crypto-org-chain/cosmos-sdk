@@ -145,11 +145,7 @@ func initFixture(tb testing.TB) *fixture {
 	})
 
 	sdkCtx := sdk.UnwrapSDKContext(integrationApp.Context())
-<<<<<<< HEAD
-	require.NoError(t, stakingKeeper.SetParams(sdkCtx, stakingtypes.DefaultParams()))
-=======
 	require.NoError(tb, stakingKeeper.SetParams(sdkCtx, stakingtypes.DefaultParams()))
->>>>>>> upstream/release/v0.53.x
 
 	stakingKeeper.SetHooks(
 		stakingtypes.NewMultiStakingHooks(
@@ -162,7 +158,6 @@ func initFixture(tb testing.TB) *fixture {
 	distrtypes.RegisterQueryServer(integrationApp.QueryHelper(), distrkeeper.NewQuerier(distrKeeper))
 	stakingtypes.RegisterMsgServer(integrationApp.MsgServiceRouter(), stakingkeeper.NewMsgServerImpl(stakingKeeper))
 
-	stakingtypes.RegisterMsgServer(integrationApp.MsgServiceRouter(), stakingkeeper.NewMsgServerImpl(stakingKeeper))
 
 	return &fixture{
 		app:           integrationApp,

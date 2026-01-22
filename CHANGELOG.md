@@ -73,7 +73,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (cli) [#25485](https://github.com/cosmos/cosmos-sdk/pull/25485) Avoid failed to convert address field in `withdraw-validator-commission` cmd.
 * (baseapp) [#25642](https://github.com/cosmos/cosmos-sdk/pull/25642) Mark pre-block events for indexing based on local configuration.
 
-
 ## [v0.53.4](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.4) - 2025-07-25
 
 This patch update also includes minor dependency bumps.
@@ -81,7 +80,6 @@ This patch update also includes minor dependency bumps.
 ### Features
 
 * (abci_utils) [#25008](https://github.com/cosmos/cosmos-sdk/pull/24861) add the ability to assign a custom signer extraction adapter in `DefaultProposalHandler`.
-
 
 ## [v0.53.3](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.3) - 2025-07-08
 
