@@ -204,7 +204,7 @@ func (snm *SenderNonceMempool) doSelect(_ context.Context, _ [][]byte) Iterator 
 }
 
 // SelectBy will hold the mutex during the iteration, callback returns if continue.
-func (snm *SenderNonceMempool) SelectBy(ctx context.Context, txs [][]byte, callback func(Tx) bool) {
+func (snm *SenderNonceMempool) SelectBy(ctx context.Context, txs [][]byte, callback func(sdk.Tx) bool) {
 	snm.mtx.Lock()
 	defer snm.mtx.Unlock()
 

@@ -84,6 +84,7 @@ func FormatCoins(coins []*basev1beta1.Coin, metadata []*bankv1beta1.Metadata) (s
 		if err != nil {
 			return "", err
 		}
+
 		// If a coin contains a comma, return an error given that the output
 		// could be misinterpreted by the user as 2 different coins.
 		if strings.Contains(formatted[i], ",") {

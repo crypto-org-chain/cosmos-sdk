@@ -304,8 +304,8 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 			selectedTxsNums int
 			invalidTxs      []sdk.Tx // invalid txs to be removed out of the loop to avoid dead lock
 		)
-		mempool.SelectBy(ctx, h.mempool, req.Txs, func(memTx mempool.Tx) bool {
-			signerData, err := h.signerExtAdapter.GetSigners(memTx.Tx)
+		mempool.SelectBy(ctx, h.mempool, req.Txs, func(memTx sdk.Tx) bool {
+			signerData, err := h.signerExtAdapter.GetSigners(memTx)
 			if err != nil {
 				// propagate the error to the caller
 				resError = err
@@ -342,7 +342,7 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 			// check again.
 			txBz, err := h.txVerifier.PrepareProposalVerifyTx(memTx.Tx)
 			if err != nil {
-				invalidTxs = append(invalidTxs, memTx.Tx)
+				invalidTxs = append(invalidTxs, memTx)
 			} else {
 				stop := h.txSelector.SelectTxForProposal(ctx, uint64(req.MaxTxBytes), maxBlockGas, memTx.Tx, txBz, memTx.GasWanted)
 				if stop {

@@ -464,8 +464,8 @@ func (s *MempoolTestSuite) TestIteratorConcurrency() {
 			}()
 
 			var i int
-			pool.SelectBy(ctx, nil, func(memTx mempool.Tx) bool {
-				tx := memTx.Tx.(testTx)
+			pool.SelectBy(ctx, nil, func(memTx sdk.Tx) bool {
+				tx := memTx.(testTx)
 				if tx.id < len(tt.txs) {
 					require.Equal(t, tt.txs[tx.id].p, int(tx.priority))
 					require.Equal(t, tt.txs[tx.id].n, int(tx.nonce))

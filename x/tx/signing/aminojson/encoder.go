@@ -43,7 +43,7 @@ func cosmosIntEncoder(_ *Encoder, v protoreflect.Value, w io.Writer) error {
 	}
 }
 
-// cosmosDecEncoder provides legacy compatible encoding for cosmos.Dec and cosmos.Int types. These are sometimes
+// cosmosDecEncoder provides legacy compatible encoding for cosmos.Dec types. These are sometimes
 // represented as strings in pulsar messages and sometimes as bytes.  This encoder handles both cases.
 func cosmosDecEncoder(_ *Encoder, v protoreflect.Value, w io.Writer) error {
 	switch val := v.Interface().(type) {
@@ -51,7 +51,12 @@ func cosmosDecEncoder(_ *Encoder, v protoreflect.Value, w io.Writer) error {
 		if val == "" {
 			return jsonMarshal(w, "0")
 		}
-		return jsonMarshal(w, val)
+		var dec math.LegacyDec
+		err := dec.Unmarshal([]byte(val))
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal for Amino JSON encoding; string %q into Dec: %w", val, err)
+		}
+		return jsonMarshal(w, dec.String())
 	case []byte:
 		if len(val) == 0 {
 			return jsonMarshal(w, "0")
