@@ -138,7 +138,7 @@ func validateBlocksPerYear(blocksPerYear uint64) error {
 	}
 
 	if blocksPerYear > math.MaxInt64 {
-		return fmt.Errorf("blocks per year too large: %d, maximum value is: %d", blocksPerYear, uint64(math.MaxInt64))
+		return fmt.Errorf("blocks per year too large: %d, maximum value is: %d", blocksPerYear, math.MaxInt64)
 	}
 
 	return nil

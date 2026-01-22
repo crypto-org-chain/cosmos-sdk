@@ -131,7 +131,7 @@ func (c Context) SetIncarnationCache(key string, value any) {
 	c.incarnationCache[key] = value
 }
 
-// BlockHeader returns the header by value (shallow copy).
+// BlockHeader returns the header by value.
 func (c Context) BlockHeader() cmtproto.Header {
 	return c.header
 }
@@ -392,12 +392,12 @@ func (c Context) IsZero() bool {
 	return c.ms == nil
 }
 
-func (c Context) WithValue(key, value interface{}) Context {
+func (c Context) WithValue(key, value any) Context {
 	c.baseCtx = context.WithValue(c.baseCtx, key, value)
 	return c
 }
 
-func (c Context) Value(key interface{}) interface{} {
+func (c Context) Value(key any) any {
 	if key == SdkContextKey {
 		return c
 	}

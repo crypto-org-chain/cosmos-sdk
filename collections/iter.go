@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"cosmossdk.io/collections/codec"
-	"cosmossdk.io/core/store"
+	store "cosmossdk.io/collections/corecompat"
 )
 
 // ErrInvalidIterator is returned when an Iterate call resulted in an invalid iterator.
@@ -204,7 +204,7 @@ func newIterator[K, V any](ctx context.Context, start, end []byte, order Order, 
 	}, nil
 }
 
-// Iterator defines a generic wrapper around an storetypes.Iterator.
+// Iterator defines a generic wrapper around a storetypes.Iterator.
 // This iterator provides automatic key and value encoding,
 // it assumes all the keys and values contained within the storetypes.Iterator
 // range are the same.

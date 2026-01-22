@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"sort"
 	"strings"
@@ -62,10 +63,12 @@ type Store struct {
 	pruningManager      *pruning.Manager
 	iavlCacheSize       int
 	iavlDisableFastNode bool
-	iavlSyncPruning     bool
-	storesParams        map[types.StoreKey]storeParams
-	// CommitStore is a common interface to unify generic CommitKVStore of different value types
-	stores            map[types.StoreKey]types.CommitStore
+	// iavlSyncPruning should rarely be set to true.
+	// The Prune command will automatically set this to true.
+	// This allows the prune command to wait for the pruning to finish before returning.
+	iavlSyncPruning   bool
+	storesParams      map[types.StoreKey]storeParams
+	stores            map[types.StoreKey]types.CommitKVStore
 	keysByName        map[string]types.StoreKey
 	initialVersion    int64
 	removalMap        map[types.StoreKey]bool
@@ -94,7 +97,7 @@ func NewStore(db dbm.DB, logger log.Logger, metricGatherer metrics.StoreMetrics)
 		iavlCacheSize:       iavl.DefaultIAVLCacheSize,
 		iavlDisableFastNode: iavlDisablefastNodeDefault,
 		storesParams:        make(map[types.StoreKey]storeParams),
-		stores:              make(map[types.StoreKey]types.CommitStore),
+		stores:              make(map[types.StoreKey]types.CommitKVStore),
 		keysByName:          make(map[string]types.StoreKey),
 		listeners:           make(map[types.StoreKey]*types.MemoryListener),
 		removalMap:          make(map[types.StoreKey]bool),
@@ -232,7 +235,7 @@ func (rs *Store) loadVersion(ver int64, upgrades *types.StoreUpgrades) error {
 	}
 
 	// load each Store (note this doesn't panic on unmounted keys now)
-	newStores := make(map[types.StoreKey]types.CommitStore)
+	newStores := make(map[types.StoreKey]types.CommitKVStore)
 
 	storesKeys := make([]types.StoreKey, 0, len(rs.storesParams))
 
@@ -394,9 +397,7 @@ func (rs *Store) getTracingContext() types.TraceContext {
 	}
 
 	ctx := types.TraceContext{}
-	for k, v := range rs.traceContext {
-		ctx[k] = v
-	}
+	maps.Copy(ctx, rs.traceContext)
 
 	return ctx
 }
@@ -850,14 +851,12 @@ func parsePath(path string) (storeName, subpath string, err error) {
 		return storeName, subpath, errorsmod.Wrapf(types.ErrUnknownRequest, "invalid path: %s", path)
 	}
 
-	paths := strings.SplitN(path[1:], "/", 2)
-	storeName = paths[0]
-
-	if len(paths) == 2 {
-		subpath = "/" + paths[1]
+	storeName, subpath, found := strings.Cut(path[1:], "/")
+	if !found {
+		return storeName, subpath, nil
 	}
 
-	return storeName, subpath, nil
+	return storeName, "/" + subpath, nil
 }
 
 //---------------------- Snapshotting ------------------
@@ -927,7 +926,7 @@ func (rs *Store) Snapshot(height uint64, protoWriter protoio.Writer) error {
 			nodeCount := 0
 			for {
 				node, err := exporter.Next()
-				if err == iavltree.ErrorExportDone {
+				if errors.Is(err, iavltree.ErrorExportDone) {
 					rs.logger.Debug("snapshot Done", "store", store.name, "nodeCount", nodeCount)
 					break
 				} else if err != nil {
@@ -951,7 +950,6 @@ func (rs *Store) Snapshot(height uint64, protoWriter protoio.Writer) error {
 
 			return nil
 		}()
-
 		if err != nil {
 			return err
 		}
@@ -974,7 +972,7 @@ loop:
 	for {
 		snapshotItem = snapshottypes.SnapshotItem{}
 		err := protoReader.ReadMsg(&snapshotItem)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return snapshottypes.SnapshotItem{}, errorsmod.Wrap(err, "invalid protobuf message")
@@ -1046,7 +1044,7 @@ loop:
 	return snapshotItem, rs.LoadLatestVersion()
 }
 
-func (rs *Store) loadCommitStoreFromParams(key types.StoreKey, id types.CommitID, params storeParams) (types.CommitStore, error) {
+func (rs *Store) loadCommitStoreFromParams(key types.StoreKey, id types.CommitID, params storeParams) (types.CommitKVStore, error) {
 	var db dbm.DB
 
 	if params.db != nil {
@@ -1065,7 +1063,6 @@ func (rs *Store) loadCommitStoreFromParams(key types.StoreKey, id types.CommitID
 		if err != nil {
 			return nil, err
 		}
-
 		if rs.interBlockCache != nil {
 			// Wrap and get a CommitKVStore with inter-block caching. Note, this should
 			// only wrap the primary CommitKVStore, not any store that is already
@@ -1228,7 +1225,7 @@ func GetLatestVersion(db dbm.DB) int64 {
 }
 
 // Commits each store and returns a new commitInfo.
-func commitStores(version int64, storeMap map[types.StoreKey]types.CommitStore, removalMap map[types.StoreKey]bool) *types.CommitInfo {
+func commitStores(version int64, storeMap map[types.StoreKey]types.CommitKVStore, removalMap map[types.StoreKey]bool) *types.CommitInfo {
 	storeInfos := make([]types.StoreInfo, 0, len(storeMap))
 	storeKeys := keysFromStoreKeyMap(storeMap)
 

@@ -524,8 +524,6 @@ func TestMultiStore_Pruning(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
-
 		t.Run(tc.name, func(t *testing.T) {
 			db := dbm.NewMemDB()
 			ms := newMultiStoreWithMounts(db, tc.po)
@@ -902,7 +900,7 @@ func getExpectedCommitID(store *Store, ver int64) types.CommitID {
 	}
 }
 
-func hashStores(stores map[types.StoreKey]types.CommitStore) []byte {
+func hashStores(stores map[types.StoreKey]types.CommitKVStore) []byte {
 	m := make(map[string][]byte, len(stores))
 	for key, store := range stores {
 		name := key.Name()
@@ -957,18 +955,18 @@ func TestStateListeners(t *testing.T) {
 	require.Empty(t, ms.PopStateCache())
 }
 
-type commitStoreStub struct {
-	types.CommitStore
+type commitKVStoreStub struct {
+	types.CommitKVStore
 	Committed int
 }
 
-func (stub *commitStoreStub) Commit() types.CommitID {
-	commitID := stub.CommitStore.Commit()
+func (stub *commitKVStoreStub) Commit() types.CommitID {
+	commitID := stub.CommitKVStore.Commit()
 	stub.Committed++
 	return commitID
 }
 
-func prepareStoreMap() (map[types.StoreKey]types.CommitStore, error) {
+func prepareStoreMap() (map[types.StoreKey]types.CommitKVStore, error) {
 	var db dbm.DB = dbm.NewMemDB()
 	store := NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
 	store.MountStoreWithDB(types.NewKVStoreKey("iavl1"), types.StoreTypeIAVL, nil)
@@ -979,18 +977,18 @@ func prepareStoreMap() (map[types.StoreKey]types.CommitStore, error) {
 	if err := store.LoadLatestVersion(); err != nil {
 		return nil, err
 	}
-	return map[types.StoreKey]types.CommitStore{
-		testStoreKey1: &commitStoreStub{
-			CommitStore: store.GetStoreByName("iavl1").(types.CommitStore),
+	return map[types.StoreKey]types.CommitKVStore{
+		testStoreKey1: &commitKVStoreStub{
+			CommitKVStore: store.GetStoreByName("iavl1").(types.CommitKVStore),
 		},
-		testStoreKey2: &commitStoreStub{
-			CommitStore: store.GetStoreByName("iavl2").(types.CommitStore),
+		testStoreKey2: &commitKVStoreStub{
+			CommitKVStore: store.GetStoreByName("iavl2").(types.CommitKVStore),
 		},
-		testStoreKey3: &commitStoreStub{
-			CommitStore: store.GetStoreByName("trans1").(types.CommitStore),
+		testStoreKey3: &commitKVStoreStub{
+			CommitKVStore: store.GetStoreByName("trans1").(types.CommitKVStore),
 		},
-		testStoreKey4: &commitStoreStub{
-			CommitStore: store.GetStoreByName("obj1").(types.CommitStore),
+		testStoreKey4: &commitKVStoreStub{
+			CommitKVStore: store.GetStoreByName("obj1").(types.CommitKVStore),
 		},
 	}, nil
 }
@@ -1021,7 +1019,7 @@ func TestCommitStores(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			storeMap, err := prepareStoreMap()
 			require.NoError(t, err)
-			store := storeMap[testStoreKey1].(*commitStoreStub)
+			store := storeMap[testStoreKey1].(*commitKVStoreStub)
 			for i := tc.committed; i > 0; i-- {
 				store.Commit()
 			}

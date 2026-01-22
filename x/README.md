@@ -28,13 +28,23 @@ proof-of-stake capabilities and governance.
 ## Supplementary Modules
 
 Supplementary modules are modules that are maintained in the Cosmos SDK but are not necessary for
-the core functionality of your blockchain.  They can be thought of as ways to extend the
+the core functionality of your blockchain.  They can be thought of as ways to extend the 
 capabilities of your blockchain or further specialize it.
 
 * [Authz](./authz/README.md) - Authorization for accounts to perform actions on behalf of other accounts.
+* [Epochs](./epochs/README.md) - Registration so SDK modules can have logic to be executed at the timed tickers.
 * [Feegrant](./feegrant/README.md) - Grant fee allowances for executing transactions.
 * [Group](./group/README.md) - Allows for the creation and management of on-chain multisig accounts.
 * [NFT](./nft/README.md) - NFT module implemented based on [ADR43](https://docs.cosmos.network/main/architecture/adr-043-nft-module.html).
+* [ProtocolPool](./protocolpool/README.md) - Extended management of community pool functionality.
+
+## Deprecated Modules
+
+The following modules are deprecated.  They will no longer be maintained and eventually will be removed
+in an upcoming release of the Cosmos SDK per our [release process](https://github.com/cosmos/cosmos-sdk/blob/main/RELEASE_PROCESS.md).
+
+* [Crisis](./crisis/README.md) - *Deprecated* halting the blockchain under certain circumstances (e.g. if an invariant is broken).
+* [Params](./params/README.md) - *Deprecated* Globally available parameter store.
 
 To learn more about the process of building modules, visit the [building modules reference documentation](https://docs.cosmos.network/main/building-modules/intro).
 
@@ -50,4 +60,4 @@ The CosmWasm module enables smart contracts, learn more by going to their [docum
 
 ## EVM
 
-Read more about writing smart contracts with solidity at the official [`evm` documentation page](https://docs.evmos.org/modules/evm/).
+Read more about writing smart contracts with solidity at the official [`evm` documentation page](https://evm.cosmos.network/).

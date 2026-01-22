@@ -30,6 +30,7 @@ type Store struct {
 	GStore[[]byte]
 }
 
+// NewStore constructs new MemDB adapter
 func NewStore() *Store {
 	return &Store{*NewGStore(
 		func(v []byte) bool { return v == nil },
@@ -57,7 +58,6 @@ func (*ObjStore) GetStoreType() types.StoreType {
 	return types.StoreTypeObject
 }
 
-// Implements CommitStore
 // Commit cleans up Store.
 func (ts *GStore[V]) Commit() (id types.CommitID) {
 	ts.Clear()
