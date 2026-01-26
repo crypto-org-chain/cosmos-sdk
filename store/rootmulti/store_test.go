@@ -1013,9 +1013,6 @@ func prepareStoreMap() (map[types.StoreKey]types.CommitStore, error) {
 		testStoreKey4: &commitStoreStub{
 			CommitStore: store.GetStoreByName("obj1").(types.CommitStore),
 		},
-		testStoreKey4: &commitStoreStub{
-			CommitStore: store.GetStoreByName("obj1").(types.CommitKVStore),
-		},
 	}, nil
 }
 
