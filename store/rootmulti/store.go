@@ -66,9 +66,10 @@ type Store struct {
 	// iavlSyncPruning should rarely be set to true.
 	// The Prune command will automatically set this to true.
 	// This allows the prune command to wait for the pruning to finish before returning.
-	iavlSyncPruning   bool
-	storesParams      map[types.StoreKey]storeParams
-	stores            map[types.StoreKey]types.CommitKVStore
+	iavlSyncPruning bool
+	storesParams    map[types.StoreKey]storeParams
+	// CommitStore is a common interface to unify generic CommitKVStore of different value types
+	stores            map[types.StoreKey]types.CommitStore
 	keysByName        map[string]types.StoreKey
 	initialVersion    int64
 	removalMap        map[types.StoreKey]bool
@@ -97,7 +98,7 @@ func NewStore(db dbm.DB, logger log.Logger, metricGatherer metrics.StoreMetrics)
 		iavlCacheSize:       iavl.DefaultIAVLCacheSize,
 		iavlDisableFastNode: iavlDisablefastNodeDefault,
 		storesParams:        make(map[types.StoreKey]storeParams),
-		stores:              make(map[types.StoreKey]types.CommitKVStore),
+		stores:              make(map[types.StoreKey]types.CommitStore),
 		keysByName:          make(map[string]types.StoreKey),
 		listeners:           make(map[types.StoreKey]*types.MemoryListener),
 		removalMap:          make(map[types.StoreKey]bool),
@@ -235,7 +236,7 @@ func (rs *Store) loadVersion(ver int64, upgrades *types.StoreUpgrades) error {
 	}
 
 	// load each Store (note this doesn't panic on unmounted keys now)
-	newStores := make(map[types.StoreKey]types.CommitKVStore)
+	newStores := make(map[types.StoreKey]types.CommitStore)
 
 	storesKeys := make([]types.StoreKey, 0, len(rs.storesParams))
 
@@ -593,7 +594,7 @@ func (rs *Store) CacheMultiStore() types.CacheMultiStore {
 		}
 		stores[k] = store
 	}
-	return cachemulti.NewFromKVStore(stores, rs.traceWriter, rs.getTracingContext())
+	return cachemulti.NewStore(stores, rs.traceWriter, rs.getTracingContext())
 }
 
 // CacheMultiStoreWithVersion is analogous to CacheMultiStore except that it
@@ -659,7 +660,7 @@ func (rs *Store) CacheMultiStoreWithVersion(version int64) (types.CacheMultiStor
 		cachedStores[key] = cacheStore
 	}
 
-	return cachemulti.NewFromKVStore(cachedStores, rs.traceWriter, rs.getTracingContext()), nil
+	return cachemulti.NewStore(cachedStores, rs.traceWriter, rs.getTracingContext()), nil
 }
 
 // GetStore returns a mounted Store for a given StoreKey. If the StoreKey does
@@ -1044,7 +1045,7 @@ loop:
 	return snapshotItem, rs.LoadLatestVersion()
 }
 
-func (rs *Store) loadCommitStoreFromParams(key types.StoreKey, id types.CommitID, params storeParams) (types.CommitKVStore, error) {
+func (rs *Store) loadCommitStoreFromParams(key types.StoreKey, id types.CommitID, params storeParams) (types.CommitStore, error) {
 	var db dbm.DB
 
 	if params.db != nil {
@@ -1224,8 +1225,8 @@ func GetLatestVersion(db dbm.DB) int64 {
 	return latestVersion
 }
 
-// Commits each store and returns a new commitInfo.
-func commitStores(version int64, storeMap map[types.StoreKey]types.CommitKVStore, removalMap map[types.StoreKey]bool) *types.CommitInfo {
+// commitStores commits each store and returns a new commitInfo.
+func commitStores(version int64, storeMap map[types.StoreKey]types.CommitStore, removalMap map[types.StoreKey]bool) *types.CommitInfo {
 	storeInfos := make([]types.StoreInfo, 0, len(storeMap))
 	storeKeys := keysFromStoreKeyMap(storeMap)
 

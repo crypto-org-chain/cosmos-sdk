@@ -8,10 +8,7 @@ import (
 	"cosmossdk.io/store/types"
 )
 
-var (
-	_ types.KVStore    = (*BTreeStore[[]byte])(nil)
-	_ types.ObjKVStore = (*BTreeStore[any])(nil)
-)
+var _ types.KVStore = (*BTreeStore[[]byte])(nil)
 
 // BTreeStore is a wrapper for a BTree with GKVStore[V] implementation
 type BTreeStore[V any] struct {
@@ -25,15 +22,9 @@ func NewBTreeStore[V any](btree btree.BTree[V], isZero func(V) bool, valueLen fu
 	return &BTreeStore[V]{btree, isZero, valueLen}
 }
 
-func (ts *BTreeStore[V]) Get(key []byte) (value V) {
-	value, _ = ts.BTree.Get(key)
-	return
-}
-
-// Hash Implements GKVStore.
+// Has Implements GKVStore.
 func (ts *BTreeStore[V]) Has(key []byte) bool {
-	_, found := ts.BTree.Get(key)
-	return found
+	return !ts.isZero(ts.Get(key))
 }
 
 func (ts *BTreeStore[V]) Iterator(start, end []byte) types.GIterator[V] {

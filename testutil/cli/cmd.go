@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spf13/cobra"
-
 	"cosmossdk.io/core/address"
+	"github.com/spf13/cobra"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/testutil"

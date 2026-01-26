@@ -32,7 +32,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Improvements
 
 * [#207](https://github.com/crypto-org-chain/cosmos-sdk/pull/207) Remove api CacheWrapWithTrace.
-* [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Support object store.
 * [#240](https://github.com/crypto-org-chain/cosmos-sdk/pull/240) Split methods from `MultiStore` into specialized `RootMultiStore`, keep `MultiStore` generic.
 * [#241](https://github.com/crypto-org-chain/cosmos-sdk/pull/241) Refactor the cache store to be btree backed, prepare to support copy-on-write atomic branching.
 * [#242](https://github.com/crypto-org-chain/cosmos-sdk/pull/242) Init cache on cache lazily, save memory allocations.
@@ -41,6 +40,9 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#258](https://github.com/crypto-org-chain/cosmos-sdk/pull/258) Add `NewFromParent` API to cachemulti store to create a new store from block-stm multiversion data structure.
 * [#1043](https://github.com/crypto-org-chain/cosmos-sdk/pull/1043) Add back CacheWrapWithTrace api.
 
+### Features
+
+* [#25470](https://github.com/cosmos/cosmos-sdk/pull/25470) Adds object KV stores and refactors the base store to be generic across the value parameter.
 
 ## v1.1.1 (September 06, 2024)
 

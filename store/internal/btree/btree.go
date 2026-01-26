@@ -28,39 +28,30 @@ type BTree[V any] struct {
 
 // NewBTree creates a wrapper around `btree.BTreeG`.
 func NewBTree[V any]() BTree[V] {
-	return BTree[V]{}
-}
-
-func (bt *BTree[V]) init() {
-	if bt.tree != nil {
-		return
+	return BTree[V]{
+		tree: btree.NewBTreeGOptions(byKeys[V], btree.Options{
+			Degree:  bTreeDegree,
+			NoLocks: false,
+		}),
 	}
-	bt.tree = btree.NewBTreeGOptions(byKeys[V], btree.Options{
-		Degree:  bTreeDegree,
-		NoLocks: false,
-	})
 }
 
-// Set supports nil as value when used as overlay
-func (bt *BTree[V]) Set(key []byte, value V) {
-	bt.init()
+func (bt BTree[V]) Set(key []byte, value V) {
 	bt.tree.Set(newItem(key, value))
 }
 
-func (bt BTree[V]) Get(key []byte) (V, bool) {
-	if bt.tree == nil {
-		var zero V
-		return zero, false
+func (bt BTree[V]) Get(key []byte) V {
+	var empty V
+	i, found := bt.tree.Get(newItem(key, empty))
+	if !found {
+		return empty
 	}
-	i, found := bt.tree.Get(newItemWithKey[V](key))
-	return i.value, found
+	return i.value
 }
 
-func (bt *BTree[V]) Delete(key []byte) {
-	if bt.tree == nil {
-		return
-	}
-	bt.tree.Delete(newItemWithKey[V](key))
+func (bt BTree[V]) Delete(key []byte) {
+	var empty V
+	bt.tree.Delete(newItem(key, empty))
 }
 
 func (bt BTree[V]) Iterator(start, end []byte) (types.GIterator[V], error) {
@@ -80,28 +71,13 @@ func (bt BTree[V]) ReverseIterator(start, end []byte) (types.GIterator[V], error
 // Copy the tree. This is a copy-on-write operation and is very fast because
 // it only performs a shadowed copy.
 func (bt BTree[V]) Copy() BTree[V] {
-	if bt.tree == nil {
-		return BTree[V]{}
-	}
 	return BTree[V]{
 		tree: bt.tree.Copy(),
 	}
 }
 
 func (bt BTree[V]) Clear() {
-	if bt.tree == nil {
-		return
-	}
 	bt.tree.Clear()
-}
-
-func (bt BTree[V]) Scan(cb func(key []byte, value V) bool) {
-	if bt.tree == nil {
-		return
-	}
-	bt.tree.Scan(func(i item[V]) bool {
-		return cb(i.key, i.value)
-	})
 }
 
 // item is a btree item with byte slices as keys and values
@@ -118,9 +94,4 @@ func byKeys[V any](a, b item[V]) bool {
 // newItem creates a new pair item.
 func newItem[V any](key []byte, value V) item[V] {
 	return item[V]{key: key, value: value}
-}
-
-// newItem creates a new pair item with empty value.
-func newItemWithKey[V any](key []byte) item[V] {
-	return item[V]{key: key}
 }

@@ -7,7 +7,6 @@ import (
 
 	"cosmossdk.io/store/tracekv"
 	"cosmossdk.io/store/types"
-	dbm "github.com/cosmos/cosmos-db"
 )
 
 // storeNameCtxKey is the TraceContext metadata key that identifies
@@ -27,8 +26,7 @@ type Store struct {
 	traceWriter  io.Writer
 	traceContext types.TraceContext
 	parentStore  func(types.StoreKey) types.CacheWrapper
-
-	branched bool
+	branched     bool
 }
 
 var _ types.CacheMultiStore = Store{}
@@ -56,7 +54,7 @@ func NewFromKVStore(
 // NewStore creates a new Store object from a mapping of store keys to
 // CacheWrapper objects. Each CacheWrapper store is a branched store.
 func NewStore(
-	_ dbm.DB, stores map[types.StoreKey]types.CacheWrapper, _ map[string]types.StoreKey,
+	stores map[types.StoreKey]types.CacheWrapper,
 	traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
 	return NewFromKVStore(stores, traceWriter, traceContext)
@@ -83,7 +81,6 @@ func (cms Store) initStore(key types.StoreKey, store types.CacheWrapper) types.C
 			tctx := cms.traceContext.Clone().Merge(types.TraceContext{
 				storeNameCtxKey: key.Name(),
 			})
-
 			store = tracekv.NewStore(kvstore, cms.traceWriter, tctx)
 		}
 	}
