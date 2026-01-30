@@ -126,7 +126,8 @@ var (
 		govtypes.ModuleName:                         {authtypes.Burner},
 		nft.ModuleName:                              nil,
 		protocolpooltypes.ModuleName:                nil,
-		protocolpooltypes.ProtocolPoolEscrowAccount: nil}
+		protocolpooltypes.ProtocolPoolEscrowAccount: nil,
+	}
 )
 
 var (
@@ -578,7 +579,6 @@ func NewSimApp(
 	)
 	app.ModuleManager.SetOrderEndBlockers(
 		banktypes.ModuleName,
-		crisistypes.ModuleName,
 		govtypes.ModuleName,
 		stakingtypes.ModuleName,
 		genutiltypes.ModuleName,

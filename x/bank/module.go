@@ -193,10 +193,6 @@ func (am AppModule) WeightedOperations(simState module.SimulationState) []simtyp
 	)
 }
 
-func (am AppModule) EndBlock(ctx context.Context) error {
-	return am.keeper.CreditVirtualAccounts(ctx)
-}
-
 // ProposalMsgsX registers governance proposal messages in the simulation registry.
 func (AppModule) ProposalMsgsX(weights simsx.WeightSource, reg simsx.Registry) {
 	reg.Add(weights.Get("msg_update_params", 100), simulation.MsgUpdateParamsFactory())
@@ -206,6 +202,10 @@ func (AppModule) ProposalMsgsX(weights simsx.WeightSource, reg simsx.Registry) {
 func (am AppModule) WeightedOperationsX(weights simsx.WeightSource, reg simsx.Registry) {
 	reg.Add(weights.Get("msg_send", 100), simulation.MsgSendFactory())
 	reg.Add(weights.Get("msg_multisend", 10), simulation.MsgMultiSendFactory())
+}
+
+func (am AppModule) EndBlock(ctx context.Context) error {
+	return am.keeper.CreditVirtualAccounts(ctx)
 }
 
 // App Wiring Setup

@@ -124,14 +124,14 @@ func SetOptimisticExecution(opts ...func(*oe.OptimisticExecution)) func(*BaseApp
 	}
 }
 
+// SetBlockSTMTxRunner sets the block stm tx runner for the BaseApp for parallel execution.
+func (app *BaseApp) SetBlockSTMTxRunner(txRunner sdk.TxRunner) {
+	app.txRunner = txRunner
+}
+
 // DisableBlockGasMeter disables the block gas meter.
 func DisableBlockGasMeter() func(*BaseApp) {
 	return func(app *BaseApp) { app.SetDisableBlockGasMeter(true) }
-}
-
-// SetTxExecutor sets a custom tx executor for the BaseApp, usually for parallel execution.
-func SetTxExecutor(executor TxExecutor) func(*BaseApp) {
-	return func(app *BaseApp) { app.txExecutor = executor }
 }
 
 func (app *BaseApp) SetName(name string) {
@@ -397,11 +397,6 @@ func (app *BaseApp) SetStreamingManager(manager storetypes.StreamingManager) {
 // SetDisableBlockGasMeter sets the disableBlockGasMeter flag for the BaseApp.
 func (app *BaseApp) SetDisableBlockGasMeter(disableBlockGasMeter bool) {
 	app.disableBlockGasMeter = disableBlockGasMeter
-}
-
-// SetTxExecutor sets a custom tx executor for the BaseApp, usually for parallel execution.
-func (app *BaseApp) SetTxExecutor(executor TxExecutor) {
-	app.txExecutor = executor
 }
 
 // SetMsgServiceRouter sets the MsgServiceRouter of a BaseApp.

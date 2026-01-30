@@ -123,15 +123,14 @@ var (
 					authz.ModuleName,
 					epochstypes.ModuleName,
 				},
-			EndBlockers: []string{
-				banktypes.ModuleName,
-				govtypes.ModuleName,
-				stakingtypes.ModuleName,
-				genutiltypes.ModuleName,
-				feegrant.ModuleName,
-				group.ModuleName,
-				protocolpooltypes.ModuleName,
-			},
+				EndBlockers: []string{
+					banktypes.ModuleName,
+					govtypes.ModuleName,
+					stakingtypes.ModuleName,
+					feegrant.ModuleName,
+					group.ModuleName,
+					protocolpooltypes.ModuleName,
+				},
 				OverrideStoreKeys: []*runtimev1alpha1.StoreKeyConfig{
 					{
 						ModuleName: authtypes.ModuleName,

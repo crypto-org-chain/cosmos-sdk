@@ -87,6 +87,7 @@ func (k BaseSendKeeper) addVirtualCoins(ctx context.Context, addr sdk.AccAddress
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	store := sdkCtx.ObjectStore(k.objStoreKey)
 
+	// bytes containing account address followed by the txn index
 	key := make([]byte, len(addr)+8)
 	copy(key, addr)
 	binary.BigEndian.PutUint64(key[len(addr):], uint64(sdkCtx.TxIndex()))
@@ -137,6 +138,10 @@ func (k BaseSendKeeper) subVirtualCoins(ctx context.Context, addr sdk.AccAddress
 // CreditVirtualAccounts sum up the transient coins and add them to the real account,
 // should be called at end blocker.
 func (k BaseSendKeeper) CreditVirtualAccounts(ctx context.Context) error {
+	// No-op if we're not using the objStore to accumulate to module accounts
+	if k.objStoreKey == nil {
+		return nil
+	}
 	store := sdk.UnwrapSDKContext(ctx).ObjectStore(k.objStoreKey)
 
 	var toAddr sdk.AccAddress

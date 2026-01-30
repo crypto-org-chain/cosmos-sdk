@@ -20,6 +20,7 @@ import (
 	snapshottypes "cosmossdk.io/store/snapshots/types"
 	storetypes "cosmossdk.io/store/types"
 
+	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -352,7 +353,7 @@ func (app *BaseApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, er
 	}
 
 	if app.checkTxHandler == nil {
-		gInfo, result, anteEvents, err := app.runTx(mode, req.Tx)
+		gInfo, result, anteEvents, err := app.RunTx(mode, req.Tx, nil, -1, nil, nil)
 		if err != nil {
 			return sdkerrors.ResponseCheckTxWithEvents(err, gInfo.GasWanted, gInfo.GasUsed, anteEvents, app.trace), nil
 		}
@@ -368,7 +369,7 @@ func (app *BaseApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, er
 
 	// Create wrapper to avoid users overriding the execution mode
 	runTx := func(txBytes []byte, tx sdk.Tx) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
-		return app.runTx(mode, txBytes)
+		return app.RunTx(mode, txBytes, tx, -1, nil, nil)
 	}
 
 	return app.checkTxHandler(runTx, req)
@@ -802,15 +803,14 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 	app.finalizeBlockState.SetContext(
 		app.finalizeBlockState.Context().
 			WithBlockGasMeter(gasMeter).
-			WithTxCount(len(req.Txs)),
-	)
+			WithTxCount(len(req.Txs)))
 
 	// Iterate over all raw transactions in the proposal and attempt to execute
 	// them, gathering the execution results.
 	//
 	// NOTE: Not all raw transactions may adhere to the sdk.Tx interface, e.g.
 	// vote extensions, so skip those.
-	txResults, err := app.executeTxs(ctx, req.Txs)
+	txResults, err := app.executeTxsWithExecutor(ctx, app.finalizeBlockState.ms, req.Txs)
 	if err != nil {
 		// usually due to canceled
 		return nil, err
@@ -839,8 +839,7 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 			WithBlockGasUsed(blockGasUsed).
 			WithBlockGasWanted(blockGasWanted),
 	)
-
-	endBlock, err := app.endBlock(ctx)
+	endBlock, err := app.endBlock(app.finalizeBlockState.Context())
 	if err != nil {
 		return nil, err
 	}
@@ -864,43 +863,14 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 	}, nil
 }
 
-func (app *BaseApp) executeTxs(ctx context.Context, txs [][]byte) ([]*abci.ExecTxResult, error) {
-	if app.txExecutor != nil {
-		return app.txExecutor(ctx, txs, app.finalizeBlockState.ms, func(i int, memTx sdk.Tx, ms storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
-			return app.deliverTxWithMultiStore(txs[i], memTx, i, ms, incarnationCache)
-		})
+func (app *BaseApp) executeTxsWithExecutor(ctx context.Context, ms storetypes.MultiStore, txs [][]byte) ([]*abci.ExecTxResult, error) {
+	if app.txRunner == nil {
+		app.txRunner = txnrunner.NewDefaultRunner(
+			app.txDecoder,
+		)
 	}
 
-	txResults := make([]*abci.ExecTxResult, 0, len(txs))
-	for i, rawTx := range txs {
-		var response *abci.ExecTxResult
-
-		if memTx, err := app.txDecoder(rawTx); err == nil {
-			response = app.deliverTx(rawTx, memTx, i)
-		} else {
-			// In the case where a transaction included in a block proposal is malformed,
-			// we still want to return a default response to comet. This is because comet
-			// expects a response for each transaction included in a block proposal.
-			response = sdkerrors.ResponseExecTxResultWithEvents(
-				sdkerrors.ErrTxDecode,
-				0,
-				0,
-				nil,
-				false,
-			)
-		}
-
-		// check after every tx if we should abort
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			// continue
-		}
-
-		txResults = append(txResults, response)
-	}
-	return txResults, nil
+	return app.txRunner.Run(ctx, ms, txs, app.deliverTx)
 }
 
 // FinalizeBlock will execute the block proposal provided by RequestFinalizeBlock.

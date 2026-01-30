@@ -66,20 +66,18 @@ type Context struct {
 	cometInfo            comet.BlockInfo
 	headerInfo           header.Info
 
-	// the index of the current tx in the block, -1 means not in finalize block context
+	// For block-stm
+	// // the index of the current tx in the block, -1 means not in finalize block context
 	txIndex int
 	// the index of the current msg in the tx, -1 means not in finalize block context
 	msgIndex int
 	// the total number of transactions in current block
 	txCount int
 	// sum the gas used by all the transactions in the current block, only accessible by end blocker
-	blockGasUsed uint64
+	blockGasUsed     uint64
+	incarnationCache map[string]any // incarnationCache is shared between multiple incarnations of the same transaction, it must only cache stateless computation results that only depends on tx body and block level information that don't change during block execution, like the result of tx signature verification.
 	// sum the gas wanted by all the transactions in the current block, only accessible by end blocker
 	blockGasWanted uint64
-
-	// incarnationCache is shared between multiple incarnations of the same transaction,
-	// it must only cache stateless computation results that only depends on tx body and block level information that don't change during block execution, like the result of tx signature verification.
-	incarnationCache map[string]any
 }
 
 // Proposed rename, not done to avoid API breakage
@@ -112,24 +110,8 @@ func (c Context) TxIndex() int                                  { return c.txInd
 func (c Context) MsgIndex() int                                 { return c.msgIndex }
 func (c Context) TxCount() int                                  { return c.txCount }
 func (c Context) BlockGasUsed() uint64                          { return c.blockGasUsed }
-func (c Context) BlockGasWanted() uint64                        { return c.blockGasWanted }
 func (c Context) IncarnationCache() map[string]any              { return c.incarnationCache }
-
-func (c Context) GetIncarnationCache(key string) (any, bool) {
-	if c.incarnationCache == nil {
-		return nil, false
-	}
-	val, ok := c.incarnationCache[key]
-	return val, ok
-}
-
-func (c Context) SetIncarnationCache(key string, value any) {
-	if c.incarnationCache == nil {
-		// noop if cache is not initialized
-		return
-	}
-	c.incarnationCache[key] = value
-}
+func (c Context) BlockGasWanted() uint64                        { return c.blockGasWanted }
 
 // BlockHeader returns the header by value.
 func (c Context) BlockHeader() cmtproto.Header {
@@ -382,11 +364,6 @@ func (c Context) WithBlockGasWanted(gasWanted uint64) Context {
 	return c
 }
 
-func (c Context) WithIncarnationCache(cache map[string]any) Context {
-	c.incarnationCache = cache
-	return c
-}
-
 // TODO: remove???
 func (c Context) IsZero() bool {
 	return c.ms == nil
@@ -458,6 +435,27 @@ func (c Context) RunAtomic(cb func(Context) error) error {
 
 	c.EventManager().EmitEvents(evtManager.Events())
 	return nil
+}
+
+func (c Context) GetIncarnationCache(key string) (any, bool) {
+	if c.incarnationCache == nil {
+		return nil, false
+	}
+	val, ok := c.incarnationCache[key]
+	return val, ok
+}
+
+func (c Context) SetIncarnationCache(key string, value any) {
+	if c.incarnationCache == nil {
+		// noop if cache is not initialized
+		return
+	}
+	c.incarnationCache[key] = value
+}
+
+func (c Context) WithIncarnationCache(cache map[string]any) Context {
+	c.incarnationCache = cache
+	return c
 }
 
 var (

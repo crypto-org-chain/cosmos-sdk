@@ -62,6 +62,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (crypto/ledger) [#25435](https://github.com/cosmos/cosmos-sdk/pull/25435) Add SetDERConversion to reset skipDERConversion and App name for ledger.
 * (gRPC) [#25565](https://github.com/cosmos/cosmos-sdk/pull/25565) Support for multi gRPC query clients serve with historical binaries to serve proper historical state.
+* (blockstm) [#25600](https://github.com/cosmos/cosmos-sdk/pull/25600) Allow dynamic retrieval of the coin denomination from multi store at runtime.
 
 ### Improvements
 
@@ -124,6 +125,7 @@ This patch update also includes minor dependency bumps.
   * The `InflationCalculationFn` argument to `mint.NewAppModule()` is now ignored and must be nil.  To set a custom `InflationCalculationFn` on the default minter, use `mintkeeper.WithMintFn(mintkeeper.DefaultMintFn(customInflationFn))`.
 * (api) [#24428](https://github.com/cosmos/cosmos-sdk/pull/24428) Add block height to response headers
 * (baseapp) [#25470](https://github.com/cosmos/cosmos-sdk/pull/25470) Support mount object store in baseapp, add `ObjectStore` api in context.
+* (baseapp) [#25334](https://github.com/cosmos/cosmos-sdk/pull/25334) Add `Executor` to support custom execution logic and incarnation cache for performance optimisation
 
 ### Improvements
 

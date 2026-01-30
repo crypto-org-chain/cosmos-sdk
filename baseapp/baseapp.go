@@ -199,8 +199,8 @@ type BaseApp struct {
 	// SAFETY: it's safe to do if validators validate the total gas wanted in the `ProcessProposal`, which is the case in the default handler.
 	disableBlockGasMeter bool
 
-	// Optional alternative tx executor, used for block-stm parallel transaction execution.
-	txExecutor TxExecutor
+	// Optional alternative tx runner, used for block-stm parallel transaction execution. If nil, default txRunner is used.
+	txRunner sdk.TxRunner
 }
 
 // NewBaseApp returns a reference to an initialized BaseApp. It accepts a
@@ -787,11 +787,7 @@ func (app *BaseApp) beginBlock(_ *abci.RequestFinalizeBlock) (sdk.BeginBlock, er
 	return resp, nil
 }
 
-func (app *BaseApp) deliverTx(tx []byte, memTx sdk.Tx, txIndex int) *abci.ExecTxResult {
-	return app.deliverTxWithMultiStore(tx, memTx, txIndex, nil, nil)
-}
-
-func (app *BaseApp) deliverTxWithMultiStore(tx []byte, memTx sdk.Tx, txIndex int, txMultiStore storetypes.MultiStore, incarnationCache map[string]any) *abci.ExecTxResult {
+func (app *BaseApp) deliverTx(tx []byte, txMultiStore storetypes.MultiStore, txIndex int, incarnationCache map[string]any) *abci.ExecTxResult {
 	gInfo := sdk.GasInfo{}
 	resultStr := "successful"
 
@@ -804,7 +800,7 @@ func (app *BaseApp) deliverTxWithMultiStore(tx []byte, memTx sdk.Tx, txIndex int
 		telemetry.SetGauge(float32(gInfo.GasWanted), "tx", "gas", "wanted")
 	}()
 
-	gInfo, result, anteEvents, err := app.runTxWithMultiStore(execModeFinalize, tx, memTx, txIndex, txMultiStore, incarnationCache)
+	gInfo, result, anteEvents, err := app.RunTx(execModeFinalize, tx, nil, txIndex, txMultiStore, incarnationCache)
 	if err != nil {
 		resultStr = "failed"
 		resp = sdkerrors.ResponseExecTxResultWithEvents(
@@ -854,32 +850,25 @@ func (app *BaseApp) endBlock(_ context.Context) (sdk.EndBlock, error) {
 	return endblock, nil
 }
 
-// runTx processes a transaction within a given execution mode, encoded transaction
+// RunTx processes a transaction within a given execution mode, encoded transaction
 // bytes, and the decoded transaction itself. All state transitions occur through
 // a cached Context depending on the mode provided. State only gets persisted
 // if all messages get executed successfully and the execution mode is DeliverTx.
 // Note, gas execution info is always returned. A reference to a Result is
 // returned if the tx does not run out of gas and if all the messages are valid
 // and execute successfully. An error is returned otherwise.
-func (app *BaseApp) runTx(mode execMode, txBytes []byte) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
-	return app.runTxWithMultiStore(mode, txBytes, nil, -1, nil, nil)
-}
-
-func (app *BaseApp) runTxWithMultiStore(
-	mode execMode,
-	txBytes []byte,
-	tx sdk.Tx,
-	txIndex int,
-	txMultiStore storetypes.MultiStore,
-	incarnationCache map[string]any,
-) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
+// both txbytes and the decoded tx are passed to runTx to avoid the state machine encoding the tx and decoding the transaction twice
+// passing the decoded tx to runTX is optional, it will be decoded if the tx is nil
+func (app *BaseApp) RunTx(mode execMode, txBytes []byte, tx sdk.Tx, txIndex int, txMultiStore storetypes.MultiStore, incarnationCache map[string]any) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
 	// NOTE: GasWanted should be returned by the AnteHandler. GasUsed is
 	// determined by the GasMeter. We need access to the context to get the gas
 	// meter, so we initialize upfront.
 	var gasWanted uint64
 
 	ctx := app.getContextForTx(mode, txBytes, txIndex)
-	ctx = ctx.WithIncarnationCache(incarnationCache)
+	if incarnationCache != nil {
+		ctx = ctx.WithIncarnationCache(incarnationCache)
+	}
 	if txMultiStore != nil {
 		ctx = ctx.WithMultiStore(txMultiStore)
 	}
@@ -1177,7 +1166,7 @@ func (app *BaseApp) PrepareProposalVerifyTx(tx sdk.Tx) ([]byte, error) {
 		return nil, err
 	}
 
-	_, _, _, err = app.runTx(execModePrepareProposal, bz)
+	_, _, _, err = app.RunTx(execModePrepareProposal, bz, tx, -1, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1196,7 +1185,7 @@ func (app *BaseApp) ProcessProposalVerifyTx(txBz []byte) (sdk.Tx, uint64, error)
 		return nil, 0, err
 	}
 
-	gInfo, _, _, err := app.runTx(execModeProcessProposal, txBz)
+	gInfo, _, _, err := app.RunTx(execModeProcessProposal, txBz, tx, -1, nil, nil)
 	if err != nil {
 		return nil, 0, err
 	}
