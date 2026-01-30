@@ -146,8 +146,6 @@ type SimApp struct {
 
 	// keys to access the substores
 	keys  map[string]*storetypes.KVStoreKey
-	tkeys map[string]*storetypes.TransientStoreKey
-	okeys map[string]*storetypes.ObjectStoreKey
 
 	// essential keepers
 	AccountKeeper         authkeeper.AccountKeeper
@@ -284,8 +282,6 @@ func NewSimApp(
 		panic(err)
 	}
 
-	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
-	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey)
 	app := &SimApp{
 		BaseApp:           bApp,
 		legacyAmino:       legacyAmino,
@@ -293,8 +289,6 @@ func NewSimApp(
 		txConfig:          txConfig,
 		interfaceRegistry: interfaceRegistry,
 		keys:              keys,
-		tkeys:             tkeys,
-		okeys:             okeys,
 	}
 
 	// set the BaseApp's parameter store
@@ -477,7 +471,7 @@ func NewSimApp(
 
 	app.GovKeeper = *govKeeper.SetHooks(
 		govtypes.NewMultiGovHooks(
-		// register the governance hooks
+			// register the governance hooks
 		),
 	)
 
@@ -507,7 +501,7 @@ func NewSimApp(
 
 	app.EpochsKeeper.SetHooks(
 		epochstypes.NewMultiEpochHooks(
-		// insert epoch hooks receivers here
+	    	// insert epoch hooks receivers here
 		),
 	)
 
@@ -672,8 +666,6 @@ func NewSimApp(
 
 	// initialize stores
 	app.MountKVStores(keys)
-	app.MountTransientStores(tkeys)
-	app.MountObjectStores(okeys)
 
 	// initialize BaseApp
 	app.SetInitChainer(app.InitChainer)

@@ -224,11 +224,15 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
+// Here are the short-lived replace from the SimApp
+// Replace here are pending PRs, or version to be tagged
+// replace (
+// 	<temporary replace>
+// )
+replace cosmossdk.io/store => ../store
+
 // Below are the long-lived replace of the SimApp
 replace (
-	cosmossdk.io/collections => ../collections
-	cosmossdk.io/core => ../core
-	cosmossdk.io/store => ../store
 	// use cosmos fork of keyring
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 	// Simapp always use the latest version of the cosmos-sdk
