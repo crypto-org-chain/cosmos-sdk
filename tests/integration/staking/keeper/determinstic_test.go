@@ -103,7 +103,6 @@ func initDeterministicFixture(t *testing.T) *deterministicFixture {
 	bankKeeper := bankkeeper.NewBaseKeeper(
 		cdc,
 		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
-		okeys[banktypes.ObjectStoreKey],
 		accountKeeper,
 		blockedAddresses,
 		authority.String(),

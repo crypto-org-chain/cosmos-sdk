@@ -41,7 +41,6 @@ func TestBankStateCompatibility(t *testing.T) {
 	k := keeper.NewBaseKeeper(
 		encCfg.Codec,
 		storeService,
-		oKey,
 		authKeeper,
 		map[string]bool{accAddrs[4].String(): true},
 		authtypes.NewModuleAddress("gov").String(),

@@ -146,7 +146,6 @@ func (suite *KeeperTestSuite) SetupTest() {
 	suite.bankKeeper = keeper.NewBaseKeeper(
 		encCfg.Codec,
 		storeService,
-		oKey,
 		suite.authKeeper,
 		map[string]bool{accAddrs[4].String(): true},
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -329,7 +328,6 @@ func (suite *KeeperTestSuite) TestGetAuthority() {
 		return keeper.NewBaseKeeper(
 			moduletestutil.MakeTestEncodingConfig().Codec,
 			storeService,
-			nil,
 			suite.authKeeper,
 			nil,
 			authority,

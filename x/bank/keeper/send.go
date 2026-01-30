@@ -76,7 +76,6 @@ type BaseSendKeeper struct {
 func NewBaseSendKeeper(
 	cdc codec.BinaryCodec,
 	storeService store.KVStoreService,
-	objStoreKey storetypes.StoreKey,
 	ak types.AccountKeeper,
 	blockedAddrs map[string]bool,
 	authority string,
@@ -91,7 +90,6 @@ func NewBaseSendKeeper(
 		cdc:             cdc,
 		ak:              ak,
 		storeService:    storeService,
-		objStoreKey:     objStoreKey,
 		blockedAddrs:    blockedAddrs,
 		authority:       authority,
 		logger:          logger,

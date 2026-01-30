@@ -265,7 +265,6 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 	bankKeeper := keeper.NewBaseKeeper(
 		in.Cdc,
 		in.StoreService,
-		in.ObjStoreKey,
 		in.AccountKeeper,
 		blockedAddresses,
 		authority.String(),
