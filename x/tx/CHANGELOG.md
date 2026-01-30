@@ -39,8 +39,6 @@ Since v0.13.0, x/tx follows Cosmos SDK semver: https://github.com/cosmos/cosmos-
 
 ## [v0.14.0](https://github.com/cosmos/cosmos-sdk/releases/tag/x/tx/v0.14.0) - 2025-04-24
 
-### Improvements
-
 * SDK v0.53.x support.
 * [#23708](https://github.com/cosmos/cosmos-sdk/pull/23708) Add unordered transaction support.
 * [#24408](https://github.com/cosmos/cosmos-sdk/pull/24408) Fix add feePayer as signer.
@@ -62,7 +60,6 @@ Since v0.13.0, x/tx follows Cosmos SDK semver: https://github.com/cosmos/cosmos-
 * [#21825](https://github.com/cosmos/cosmos-sdk/pull/21825) Fix decimal encoding and field ordering in Amino JSON encoder.
 * [#21782](https://github.com/cosmos/cosmos-sdk/pull/21782) Fix JSON attribute sort order on messages with oneof fields.
 
->>>>>>> v0.50.15
 ## [v0.13.5](https://github.com/cosmos/cosmos-sdk/releases/tag/x/tx/v0.13.5) - 2024-09-18
 
 ### Improvements
