@@ -17,7 +17,6 @@ import (
 	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -225,7 +224,6 @@ type ModuleInputs struct {
 	Cdc          codec.Codec
 	StoreService corestore.KVStoreService
 	Logger       log.Logger
-	ObjStoreKey  *storetypes.ObjectStoreKey
 
 	AccountKeeper types.AccountKeeper
 
