@@ -101,13 +101,10 @@ func initFixture(tb testing.TB) *fixture {
 	keys := storetypes.NewKVStoreKeys(
 		authtypes.StoreKey, banktypes.StoreKey, types.StoreKey,
 	)
-	okeys := storetypes.NewObjectStoreKeys(
-		banktypes.ObjectStoreKey,
-	)
 	cdc := moduletestutil.MakeTestEncodingConfig(auth.AppModuleBasic{}, staking.AppModuleBasic{}).Codec
 
 	logger := log.NewTestLogger(tb)
-	cms := integration.CreateMultiStore(keys, okeys, logger)
+	cms := integration.CreateMultiStore(keys, logger)
 
 	newCtx := sdk.NewContext(cms, cmtprototypes.Header{}, true, logger)
 

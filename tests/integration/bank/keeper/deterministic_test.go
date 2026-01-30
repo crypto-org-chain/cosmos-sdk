@@ -67,11 +67,10 @@ func initDeterministicFixture(t *testing.T) *deterministicFixture {
 	t.Helper()
 
 	keys := storetypes.NewKVStoreKeys(authtypes.StoreKey, banktypes.StoreKey)
-	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey)
 	cdc := moduletestutil.MakeTestEncodingConfig(auth.AppModuleBasic{}, bank.AppModuleBasic{}).Codec
 
 	logger := log.NewTestLogger(t)
-	cms := integration.CreateMultiStore(keys, okeys, logger)
+	cms := integration.CreateMultiStore(keys, logger)
 
 	newCtx := sdk.NewContext(cms, cmtproto.Header{}, true, logger)
 
