@@ -6,7 +6,6 @@ import (
 	"cosmossdk.io/store/types"
 )
 
-
 var _ types.KVStore = &Store{}
 
 type Store = GStore[[]byte]
