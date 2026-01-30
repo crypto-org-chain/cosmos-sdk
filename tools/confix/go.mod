@@ -1,6 +1,6 @@
 module cosmossdk.io/tools/confix
 
-go 1.23.2
+go 1.23.5
 
 require (
 	github.com/cosmos/cosmos-sdk v0.53.0
@@ -12,7 +12,7 @@ require (
 	gotest.tools/v3 v3.5.2
 )
 
-require go.yaml.in/yaml/v2 v2.4.2 // indirect
+require go.yaml.in/yaml/v2 v2.4.3 // indirect
 
 require (
 	cosmossdk.io/api v0.9.2 // indirect
