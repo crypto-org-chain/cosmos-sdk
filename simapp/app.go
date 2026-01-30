@@ -36,7 +36,6 @@ import (
 	"cosmossdk.io/x/upgrade"
 	upgradekeeper "cosmossdk.io/x/upgrade/keeper"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
-	crisistypes "github.com/cosmos/cosmos-sdk/x/crisis/types"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
