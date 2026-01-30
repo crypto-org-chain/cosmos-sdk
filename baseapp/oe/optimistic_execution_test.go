@@ -29,6 +29,6 @@ func TestOptimisticExecution(t *testing.T) {
 
 	assert.False(t, oe.AbortIfNeeded([]byte("test")))
 	assert.True(t, oe.AbortIfNeeded([]byte("wrong_hash")))
-	
+
 	oe.Reset()
 }

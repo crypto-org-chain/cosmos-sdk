@@ -73,6 +73,7 @@ Supported app-db-backend types include 'goleveldb', 'rocksdb', 'pebbledb'.`,
 			if err != nil {
 				return err
 			}
+
 			// in our test, it's important to close db explicitly for pebbledb to write to disk.
 			defer db.Close()
 
