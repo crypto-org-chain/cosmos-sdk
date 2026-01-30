@@ -6,8 +6,6 @@ import (
 	"cosmossdk.io/store/types"
 )
 
-// ObjectValueLength is the emulated number of bytes for storing transient objects in gas accounting.
-const ObjectValueLength = 16
 
 var _ types.KVStore = &Store{}
 
