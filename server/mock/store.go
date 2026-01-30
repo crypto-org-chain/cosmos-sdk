@@ -31,7 +31,7 @@ func (ms multiStore) CacheWrap() storetypes.CacheWrap {
 }
 
 func (ms multiStore) CacheWrapWithTrace(w io.Writer, tc storetypes.TraceContext) storetypes.CacheWrap {
-	panic("unimplemented")
+	panic("not implemented")
 }
 
 func (ms multiStore) TracingEnabled() bool {
