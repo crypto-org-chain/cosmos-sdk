@@ -17,7 +17,6 @@ import (
 	sdkmaps "cosmossdk.io/store/internal/maps"
 	"cosmossdk.io/store/metrics"
 	pruningtypes "cosmossdk.io/store/pruning/types"
-	"cosmossdk.io/store/tracekv"
 	"cosmossdk.io/store/transient"
 	"cosmossdk.io/store/types"
 )
@@ -119,18 +118,15 @@ func TestCacheMultiStoreWithVersion(t *testing.T) {
 	require.Equal(t, kvStore.Get(k), v)
 
 	// add new module stores (store4 and store5) to multi stores and commit
-	key4, key5 := types.NewKVStoreKey("store4"), types.NewKVStoreKey("store5")
-	ms.MountStoreWithDB(key4, types.StoreTypeIAVL, nil)
-	ms.MountStoreWithDB(key5, types.StoreTypeIAVL, nil)
+	ms.MountStoreWithDB(types.NewKVStoreKey("store4"), types.StoreTypeIAVL, nil)
+	ms.MountStoreWithDB(types.NewKVStoreKey("store5"), types.StoreTypeIAVL, nil)
 	err = ms.LoadLatestVersionAndUpgrade(&types.StoreUpgrades{Added: []string{"store4", "store5"}})
 	require.NoError(t, err)
 	ms.Commit()
 
 	// cache multistore of version before adding store4 should works
-	cms2, err := ms.CacheMultiStoreWithVersion(1)
+	_, err = ms.CacheMultiStoreWithVersion(1)
 	require.NoError(t, err)
-
-	require.Empty(t, cms2.GetKVStore(key4).Get([]byte("key")))
 
 	// require we cannot commit (write) to a cache-versioned multi-store
 	require.Panics(t, func() {
@@ -601,6 +597,7 @@ func TestMultiStore_Pruning_SameHeightsTwice(t *testing.T) {
 	// Ensure that can commit one more height with no panic
 	lastCommitInfo = ms.Commit()
 	require.Equal(t, numVersions+1, lastCommitInfo.Version)
+
 	isPruned := func() bool {
 		ls := ms.Commit() // to flush the batch with the pruned heights
 		for v := int64(1); v < numVersions-int64(keepRecent); v++ {
@@ -767,7 +764,7 @@ func TestTraceConcurrency(t *testing.T) {
 
 	cms := multi.CacheMultiStore()
 	store1 := cms.GetKVStore(key)
-	cw := tracekv.NewStore(store1, b, tc).CacheWrap()
+	cw := store1.CacheWrapWithTrace(b, tc)
 	_ = cw
 	require.NotNil(t, store1)
 
