@@ -39,22 +39,18 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ## UNRELEASED
 
 ### Features
-* (baseapp) [#205](https://github.com/crypto-org-chain/cosmos-sdk/pull/205) Add `TxExecutor` baseapp option, add `TxIndex`/`TxCount`/`MsgIndex`/`BlockGasUsed` fields to `Context, to support tx parallel execution.
-* (baseapp) [#206](https://github.com/crypto-org-chain/cosmos-sdk/pull/206) Support mount object store in baseapp, add `ObjectStore` api in context, [#585](https://github.com/crypto-org-chain/cosmos-sdk/pull/585) Skip snapshot for object store.
-* (bank) [#237](https://github.com/crypto-org-chain/cosmos-sdk/pull/237) Support virtual accounts in sending coins.
+
 * [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API in `Context` to use new CoW branched cache store.
-* [#248](https://github.com/crypto-org-chain/cosmos-sdk/pull/248) Init btree store lazily to save allocations when no content insert into it.
-* [#252](https://github.com/crypto-org-chain/cosmos-sdk/pull/252) Add `BlockGasWanted` to `Context` to support feemarket module.
 
 ### Improvements
 
-* [#261](https://github.com/crypto-org-chain/cosmos-sdk/pull/261) `ctx.BlockHeader` don't do protobuf deep copy, shallow copy seems enough, reduce scope of mutex in `PriorityNonceMempool.Remove`.
+* [#261](https://github.com/crypto-org-chain/cosmos-sdk/pull/261) reduce scope of mutex in `PriorityNonceMempool.Remove`.
 * [#507](https://github.com/crypto-org-chain/cosmos-sdk/pull/507) mempool respect gas wanted returned by ante handler
-* [#744](https://github.com/crypto-org-chain/cosmos-sdk/pull/744) Pass raw transactions to tx executor so it can do pre-estimations.
 * [#884](https://github.com/crypto-org-chain/cosmos-sdk/pull/884) Avoid decoding tx for in PrepareProposal if it's NopMempool.
-* (store) [#923](https://github.com/crypto-org-chain/cosmos-sdk/pull/923) Enable iavl async pruning.
 * (store) [#934](https://github.com/crypto-org-chain/cosmos-sdk/pull/934) Add pause pruning.
 * (baseapp) [#20208](https://github.com/cosmos/cosmos-sdk/pull/20208) Skip running validateBasic for rechecking txs.
+* [#1736](https://github.com/crypto-org-chain/cosmos-sdk/pull/1736) Cleanup priority mempool when tx is replaced
+* [#536](https://github.com/crypto-org-chain/cosmos-sdk/pull/536) Reuse mempool.GasTx interface.
 
 ### Features
 
