@@ -225,9 +225,23 @@ func (m *MockTxSelector) SelectTxForProposal(ctx context.Context, maxTxBytes, ma
 }
 
 // SelectTxForProposal indicates an expected call of SelectTxForProposal.
-func (mr *MockTxSelectorMockRecorder) SelectTxForProposal(ctx, maxTxBytes, maxBlockGas, memTx, txBz, gasWanted interface{}) *gomock.Call {
+func (mr *MockTxSelectorMockRecorder) SelectTxForProposal(ctx, maxTxBytes, maxBlockGas, memTx, txBz, gasWanted any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectTxForProposal", reflect.TypeOf((*MockTxSelector)(nil).SelectTxForProposal), ctx, maxTxBytes, maxBlockGas, memTx, txBz, gasWanted)
+}
+
+// SelectTxForProposalFast mocks base method.
+func (m *MockTxSelector) SelectTxForProposalFast(ctx context.Context, txs [][]byte) [][]byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectTxForProposalFast", ctx, txs)
+	ret0, _ := ret[0].([][]byte)
+	return ret0
+}
+
+// SelectTxForProposalFast indicates an expected call of SelectTxForProposalFast.
+func (mr *MockTxSelectorMockRecorder) SelectTxForProposalFast(ctx, txs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectTxForProposalFast", reflect.TypeOf((*MockTxSelector)(nil).SelectTxForProposalFast), ctx, txs)
 }
 
 // SelectedTxs mocks base method.
