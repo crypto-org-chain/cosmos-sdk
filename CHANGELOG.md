@@ -49,7 +49,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#884](https://github.com/crypto-org-chain/cosmos-sdk/pull/884) Avoid decoding tx for in PrepareProposal if it's NopMempool.
 * (store) [#934](https://github.com/crypto-org-chain/cosmos-sdk/pull/934) Add pause pruning.
 * (baseapp) [#20208](https://github.com/cosmos/cosmos-sdk/pull/20208) Skip running validateBasic for rechecking txs.
-* [#1006](https://github.com/crypto-org-chain/cosmos-sdk/pull/1006) fix panic when store not exists in historical version.
 
 ### Features
 
