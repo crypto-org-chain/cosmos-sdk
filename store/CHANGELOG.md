@@ -23,13 +23,18 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## Unreleased
+## [Unreleased]
 
 ### Improvements
 
 * [#241](https://github.com/crypto-org-chain/cosmos-sdk/pull/241) Refactor the cache store to be btree backed, prepare to support copy-on-write atomic branching.
 * [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API to use new CoW cache store.
 * [#244](https://github.com/crypto-org-chain/cosmos-sdk/pull/244) Add `Discard` method to CacheWrap to discard the write buffer.
+
+### Bug Fixes
+
+* [#20425](https://github.com/cosmos/cosmos-sdk/pull/20425) Fix nil pointer panic when querying historical state where a new store does not exist.
+
 ## v1.1.2 (March 31, 2025)
 
 ### Bug Fixes
