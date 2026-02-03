@@ -489,18 +489,18 @@ func doOp(t *testing.T, st types.CacheKVStore, truth dbm.DB, op int, args ...int
 		require.NoError(t, err)
 	case opSetRange:
 		require.True(t, len(args) > 1)
-		start := args[0] //nolint:gosec // len(args) > 1 is checked above
-		end := args[1]   //nolint:gosec // len(args) > 1 is checked above
+		start := args[0]
+		end := args[1] //nolint:gosec // len(args) > 1 is checked above
 		setRange(t, st, truth, start, end)
 	case opDel:
-		k := args[0] //nolint:gosec // args is guaranteed to have at least one element
+		k := args[0]
 		st.Delete(keyFmt(k))
 		err := truth.Delete(keyFmt(k))
 		require.NoError(t, err)
 	case opDelRange:
 		require.True(t, len(args) > 1)
-		start := args[0] //nolint:gosec // len(args) > 1 is checked above
-		end := args[1]   //nolint:gosec // len(args) > 1 is checked above
+		start := args[0]
+		end := args[1] //nolint:gosec // len(args) > 1 is checked above
 		deleteRange(t, st, truth, start, end)
 	case opWrite:
 		st.Write()
