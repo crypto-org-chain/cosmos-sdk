@@ -76,11 +76,15 @@ func (store *GStore[V]) GetStoreType() types.StoreType {
 // Clone creates a copy-on-write snapshot of the cache store,
 // it only performs a shallow copy so is very fast.
 func (store *GStore[V]) Clone() types.BranchStore {
-	v := *store
-	v.cache = maps.Clone(store.cache)
-	v.unsortedCache = maps.Clone(store.unsortedCache)
-	v.sortedCache = store.sortedCache.Copy()
-	return &v
+	return &GStore[V]{
+		cache:         maps.Clone(store.cache),
+		unsortedCache: maps.Clone(store.unsortedCache),
+		sortedCache:   store.sortedCache.Copy(),
+		parent:        store.parent,
+		isZero:        store.isZero,
+		valueLen:      store.valueLen,
+		// mtx is intentionally not copied - each clone gets its own mutex
+	}
 }
 
 // Get implements types.KVStore.
