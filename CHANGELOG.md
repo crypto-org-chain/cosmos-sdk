@@ -38,10 +38,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## UNRELEASED
 
-### Features
-
-* [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API in `Context` to use new CoW branched cache store.
-
 ### Improvements
 
 * [#261](https://github.com/crypto-org-chain/cosmos-sdk/pull/261) reduce scope of mutex in `PriorityNonceMempool.Remove`.
