@@ -3,6 +3,7 @@ package cachekv
 import (
 	"bytes"
 	"io"
+	"maps"
 	"sort"
 	"sync"
 
@@ -76,6 +77,8 @@ func (store *GStore[V]) GetStoreType() types.StoreType {
 // it only performs a shallow copy so is very fast.
 func (store *GStore[V]) Clone() types.BranchStore {
 	v := *store
+	v.cache = maps.Clone(store.cache)
+	v.unsortedCache = maps.Clone(store.unsortedCache)
 	v.sortedCache = store.sortedCache.Copy()
 	return &v
 }
@@ -109,15 +112,20 @@ func (store *GStore[V]) Set(key []byte, value V) {
 }
 
 // swapCache swap out the internal cache store and leave the current store unusable.
-func (store *GStore[V]) swapCache() btree.BTree[V] {
-	cache := store.sortedCache
+func (store *GStore[V]) swapCache() (btree.BTree[V], map[string]*cValue[V], map[string]struct{}) {
+	sortedCache := store.sortedCache
+	cache := store.cache
+	unsortedCache := store.unsortedCache
 	store.sortedCache = btree.BTree[V]{}
-	return cache
+	store.cache = make(map[string]*cValue[V])
+	store.unsortedCache = make(map[string]struct{})
+	return sortedCache, cache, unsortedCache
 }
 
 // Restore restores the store cache to a given snapshot, leaving the snapshot unusable.
 func (store *GStore[V]) Restore(s types.BranchStore) {
-	store.sortedCache = s.(*GStore[V]).swapCache()
+	snapshot := s.(*GStore[V])
+	store.sortedCache, store.cache, store.unsortedCache = snapshot.swapCache()
 }
 
 // Has implements types.KVStore.
@@ -207,6 +215,8 @@ func (store *GStore[V]) Write() {
 
 func (store *GStore[V]) Discard() {
 	store.sortedCache.Clear()
+	store.cache = make(map[string]*cValue[V])
+	store.unsortedCache = make(map[string]struct{})
 }
 
 // CacheWrap implements CacheWrapper.

@@ -224,11 +224,12 @@ func (cms Store) Restore(other Store) {
 		panic("cannot restore from non-branched store")
 	}
 
-	// discard the non-exists stores
+	// discard the non-exists stores and remove them from the map
 	for k, v := range cms.stores {
 		if _, ok := other.stores[k]; !ok {
 			// clear the cache store if it's not in the other
 			v.Discard()
+			delete(cms.stores, k)
 		}
 	}
 
