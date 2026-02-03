@@ -23,11 +23,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## v1.1.2 (March 31, 2025)
-
-### Bug Fixes
-
-* [#24090](https://github.com/cosmos/cosmos-sdk/pull/24090) Running the `prune` command now disables async pruning.
+## Unreleased
 
 ### Improvements
 
@@ -39,6 +35,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#244](https://github.com/crypto-org-chain/cosmos-sdk/pull/244) Add `Discard` method to CacheWrap to discard the write buffer.
 * [#258](https://github.com/crypto-org-chain/cosmos-sdk/pull/258) Add `NewFromParent` API to cachemulti store to create a new store from block-stm multiversion data structure.
 * [#1043](https://github.com/crypto-org-chain/cosmos-sdk/pull/1043) Add back CacheWrapWithTrace api.
+
+## v1.1.2 (March 31, 2025)
+
+### Bug Fixes
+
+* [#24090](https://github.com/cosmos/cosmos-sdk/pull/24090) Running the `prune` command now disables async pruning.
 
 ### Features
 
