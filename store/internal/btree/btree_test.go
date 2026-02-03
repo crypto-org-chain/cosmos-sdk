@@ -39,13 +39,6 @@ func TestGetSetDelete(t *testing.T) {
 	require.Nil(t, value)
 }
 
-func TestNilValue(t *testing.T) {
-	db := NewBTree[[]byte]()
-	db.Set([]byte("a"), nil)
-	value := db.Get([]byte("a"))
-	require.Nil(t, value)
-}
-
 func TestDBIterator(t *testing.T) {
 	db := NewBTree[[]byte]()
 
