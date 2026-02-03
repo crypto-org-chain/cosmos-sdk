@@ -28,7 +28,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Improvements
 
 * [#207](https://github.com/crypto-org-chain/cosmos-sdk/pull/207) Remove api CacheWrapWithTrace.
-* [#240](https://github.com/crypto-org-chain/cosmos-sdk/pull/240) Split methods from `MultiStore` into specialized `RootMultiStore`, keep `MultiStore` generic.
 * [#241](https://github.com/crypto-org-chain/cosmos-sdk/pull/241) Refactor the cache store to be btree backed, prepare to support copy-on-write atomic branching.
 * [#242](https://github.com/crypto-org-chain/cosmos-sdk/pull/242) Init cache on cache lazily, save memory allocations.
 * [#243](https://github.com/crypto-org-chain/cosmos-sdk/pull/243) Support `RunAtomic` API to use new CoW cache store.
