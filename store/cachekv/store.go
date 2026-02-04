@@ -82,7 +82,7 @@ func (store *GStore[V]) Clone() types.BranchStore {
 	cache := maps.Clone(store.cache)
 	unsorted := maps.Clone(store.unsortedCache)
 	sorted := store.sortedCache.Copy()
-	
+
 	return &GStore[V]{
 		cache:         cache,
 		unsortedCache: unsorted,
@@ -91,7 +91,6 @@ func (store *GStore[V]) Clone() types.BranchStore {
 		isZero:        store.isZero,
 		valueLen:      store.valueLen,
 	}
-	
 }
 
 // Get implements types.KVStore.
@@ -230,7 +229,7 @@ func (store *GStore[V]) Write() {
 func (store *GStore[V]) Discard() {
 	store.mtx.Lock()
 	defer store.mtx.Unlock()
-	
+
 	store.sortedCache.Clear()
 	store.cache = make(map[string]*cValue[V])
 	store.unsortedCache = make(map[string]struct{})
