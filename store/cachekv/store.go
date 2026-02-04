@@ -76,15 +76,22 @@ func (store *GStore[V]) GetStoreType() types.StoreType {
 // Clone creates a copy-on-write snapshot of the cache store,
 // it only performs a shallow copy so is very fast.
 func (store *GStore[V]) Clone() types.BranchStore {
+	store.mtx.Lock()
+	defer store.mtx.Unlock()
+
+	cache := maps.Clone(store.cache)
+	unsorted := maps.Clone(store.unsortedCache)
+	sorted := store.sortedCache.Copy()
+	
 	return &GStore[V]{
-		cache:         maps.Clone(store.cache),
-		unsortedCache: maps.Clone(store.unsortedCache),
-		sortedCache:   store.sortedCache.Copy(),
+		cache:         cache,
+		unsortedCache: unsorted,
+		sortedCache:   sorted,
 		parent:        store.parent,
 		isZero:        store.isZero,
 		valueLen:      store.valueLen,
-		// mtx is intentionally not copied - each clone gets its own mutex
 	}
+	
 }
 
 // Get implements types.KVStore.
@@ -117,6 +124,9 @@ func (store *GStore[V]) Set(key []byte, value V) {
 
 // swapCache swap out the internal cache store and leave the current store unusable.
 func (store *GStore[V]) swapCache() (btree.BTree[V], map[string]*cValue[V], map[string]struct{}) {
+	store.mtx.Lock()
+	defer store.mtx.Unlock()
+
 	sortedCache := store.sortedCache
 	cache := store.cache
 	unsortedCache := store.unsortedCache
@@ -218,6 +228,9 @@ func (store *GStore[V]) Write() {
 }
 
 func (store *GStore[V]) Discard() {
+	store.mtx.Lock()
+	defer store.mtx.Unlock()
+	
 	store.sortedCache.Clear()
 	store.cache = make(map[string]*cValue[V])
 	store.unsortedCache = make(map[string]struct{})
