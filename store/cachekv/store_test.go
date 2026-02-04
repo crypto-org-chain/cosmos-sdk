@@ -447,6 +447,20 @@ func TestIteratorDeadlock(t *testing.T) {
 	defer it2.Close()
 }
 
+func TestBranchStore(t *testing.T) {
+	mem := dbadapter.Store{DB: dbm.NewMemDB()}
+	store := cachekv.NewStore(mem)
+
+	store.Set([]byte("key1"), []byte("value1"))
+
+	branch := store.Clone().(types.CacheKVStore)
+	branch.Set([]byte("key1"), []byte("value2"))
+
+	require.Equal(t, []byte("value1"), store.Get([]byte("key1")))
+	store.Restore(branch.(types.BranchStore))
+	require.Equal(t, []byte("value2"), store.Get([]byte("key1")))
+}
+
 //-------------------------------------------------------------------------------------------
 // do some random ops
 
@@ -475,18 +489,18 @@ func doOp(t *testing.T, st types.CacheKVStore, truth dbm.DB, op int, args ...int
 		require.NoError(t, err)
 	case opSetRange:
 		require.True(t, len(args) > 1)
-		start := args[0] //nolint:gosec // this is not out of range
-		end := args[1]   //nolint:gosec // this is not out of range
+		start := args[0] //nolint:gosec // len(args) > 1 is checked above
+		end := args[1]   //nolint:gosec // len(args) > 1 is checked above
 		setRange(t, st, truth, start, end)
 	case opDel:
-		k := args[0] //nolint:gosec // this is not out of range
+		k := args[0] //nolint:gosec // args is guaranteed to have at least one element
 		st.Delete(keyFmt(k))
 		err := truth.Delete(keyFmt(k))
 		require.NoError(t, err)
 	case opDelRange:
 		require.True(t, len(args) > 1)
-		start := args[0] //nolint:gosec // this is not out of range
-		end := args[1]   //nolint:gosec // this is not out of range
+		start := args[0] //nolint:gosec // len(args) > 1 is checked above
+		end := args[1]   //nolint:gosec // len(args) > 1 is checked above
 		deleteRange(t, st, truth, start, end)
 	case opWrite:
 		st.Write()

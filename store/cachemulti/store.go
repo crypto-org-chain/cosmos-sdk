@@ -26,6 +26,7 @@ type Store struct {
 	traceWriter  io.Writer
 	traceContext types.TraceContext
 	parentStore  func(types.StoreKey) types.CacheWrapper
+	branched     bool
 }
 
 var _ types.CacheMultiStore = Store{}
@@ -126,8 +127,17 @@ func (cms Store) GetStoreType() types.StoreType {
 
 // Write calls Write on each underlying store.
 func (cms Store) Write() {
+	if cms.branched {
+		panic("cannot Write on branched store")
+	}
 	for _, store := range cms.stores {
 		store.Write()
+	}
+}
+
+func (cms Store) Discard() {
+	for _, store := range cms.stores {
+		store.Discard()
 	}
 }
 
@@ -192,4 +202,54 @@ func (cms Store) GetObjKVStore(key types.StoreKey) types.ObjKVStore {
 		panic(fmt.Sprintf("store with key %v is not ObjKVStore", key))
 	}
 	return store
+}
+
+func (cms Store) Clone() Store {
+	stores := make(map[types.StoreKey]types.CacheWrap, len(cms.stores))
+	for k, v := range cms.stores {
+		stores[k] = v.(types.BranchStore).Clone().(types.CacheWrap)
+	}
+	return Store{
+		stores:       stores,
+		traceWriter:  cms.traceWriter,
+		traceContext: cms.traceContext,
+		parentStore:  cms.parentStore,
+
+		branched: true,
+	}
+}
+
+func (cms Store) Restore(other Store) {
+	if !other.branched {
+		panic("cannot restore from non-branched store")
+	}
+
+	// discard the non-exists stores and remove them from the map
+	for k, v := range cms.stores {
+		if _, ok := other.stores[k]; !ok {
+			// clear the cache store if it's not in the other
+			v.Discard()
+			delete(cms.stores, k)
+		}
+	}
+
+	// restore the other stores
+	for k, v := range other.stores {
+		store, ok := cms.stores[k]
+		if !ok {
+			store = cms.initStore(k, cms.parentStore(k))
+		}
+
+		store.(types.BranchStore).Restore(v.(types.BranchStore))
+	}
+}
+
+func (cms Store) RunAtomic(cb func(types.CacheMultiStore) error) error {
+	branch := cms.Clone()
+	if err := cb(branch); err != nil {
+		return err
+	}
+
+	cms.Restore(branch)
+	return nil
 }

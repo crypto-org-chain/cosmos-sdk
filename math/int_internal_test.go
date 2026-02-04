@@ -121,7 +121,7 @@ func (s *internalIntTestSuite) TestImmutabilityArithInt() {
 		bi := new(big.Int).SetInt64(n)
 
 		for j := 0; j < size; j++ {
-			op := ops[rand.Intn(len(ops))] //nolint:gosec // this is fine for testing
+			op := ops[rand.Intn(len(ops))] //nolint:gosec // rand.Intn returns value in [0,n) which is safe for slice access
 			uis[j], bis[j] = op(ui, bi)
 		}
 

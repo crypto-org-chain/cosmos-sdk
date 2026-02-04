@@ -3,6 +3,7 @@ package cachekv
 import (
 	"bytes"
 	"io"
+	"maps"
 	"sort"
 	"sync"
 
@@ -72,6 +73,26 @@ func (store *GStore[V]) GetStoreType() types.StoreType {
 	return store.parent.GetStoreType()
 }
 
+// Clone creates a copy-on-write snapshot of the cache store,
+// it only performs a shallow copy so is very fast.
+func (store *GStore[V]) Clone() types.BranchStore {
+	store.mtx.Lock()
+	defer store.mtx.Unlock()
+
+	cache := maps.Clone(store.cache)
+	unsorted := maps.Clone(store.unsortedCache)
+	sorted := store.sortedCache.Copy()
+
+	return &GStore[V]{
+		cache:         cache,
+		unsortedCache: unsorted,
+		sortedCache:   sorted,
+		parent:        store.parent,
+		isZero:        store.isZero,
+		valueLen:      store.valueLen,
+	}
+}
+
 // Get implements types.KVStore.
 func (store *GStore[V]) Get(key []byte) (value V) {
 	store.mtx.Lock()
@@ -98,6 +119,26 @@ func (store *GStore[V]) Set(key []byte, value V) {
 	store.mtx.Lock()
 	defer store.mtx.Unlock()
 	store.setCacheValue(key, value, true)
+}
+
+// swapCache swap out the internal cache store and leave the current store unusable.
+func (store *GStore[V]) swapCache() (btree.BTree[V], map[string]*cValue[V], map[string]struct{}) {
+	store.mtx.Lock()
+	defer store.mtx.Unlock()
+
+	sortedCache := store.sortedCache
+	cache := store.cache
+	unsortedCache := store.unsortedCache
+	store.sortedCache = btree.BTree[V]{}
+	store.cache = make(map[string]*cValue[V])
+	store.unsortedCache = make(map[string]struct{})
+	return sortedCache, cache, unsortedCache
+}
+
+// Restore restores the store cache to a given snapshot, leaving the snapshot unusable.
+func (store *GStore[V]) Restore(s types.BranchStore) {
+	snapshot := s.(*GStore[V])
+	store.sortedCache, store.cache, store.unsortedCache = snapshot.swapCache()
 }
 
 // Has implements types.KVStore.
@@ -183,6 +224,15 @@ func (store *GStore[V]) Write() {
 			store.parent.Delete([]byte(obj.key))
 		}
 	}
+}
+
+func (store *GStore[V]) Discard() {
+	store.mtx.Lock()
+	defer store.mtx.Unlock()
+
+	store.sortedCache.Clear()
+	store.cache = make(map[string]*cValue[V])
+	store.unsortedCache = make(map[string]struct{})
 }
 
 // CacheWrap implements CacheWrapper.

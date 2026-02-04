@@ -31,6 +31,14 @@ type Committer interface {
 	GetPruning() pruningtypes.PruningOptions
 }
 
+type PausablePruner interface {
+	// PausePruning let the pruning handler know that the store is being committed
+	// or not, so the handler can decide to prune or not the store.
+	//
+	// NOTE: PausePruning(true) should be called before Commit() and PausePruning(false)
+	PausePruning(bool)
+}
+
 // Stores of MultiStore must implement CommitStore.
 type CommitStore interface {
 	Committer
@@ -151,6 +159,8 @@ type MultiStore interface {
 type CacheMultiStore interface {
 	MultiStore
 	Write() // Writes operations to underlying KVStore
+
+	RunAtomic(func(CacheMultiStore) error) error
 }
 
 // CommitMultiStore is an interface for a MultiStore without cache capabilities.
@@ -331,6 +341,8 @@ type CacheWrap interface {
 
 	// Write syncs with the underlying store.
 	Write()
+
+	Discard()
 }
 
 type CacheWrapper interface {
@@ -347,6 +359,12 @@ func (cid CommitID) IsZero() bool {
 
 func (cid CommitID) String() string {
 	return fmt.Sprintf("CommitID{%v:%X}", cid.Hash, cid.Version)
+}
+
+// BranchStore
+type BranchStore interface {
+	Clone() BranchStore
+	Restore(BranchStore)
 }
 
 //----------------------------------------
