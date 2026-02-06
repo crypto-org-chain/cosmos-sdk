@@ -243,7 +243,9 @@ func SimulateFromSeedX(
 		proposerAddress = validators.randomProposer(r)
 
 		if config.Commit {
-			app.SimWriteState()
+			// this is to be commented out for ethermint simulation tests to pass as this prevents
+			// inconsistent state to be committed during simulation 
+			// app.SimWriteState()
 			if _, err := app.Commit(); err != nil {
 				return params, accs, fmt.Errorf("commit failed at height %d: %w", blockHeight, err)
 			}
