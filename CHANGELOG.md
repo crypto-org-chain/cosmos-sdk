@@ -65,6 +65,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (mempool) [#25563](https://github.com/cosmos/cosmos-sdk/pull/25563) Cleanup sender indices in case of tx replacement.
 * (cli) [#25485](https://github.com/cosmos/cosmos-sdk/pull/25485) Avoid failed to convert address field in `withdraw-validator-commission` cmd.
 * (baseapp) [#25642](https://github.com/cosmos/cosmos-sdk/pull/25642) Mark pre-block events for indexing based on local configuration.
+* (blockstm) [#1765](https://github.com/crypto-org-chain/cosmos-sdk/pull/1765) Remove `SigVerificationDecorator` signature incarnation cache causing state divergence under blockstm.
+
 
 ## [v0.53.4](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.4) - 2025-07-25
 
