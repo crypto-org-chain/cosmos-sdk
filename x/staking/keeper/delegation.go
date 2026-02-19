@@ -3,6 +3,7 @@ package keeper
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -482,8 +483,67 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 	return pairs.Pairs, err
 }
 
+// getUBDPendingTimes reads the sorted list of completion timestamps that have UBD queue entries.
+// Value format: 4-byte count (big-endian uint32) + 8-byte UnixNano (big-endian) per time.
+func (k Keeper) getUBDPendingTimes(ctx context.Context) ([]time.Time, error) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.UBDPendingTimesKey)
+	if err != nil || len(bz) < 4 {
+		return nil, err
+	}
+	n := binary.BigEndian.Uint32(bz[:4])
+	if n == 0 || len(bz) < 4+int(n)*8 {
+		return nil, nil
+	}
+	out := make([]time.Time, 0, n)
+	for i := uint32(0); i < n; i++ {
+		off := 4 + i*8
+		nanos := int64(binary.BigEndian.Uint64(bz[off : off+8]))
+		out = append(out, time.Unix(0, nanos))
+	}
+	return out, nil
+}
+
+// setUBDPendingTimes writes the sorted list of completion timestamps.
+func (k Keeper) setUBDPendingTimes(ctx context.Context, times []time.Time) error {
+	store := k.storeService.OpenKVStore(ctx)
+	if len(times) == 0 {
+		_ = store.Delete(types.UBDPendingTimesKey)
+		return nil
+	}
+	bz := make([]byte, 4+len(times)*8)
+	binary.BigEndian.PutUint32(bz[:4], uint32(len(times)))
+	for i, t := range times {
+		binary.BigEndian.PutUint64(bz[4+i*8:4+(i+1)*8], uint64(t.UnixNano()))
+	}
+	return store.Set(types.UBDPendingTimesKey, bz)
+}
+
+// addUBDPendingTime inserts timestamp into the pending list (sorted, no duplicate).
+func (k Keeper) addUBDPendingTime(ctx context.Context, timestamp time.Time) error {
+	times, err := k.getUBDPendingTimes(ctx)
+	if err != nil {
+		return err
+	}
+	nanos := timestamp.UnixNano()
+	for _, t := range times {
+		if t.UnixNano() == nanos {
+			return nil
+		}
+	}
+	// insert in sorted order
+	i := 0
+	for i < len(times) && times[i].UnixNano() < nanos {
+		i++
+	}
+	times = append(times, time.Time{})
+	copy(times[i+1:], times[i:])
+	times[i] = timestamp
+	return k.setUBDPendingTimes(ctx, times)
+}
+
 // SetUBDQueueTimeSlice sets a specific unbonding queue timeslice.
-// Updates UBDQueueHeadKey when this timeslice is earlier than the current queue head.
+// Updates UBDQueueHeadKey and UBDPendingTimesKey when this timeslice is earlier than the current queue head.
 func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
 	store := k.storeService.OpenKVStore(ctx)
 	key := types.GetUnbondingDelegationTimeKey(timestamp)
@@ -492,6 +552,9 @@ func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, k
 		return err
 	}
 	if err = store.Set(key, bz); err != nil {
+		return err
+	}
+	if err = k.addUBDPendingTime(ctx, timestamp); err != nil {
 		return err
 	}
 	headVal, _ := store.Get(types.UBDQueueHeadKey)
@@ -522,78 +585,110 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 	return k.SetUBDQueueTimeSlice(ctx, completionTime, timeSlice)
 }
 
-// UBDQueueIterator returns all the unbonding queue timeslices from the queue head (or prefix start) until endTime.
-// When UBDQueueHeadKey is set, iteration starts from that key to avoid scanning from time 0 each block.
-func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corestore.Iterator, error) {
-	store := k.storeService.OpenKVStore(ctx)
-	endKey := storetypes.InclusiveEndBytes(types.GetUnbondingDelegationTimeKey(endTime))
-	headVal, err := store.Get(types.UBDQueueHeadKey)
-	if err != nil {
-		return nil, err
-	}
-	if len(headVal) > len(types.UnbondingQueueKey) {
-		headTime, err := sdk.ParseTimeBytes(headVal[len(types.UnbondingQueueKey):])
-		if err == nil && !headTime.After(endTime) {
-			return store.Iterator(headVal, endKey)
-		}
-	}
-	return store.Iterator(types.UnbondingQueueKey, endKey)
-}
-
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
-// currTime, and deletes the timeslices from the queue. Updates UBDQueueHeadKey so the next block
-// can start iteration from the new head instead of from the prefix start.
+// currTime, and deletes the timeslices from the queue. Uses the pending-times list when available
+// (point Get/Delete only, no range iterator) to avoid expensive SST scans in LSM stores.
+// Falls back to the iterator path when the pending list is empty (e.g. after upgrade).
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
 	store := k.storeService.OpenKVStore(ctx)
-
-	// Early exit when no mature entries: if queue head is after currTime, skip iterator entirely.
-	headVal, err := store.Get(types.UBDQueueHeadKey)
+	pending, err := k.getUBDPendingTimes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(headVal) > len(types.UnbondingQueueKey) {
-		headTime, err := sdk.ParseTimeBytes(headVal[len(types.UnbondingQueueKey):])
-		if err == nil && headTime.After(currTime) {
-			return nil, nil
+	if len(pending) > 0 {
+		return k.dequeueAllMatureUBDQueueFromPending(ctx, store, currTime, pending)
+	}
+	return k.dequeueAllMatureUBDQueueWithIterator(ctx, store, currTime)
+}
+
+// dequeueAllMatureUBDQueueFromPending processes mature UBD entries using the pending-times list (point Get/Delete only).
+func (k Keeper) dequeueAllMatureUBDQueueFromPending(ctx context.Context, store corestore.KVStore, currTime time.Time, pending []time.Time) (matureUnbonds []types.DVPair, err error) {
+	var remaining []time.Time
+	for i, t := range pending {
+		if t.After(currTime) {
+			remaining = append(remaining, pending[i:]...)
+			break
+		}
+		key := types.GetUnbondingDelegationTimeKey(t)
+		bz, err := store.Get(key)
+		if err != nil {
+			return matureUnbonds, err
+		}
+		if bz == nil {
+			continue
+		}
+		var timeslice types.DVPairs
+		if err = k.cdc.Unmarshal(bz, &timeslice); err != nil {
+			return matureUnbonds, err
+		}
+		matureUnbonds = append(matureUnbonds, timeslice.Pairs...)
+		if err = store.Delete(key); err != nil {
+			return matureUnbonds, err
 		}
 	}
-
-	unbondingTimesliceIterator, err := k.UBDQueueIterator(ctx, currTime)
-	if err != nil {
+	if err = k.setUBDPendingTimes(ctx, remaining); err != nil {
 		return matureUnbonds, err
 	}
-	defer unbondingTimesliceIterator.Close()
-
-	var nextHead []byte
-	for unbondingTimesliceIterator.Valid() {
-		timeslice := types.DVPairs{}
-		value := unbondingTimesliceIterator.Value()
-		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
-			return matureUnbonds, err
-		}
-
-		matureUnbonds = append(matureUnbonds, timeslice.Pairs...)
-
-		if err = store.Delete(unbondingTimesliceIterator.Key()); err != nil {
-			return matureUnbonds, err
-		}
-
-		unbondingTimesliceIterator.Next()
-		if unbondingTimesliceIterator.Valid() {
-			nextHead = unbondingTimesliceIterator.Key()
-		} else {
-			nextHead = nil
-		}
-	}
-
-	if nextHead != nil {
-		if err = store.Set(types.UBDQueueHeadKey, nextHead); err != nil {
-			return matureUnbonds, err
-		}
+	if len(remaining) > 0 {
+		_ = store.Set(types.UBDQueueHeadKey, types.GetUnbondingDelegationTimeKey(remaining[0]))
 	} else {
 		_ = store.Delete(types.UBDQueueHeadKey)
 	}
+	return matureUnbonds, nil
+}
 
+// dequeueAllMatureUBDQueueWithIterator is the fallback path using a range iterator (e.g. when pending list is empty after upgrade).
+// Uses a single full-range iterator: processes mature entries and collects remaining times in one pass, then sets pending list.
+func (k Keeper) dequeueAllMatureUBDQueueWithIterator(ctx context.Context, store corestore.KVStore, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
+	startKey := types.UnbondingQueueKey
+	headVal, err := store.Get(types.UBDQueueHeadKey)
+	if err != nil {
+		return nil, err
+	}
+	if len(headVal) > len(types.UnbondingQueueKey) {
+		headTime, parseErr := sdk.ParseTimeBytes(headVal[len(types.UnbondingQueueKey):])
+		if parseErr == nil && headTime.After(currTime) {
+			return nil, nil
+		}
+		startKey = headVal
+	}
+
+	endKey := storetypes.PrefixEndBytes(types.UnbondingQueueKey)
+	it, err := store.Iterator(startKey, endKey)
+	if err != nil {
+		return matureUnbonds, err
+	}
+	defer it.Close()
+
+	var remainingTimes []time.Time
+	for ; it.Valid(); it.Next() {
+		key := it.Key()
+		t, parseErr := sdk.ParseTimeBytes(key[len(types.UnbondingQueueKey):])
+		if parseErr != nil {
+			continue
+		}
+		if t.After(currTime) {
+			remainingTimes = append(remainingTimes, t)
+			continue
+		}
+		var timeslice types.DVPairs
+		if err = k.cdc.Unmarshal(it.Value(), &timeslice); err != nil {
+			return matureUnbonds, err
+		}
+		matureUnbonds = append(matureUnbonds, timeslice.Pairs...)
+		if err = store.Delete(key); err != nil {
+			return matureUnbonds, err
+		}
+	}
+
+	if err = k.setUBDPendingTimes(ctx, remainingTimes); err != nil {
+		return matureUnbonds, err
+	}
+	if len(remainingTimes) > 0 {
+		_ = store.Set(types.UBDQueueHeadKey, types.GetUnbondingDelegationTimeKey(remainingTimes[0]))
+	} else {
+		_ = store.Delete(types.UBDQueueHeadKey)
+	}
 	return matureUnbonds, nil
 }
 
@@ -840,8 +935,65 @@ func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 	return triplets.Triplets, nil
 }
 
+// getRedelegationPendingTimes reads the sorted list of completion timestamps that have redelegation queue entries.
+func (k Keeper) getRedelegationPendingTimes(ctx context.Context) ([]time.Time, error) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.RedelegationPendingTimesKey)
+	if err != nil || len(bz) < 4 {
+		return nil, err
+	}
+	n := binary.BigEndian.Uint32(bz[:4])
+	if n == 0 || len(bz) < 4+int(n)*8 {
+		return nil, nil
+	}
+	out := make([]time.Time, 0, n)
+	for i := uint32(0); i < n; i++ {
+		off := 4 + i*8
+		nanos := int64(binary.BigEndian.Uint64(bz[off : off+8]))
+		out = append(out, time.Unix(0, nanos))
+	}
+	return out, nil
+}
+
+// setRedelegationPendingTimes writes the sorted list of completion timestamps.
+func (k Keeper) setRedelegationPendingTimes(ctx context.Context, times []time.Time) error {
+	store := k.storeService.OpenKVStore(ctx)
+	if len(times) == 0 {
+		_ = store.Delete(types.RedelegationPendingTimesKey)
+		return nil
+	}
+	bz := make([]byte, 4+len(times)*8)
+	binary.BigEndian.PutUint32(bz[:4], uint32(len(times)))
+	for i, t := range times {
+		binary.BigEndian.PutUint64(bz[4+i*8:4+(i+1)*8], uint64(t.UnixNano()))
+	}
+	return store.Set(types.RedelegationPendingTimesKey, bz)
+}
+
+// addRedelegationPendingTime inserts timestamp into the pending list (sorted, no duplicate).
+func (k Keeper) addRedelegationPendingTime(ctx context.Context, timestamp time.Time) error {
+	times, err := k.getRedelegationPendingTimes(ctx)
+	if err != nil {
+		return err
+	}
+	nanos := timestamp.UnixNano()
+	for _, t := range times {
+		if t.UnixNano() == nanos {
+			return nil
+		}
+	}
+	i := 0
+	for i < len(times) && times[i].UnixNano() < nanos {
+		i++
+	}
+	times = append(times, time.Time{})
+	copy(times[i+1:], times[i:])
+	times[i] = timestamp
+	return k.setRedelegationPendingTimes(ctx, times)
+}
+
 // SetRedelegationQueueTimeSlice sets a specific redelegation queue timeslice.
-// Updates RedelegationQueueHeadKey when this timeslice is earlier than the current queue head.
+// Updates RedelegationQueueHeadKey and RedelegationPendingTimesKey when this timeslice is earlier than the current queue head.
 func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVVTriplet) error {
 	store := k.storeService.OpenKVStore(ctx)
 	key := types.GetRedelegationTimeKey(timestamp)
@@ -850,6 +1002,9 @@ func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 		return err
 	}
 	if err = store.Set(key, bz); err != nil {
+		return err
+	}
+	if err = k.addRedelegationPendingTime(ctx, timestamp); err != nil {
 		return err
 	}
 	headVal, _ := store.Get(types.RedelegationQueueHeadKey)
@@ -880,81 +1035,110 @@ func (k Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelegat
 	return k.SetRedelegationQueueTimeSlice(ctx, completionTime, timeSlice)
 }
 
-// RedelegationQueueIterator returns all the redelegation queue timeslices from
-// the queue head (or prefix start) until endTime. When RedelegationQueueHeadKey is set,
-// iteration starts from that key to avoid scanning from time 0 each block.
-func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time) (storetypes.Iterator, error) {
-	store := k.storeService.OpenKVStore(ctx)
-	endKey := storetypes.InclusiveEndBytes(types.GetRedelegationTimeKey(endTime))
-	headVal, err := store.Get(types.RedelegationQueueHeadKey)
-	if err != nil {
-		return nil, err
-	}
-	if len(headVal) > len(types.RedelegationQueueKey) {
-		headTime, err := sdk.ParseTimeBytes(headVal[len(types.RedelegationQueueKey):])
-		if err == nil && !headTime.After(endTime) {
-			return store.Iterator(headVal, endKey)
-		}
-	}
-	return store.Iterator(types.RedelegationQueueKey, endKey)
-}
-
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
 // timeslices inclusively previous to currTime, and deletes the timeslices from
-// the queue. Updates RedelegationQueueHeadKey so the next block can start
-// iteration from the new head instead of from the prefix start.
+// the queue. Uses the pending-times list when available (point Get/Delete only)
+// to avoid expensive SST scans in LSM stores. Falls back to the iterator path when the pending list is empty.
 func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
 	store := k.storeService.OpenKVStore(ctx)
-
-	// Early exit when no mature entries: if queue head is after currTime, skip iterator entirely.
-	headVal, err := store.Get(types.RedelegationQueueHeadKey)
+	pending, err := k.getRedelegationPendingTimes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(headVal) > len(types.RedelegationQueueKey) {
-		headTime, err := sdk.ParseTimeBytes(headVal[len(types.RedelegationQueueKey):])
-		if err == nil && headTime.After(currTime) {
-			return nil, nil
-		}
+	if len(pending) > 0 {
+		return k.dequeueAllMatureRedelegationQueueFromPending(ctx, store, currTime, pending)
 	}
+	return k.dequeueAllMatureRedelegationQueueWithIterator(ctx, store, currTime)
+}
 
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	redelegationTimesliceIterator, err := k.RedelegationQueueIterator(ctx, sdkCtx.HeaderInfo().Time)
-	if err != nil {
-		return nil, err
-	}
-	defer redelegationTimesliceIterator.Close()
-
-	var nextHead []byte
-	for redelegationTimesliceIterator.Valid() {
-		timeslice := types.DVVTriplets{}
-		value := redelegationTimesliceIterator.Value()
-		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
-			return nil, err
+// dequeueAllMatureRedelegationQueueFromPending processes mature redelegation entries using the pending-times list (point Get/Delete only).
+func (k Keeper) dequeueAllMatureRedelegationQueueFromPending(ctx context.Context, store corestore.KVStore, currTime time.Time, pending []time.Time) (matureRedelegations []types.DVVTriplet, err error) {
+	var remaining []time.Time
+	for i, t := range pending {
+		if t.After(currTime) {
+			remaining = append(remaining, pending[i:]...)
+			break
 		}
-
-		matureRedelegations = append(matureRedelegations, timeslice.Triplets...)
-
-		if err = store.Delete(redelegationTimesliceIterator.Key()); err != nil {
-			return nil, err
-		}
-
-		redelegationTimesliceIterator.Next()
-		if redelegationTimesliceIterator.Valid() {
-			nextHead = redelegationTimesliceIterator.Key()
-		} else {
-			nextHead = nil
-		}
-	}
-
-	if nextHead != nil {
-		if err = store.Set(types.RedelegationQueueHeadKey, nextHead); err != nil {
+		key := types.GetRedelegationTimeKey(t)
+		bz, err := store.Get(key)
+		if err != nil {
 			return matureRedelegations, err
 		}
+		if bz == nil {
+			continue
+		}
+		var timeslice types.DVVTriplets
+		if err = k.cdc.Unmarshal(bz, &timeslice); err != nil {
+			return matureRedelegations, err
+		}
+		matureRedelegations = append(matureRedelegations, timeslice.Triplets...)
+		if err = store.Delete(key); err != nil {
+			return matureRedelegations, err
+		}
+	}
+	if err = k.setRedelegationPendingTimes(ctx, remaining); err != nil {
+		return matureRedelegations, err
+	}
+	if len(remaining) > 0 {
+		_ = store.Set(types.RedelegationQueueHeadKey, types.GetRedelegationTimeKey(remaining[0]))
 	} else {
 		_ = store.Delete(types.RedelegationQueueHeadKey)
 	}
+	return matureRedelegations, nil
+}
 
+// dequeueAllMatureRedelegationQueueWithIterator is the fallback path using a range iterator.
+// Uses a single full-range iterator: processes mature entries and collects remaining times in one pass, then sets pending list.
+func (k Keeper) dequeueAllMatureRedelegationQueueWithIterator(ctx context.Context, store corestore.KVStore, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
+	startKey := types.RedelegationQueueKey
+	headVal, err := store.Get(types.RedelegationQueueHeadKey)
+	if err != nil {
+		return nil, err
+	}
+	if len(headVal) > len(types.RedelegationQueueKey) {
+		headTime, parseErr := sdk.ParseTimeBytes(headVal[len(types.RedelegationQueueKey):])
+		if parseErr == nil && headTime.After(currTime) {
+			return nil, nil
+		}
+		startKey = headVal
+	}
+
+	endKey := storetypes.PrefixEndBytes(types.RedelegationQueueKey)
+	it, err := store.Iterator(startKey, endKey)
+	if err != nil {
+		return matureRedelegations, err
+	}
+	defer it.Close()
+
+	var remainingTimes []time.Time
+	for ; it.Valid(); it.Next() {
+		key := it.Key()
+		t, parseErr := sdk.ParseTimeBytes(key[len(types.RedelegationQueueKey):])
+		if parseErr != nil {
+			continue
+		}
+		if t.After(currTime) {
+			remainingTimes = append(remainingTimes, t)
+			continue
+		}
+		var timeslice types.DVVTriplets
+		if err = k.cdc.Unmarshal(it.Value(), &timeslice); err != nil {
+			return matureRedelegations, err
+		}
+		matureRedelegations = append(matureRedelegations, timeslice.Triplets...)
+		if err = store.Delete(key); err != nil {
+			return matureRedelegations, err
+		}
+	}
+
+	if err = k.setRedelegationPendingTimes(ctx, remainingTimes); err != nil {
+		return matureRedelegations, err
+	}
+	if len(remainingTimes) > 0 {
+		_ = store.Set(types.RedelegationQueueHeadKey, types.GetRedelegationTimeKey(remainingTimes[0]))
+	} else {
+		_ = store.Delete(types.RedelegationQueueHeadKey)
+	}
 	return matureRedelegations, nil
 }
 

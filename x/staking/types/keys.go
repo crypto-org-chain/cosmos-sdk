@@ -57,6 +57,12 @@ var (
 	RedelegationQueueHeadKey = append(RedelegationQueueKey, 0x00)
 	ValidatorQueueHeadKey    = append(ValidatorQueueKey, 0x00)
 
+	// Pending times keys: store the sorted list of completion timestamps that have queue entries.
+	// Used to dequeue by point Get/Delete instead of a range iterator, avoiding expensive SST scans in LSM stores.
+	// Value: 4-byte count (big-endian uint32) + 8-byte UnixNano (big-endian int64) per time.
+	UBDPendingTimesKey          = append(UnbondingQueueKey, 0x01)
+	RedelegationPendingTimesKey = append(RedelegationQueueKey, 0x01)
+
 	HistoricalInfoKey          = []byte{0x50}                    // prefix for the historical info
 	HistoricalInfoMinHeightKey = append(HistoricalInfoKey, 0x00) // stored min height for bounded iteration (value: 8-byte height)
 	ValidatorUpdatesKey        = []byte{0x61}                    // prefix for the end block validator updates key
@@ -67,6 +73,14 @@ var (
 
 	// NOTE: keys in range 0x81–0x87 were previously used in liquid staking forks of the staking module.
 	// Module developers MUST NOT use these keys and MUST consider them "reserved".
+)
+
+// Validator queue key layout: prefix | timeBzLen (8 bytes) | timeBz | height (8 bytes).
+const (
+	validatorQueueKeyTimeBzLenSize = 8 // bytes for timeBz length (big-endian uint64)
+	validatorQueueKeyHeightSize    = 8 // bytes for height (big-endian uint64)
+	// ValidatorQueueKeyMinParseLength is the minimum length required to parse a validator queue key.
+	ValidatorQueueKeyMinParseLength = 1 + validatorQueueKeyTimeBzLenSize // len(ValidatorQueueKey) + timeBzLen size
 )
 
 // UnbondingType defines the type of unbonding operation
@@ -181,38 +195,45 @@ func GetValidatorQueueKey(timestamp time.Time, height int64) []byte {
 	timeBzL := len(timeBz)
 	prefixL := len(ValidatorQueueKey)
 
-	bz := make([]byte, prefixL+8+timeBzL+8)
+	bz := make([]byte, prefixL+validatorQueueKeyTimeBzLenSize+timeBzL+validatorQueueKeyHeightSize)
 
 	// copy the prefix
 	copy(bz[:prefixL], ValidatorQueueKey)
 
 	// copy the encoded time bytes length
-	copy(bz[prefixL:prefixL+8], sdk.Uint64ToBigEndian(uint64(timeBzL)))
+	copy(bz[prefixL:prefixL+validatorQueueKeyTimeBzLenSize], sdk.Uint64ToBigEndian(uint64(timeBzL)))
 
 	// copy the encoded time bytes
-	copy(bz[prefixL+8:prefixL+8+timeBzL], timeBz)
+	copy(bz[prefixL+validatorQueueKeyTimeBzLenSize:prefixL+validatorQueueKeyTimeBzLenSize+timeBzL], timeBz)
 
 	// copy the encoded height
-	copy(bz[prefixL+8+timeBzL:], heightBz)
+	copy(bz[prefixL+validatorQueueKeyTimeBzLenSize+timeBzL:], heightBz)
 
 	return bz
 }
 
 // ParseValidatorQueueKey returns the encoded time and height from a key created
-// from GetValidatorQueueKey.
+// from GetValidatorQueueKey. Returns an error if bz is too short or malformed.
 func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 	prefixL := len(ValidatorQueueKey)
+	if len(bz) < ValidatorQueueKeyMinParseLength {
+		return time.Time{}, 0, fmt.Errorf("invalid key length: %d", len(bz))
+	}
 	if prefix := bz[:prefixL]; !bytes.Equal(prefix, ValidatorQueueKey) {
 		return time.Time{}, 0, fmt.Errorf("invalid prefix; expected: %X, got: %X", ValidatorQueueKey, prefix)
 	}
 
-	timeBzL := sdk.BigEndianToUint64(bz[prefixL : prefixL+8])
-	ts, err := sdk.ParseTimeBytes(bz[prefixL+8 : prefixL+8+int(timeBzL)])
+	timeBzL := sdk.BigEndianToUint64(bz[prefixL : prefixL+validatorQueueKeyTimeBzLenSize])
+	minLen := prefixL + validatorQueueKeyTimeBzLenSize + int(timeBzL) + validatorQueueKeyHeightSize
+	if len(bz) < minLen {
+		return time.Time{}, 0, fmt.Errorf("invalid key length: %d (need %d for timeBzLen %d)", len(bz), minLen, timeBzL)
+	}
+	ts, err := sdk.ParseTimeBytes(bz[prefixL+validatorQueueKeyTimeBzLenSize : prefixL+validatorQueueKeyTimeBzLenSize+int(timeBzL)])
 	if err != nil {
 		return time.Time{}, 0, err
 	}
 
-	height := sdk.BigEndianToUint64(bz[prefixL+8+int(timeBzL):])
+	height := sdk.BigEndianToUint64(bz[prefixL+validatorQueueKeyTimeBzLenSize+int(timeBzL):])
 
 	return ts, int64(height), nil
 }

@@ -549,8 +549,11 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 	if err != nil {
 		return nil, err
 	}
-	if len(headVal) > len(types.ValidatorQueueKey) && bytes.Compare(headVal, endKey) <= 0 {
-		return store.Iterator(headVal, endKey)
+	// Only use headVal as start key if it looks like a full validator queue key (avoids panic on stale/corrupt values).
+	if len(headVal) >= types.ValidatorQueueKeyMinParseLength && bytes.Compare(headVal, endKey) <= 0 {
+		if _, _, parseErr := types.ParseValidatorQueueKey(headVal); parseErr == nil {
+			return store.Iterator(headVal, endKey)
+		}
 	}
 	return store.Iterator(types.ValidatorQueueKey, endKey)
 }
@@ -563,14 +566,15 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	blockHeight := sdkCtx.BlockHeight()
 
 	// Early exit when no mature entries: if queue head is after (blockTime, blockHeight), skip iterator.
+	// Only use headVal if it looks like a full validator queue key (avoids panic on stale/corrupt 8-byte values).
 	store := k.storeService.OpenKVStore(ctx)
 	headVal, err := store.Get(types.ValidatorQueueHeadKey)
 	if err != nil {
 		return err
 	}
-	if len(headVal) > len(types.ValidatorQueueKey) {
-		headTime, headHeight, err := types.ParseValidatorQueueKey(headVal)
-		if err == nil {
+	if len(headVal) >= types.ValidatorQueueKeyMinParseLength {
+		headTime, headHeight, parseErr := types.ParseValidatorQueueKey(headVal)
+		if parseErr == nil {
 			if headHeight > blockHeight || (headHeight == blockHeight && headTime.After(blockTime)) {
 				return nil
 			}
