@@ -23,7 +23,7 @@ The tier module holds the locked tokens and is the delegator in `x/staking`; use
 
 | Term | Description |
 |------|-------------|
-| **Tier** | A lock level defined by an **exit commitment duration** (e.g. 1y, 2y, 5y wait after user triggers exit) and a **fixed bonus APY** (e.g. 0.10 = 10% per year on the locked amount). |
+| **Tier** | A lock level defined by an **exit commitment duration** (e.g. 1y, 2y, 5y wait after user triggers exit), a **fixed bonus APY** (e.g. 0.10 = 10% per year on the locked amount), and a **minimum lock amount** (smallest amount that can be locked when creating a position in this tier). |
 | **Tier-locked tokens** | Tokens sent to the tier module when locking; they are **internal** to the mechanism. They can only be delegated/undelegated/redelegated via tier messages (internal liquid-stake style). They cannot be used externally (no transfer out except via withdraw from tier). |
 | **Lock** | User sends tokens to the tier module and receives a **tier position**. The locked amount earns base (staking) rewards when delegated and a **fixed APY** bonus from the pool. User can trigger exit at any time. The owner can **add** to an existing position (same tier) as long as exit has not been triggered. |
 | **Base rewards** | Staking rewards from `x/distribution` when tier-locked tokens are delegated to validators (tier module is the delegator). |
@@ -55,6 +55,7 @@ type TierDefinition struct {
     TierId                 uint32        // e.g. 1, 2, 3
     ExitCommitmentDuration time.Duration // e.g. 5*365*24*time.Hour; after user triggers exit, they must wait this before claim; no bonus after
     BonusAPY               sdk.Dec       // e.g. 0.10 for 10% per year (fixed APY on locked amount)
+    MinLockAmount          math.Int      // minimum amount (in bond denom) required when creating a new position in this tier; enforced on MsgLockTier
 }
 
 // Params
@@ -64,6 +65,7 @@ type Params struct {
 }
 ```
 
+- **Minimum lock:** Each tier’s `MinLockAmount` must be ≥ 0 when params are set or updated; implementations may require it to be strictly positive for the tier to accept new locks. It is enforced only on **MsgLockTier** (new positions); **MsgAddToTierPosition** does not require the added amount to meet any minimum.
 - **Fixed APY:** Bonus is not a multiplier on base rewards. It is an annual rate on the locked (or delegated) amount: `accrued_bonus = amount_locked × BonusAPY × (time_elapsed / 1 year)`, paid from the tier pool in `BonusDenoms`. Accrual can be computed per block or on each withdraw/claim using `LastAccrualTime` (or height) stored on the position.
 
 ### 4.2 Tier positions (state)
@@ -94,7 +96,7 @@ type TierPosition struct {
 // - NextPositionId:     next uint64
 ```
 
-- **Lock into tier:** User sends `MsgLockTier(tier_id, amount)`. Tokens are transferred to the tier module account; module creates a `TierPosition` with `amount_locked`, no exit triggered, no validator (not yet delegated). Multiple positions per owner allowed. User can trigger exit at any time.
+- **Lock into tier:** User sends `MsgLockTier(tier_id, amount)`. The amount must be **≥** the tier’s **MinLockAmount**. Tokens are transferred to the tier module account; module creates a `TierPosition` with `amount_locked`, no exit triggered, no validator (not yet delegated). Multiple positions per owner allowed. User can trigger exit at any time.
 - **Add to position:** Owner can send `MsgAddToTierPosition(position_id, amount)` to add tokens to an **existing** position. Allowed only while exit has **not** been triggered (`ExitTriggeredAt` is zero). See §4.6 for what is updated on add.
 - **Delegation:** When the user calls `MsgTierDelegate(position_id, validator)`, the module delegates the **full** `amount_locked` to that validator (position cannot be split). The staking module returns **shares** for that delegation; the tier module stores them in `DelegatedShares` (see §4.2.1). Bonus APY accrues on `amount_locked`.
 
@@ -205,7 +207,7 @@ When the owner adds tokens to an existing position (`position_id`), the followin
 
 ```
 User -> MsgLockTier(tier_id, amount)
-  -> Validate tier_id exists; amount > 0; denom = bond denom
+  -> Validate tier_id exists; amount > 0; denom = bond denom; amount >= tiers[tier_id].MinLockAmount
   -> Bank.SendCoinsFromAccountToModule(owner, tieredrewards.ModuleName, amount)
   -> position_id = NextPositionId; NextPositionId++
   -> Set TierPosition(position_id, owner, tier_id, amount_locked=amount, CreatedAtHeight, CreatedAtTime, ExitTriggeredAt=0, ExitUnlockTime=0, Validator="", DelegatedShares=0, LastBonusAccrual=now)
@@ -373,12 +375,14 @@ Tier-locked tokens **cannot** be delegated, undelegated, or redelegated using no
 | Trigger exit / claim | User can trigger exit **anytime**. **MsgTriggerExitFromTier** starts exit commitment (wait X years per tier); then **MsgWithdrawFromTier** claims tokens. No bonus after exit commitment elapsed. If delegated, must undelegate and wait unbonding before claim. |
 | Multiple positions per owner | Each position is an independent state record; bonus APY and base attribution per position. |
 | Add to position when exit triggered | **Reject.** `MsgAddToTierPosition` is allowed only when `ExitTriggeredAt` is zero. Once the user has triggered exit, no further adds to that position. |
+| Lock amount below tier minimum | **Reject.** `MsgLockTier(tier_id, amount)` requires `amount >= tiers[tier_id].MinLockAmount`. If amount is less than the tier’s minimum, the message fails validation. |
 
 ---
 
 ## 10. Security and Invariants
 
 - **Authority:** Only designated authority (e.g. gov) can update tier params and fund the pool.  
+- **Tier minimum lock:** For each tier, `MinLockAmount` is enforced on **MsgLockTier**: `amount >= tiers[tier_id].MinLockAmount`. Params must set `MinLockAmount` ≥ 0; implementations may require it to be positive for a tier to accept new locks.  
 - **No double bonus:** Bonus is fixed APY accrued over time; tracked per position (`LastBonusAccrual`); paid on `MsgWithdrawTierRewards` (and optionally on TierUndelegate/TierRedelegate).  
 - **Pool balance:** Never send more than pool balance; cap bonus payout to available balance.  
 - **Tier-only delegation:** Only tier module can delegate/undelegate/redelegate tier-locked tokens; staking messages from users do not affect tier positions.  
@@ -436,7 +440,7 @@ x/tieredrewards/
 
 ## 14. Summary
 
-- **Tier = lock duration + fixed bonus APY.** Tier-locked tokens are **internal** to the tier mechanism: only **MsgTierDelegate**, **MsgTierUndelegate**, **MsgTierRedelegate** move stake; the tier module account is the delegator.  
+- **Tier = lock duration + fixed bonus APY + minimum lock amount.** Each tier defines `MinLockAmount`; **MsgLockTier** requires `amount >= MinLockAmount` for that tier. Tier-locked tokens are **internal** to the tier mechanism: only **MsgTierDelegate**, **MsgTierUndelegate**, **MsgTierRedelegate** move stake; the tier module account is the delegator.  
 - **Tier positions are state records:** each lock is a `TierPosition` (position_id, owner, tier_id, amount_locked, created_at, exit_triggered_at, exit_unlock_time, validator, delegated_shares, last_bonus_accrual). A position cannot be broken down; the full amount is delegated to one validator. The owner can **add** to an existing position via `MsgAddToTierPosition` as long as exit has not been triggered. Store: `PositionByID`, `PositionsByOwner`, `AllTierPositions`.  
 - **Withdraw from tier:** User can trigger exit **at any time**. **MsgTriggerExitFromTier** starts the exit commitment (wait X years, per tier); once it has elapsed, **no more bonus** and **MsgWithdrawFromTier** claims tokens (after unbonding if delegated). Optional `MsgClaimExpiredTier` for positions past `ExitUnlockTime`.  
 - **Bonus = fixed APY** on locked amount, accrued over time and paid from a **tier rewards pool** when user calls `MsgWithdrawTierRewards` (and optionally on TierUndelegate/TierRedelegate).  
