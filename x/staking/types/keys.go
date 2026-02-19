@@ -48,18 +48,18 @@ var (
 
 	UnbondingQueueKey    = []byte{0x41} // prefix for the timestamps in unbonding queue
 	RedelegationQueueKey = []byte{0x42} // prefix for the timestamps in redelegations queue
-	ValidatorQueueKey   = []byte{0x43} // prefix for the timestamps in validator queue
+	ValidatorQueueKey    = []byte{0x43} // prefix for the timestamps in validator queue
 
 	// Queue head keys: store the minimum (earliest) completion key in each queue.
 	// Used to start iteration from the head instead of prefix start, reducing EndBlock iterator cost.
 	// Value is the full queue key (e.g. GetUnbondingDelegationTimeKey(t)); 0x00 suffix ensures these sort before any real queue key.
-	UBDQueueHeadKey         = append(UnbondingQueueKey, 0x00)
+	UBDQueueHeadKey          = append(UnbondingQueueKey, 0x00)
 	RedelegationQueueHeadKey = append(RedelegationQueueKey, 0x00)
 	ValidatorQueueHeadKey    = append(ValidatorQueueKey, 0x00)
 
-	HistoricalInfoKey      = []byte{0x50} // prefix for the historical info
+	HistoricalInfoKey          = []byte{0x50}                    // prefix for the historical info
 	HistoricalInfoMinHeightKey = append(HistoricalInfoKey, 0x00) // stored min height for bounded iteration (value: 8-byte height)
-	ValidatorUpdatesKey    = []byte{0x61} // prefix for the end block validator updates key
+	ValidatorUpdatesKey        = []byte{0x61}                    // prefix for the end block validator updates key
 
 	ParamsKey = []byte{0x51} // prefix for parameters for module x/staking
 
