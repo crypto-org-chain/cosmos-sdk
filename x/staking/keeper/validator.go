@@ -467,14 +467,23 @@ func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, e
 }
 
 // SetUnbondingValidatorsQueue sets a given slice of validator addresses into
-// the unbonding validator queue by a given height and time.
+// the unbonding validator queue by a given height and time. Updates
+// ValidatorQueueHeadKey when this (time, height) is earlier than the current head.
 func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Time, endHeight int64, addrs []string) error {
 	store := k.storeService.OpenKVStore(ctx)
+	key := types.GetValidatorQueueKey(endTime, endHeight)
 	bz, err := k.cdc.Marshal(&types.ValAddresses{Addresses: addrs})
 	if err != nil {
 		return err
 	}
-	return store.Set(types.GetValidatorQueueKey(endTime, endHeight), bz)
+	if err = store.Set(key, bz); err != nil {
+		return err
+	}
+	headVal, _ := store.Get(types.ValidatorQueueHeadKey)
+	if len(headVal) == 0 || bytes.Compare(key, headVal) < 0 {
+		return store.Set(types.ValidatorQueueHeadKey, key)
+	}
+	return nil
 }
 
 // InsertUnbondingValidatorQueue inserts a given unbonding validator address into
@@ -529,11 +538,21 @@ func (k Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) e
 	return k.SetUnbondingValidatorsQueue(ctx, val.UnbondingTime, val.UnbondingHeight, newAddrs)
 }
 
-// ValidatorQueueIterator returns an interator ranging over validators that are
+// ValidatorQueueIterator returns an iterator ranging over validators that are
 // unbonding whose unbonding completion occurs at the given height and time.
+// When ValidatorQueueHeadKey is set, iteration starts from that key to avoid
+// scanning from the prefix start each block.
 func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, endHeight int64) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.ValidatorQueueKey, storetypes.InclusiveEndBytes(types.GetValidatorQueueKey(endTime, endHeight)))
+	endKey := storetypes.InclusiveEndBytes(types.GetValidatorQueueKey(endTime, endHeight))
+	headVal, err := store.Get(types.ValidatorQueueHeadKey)
+	if err != nil {
+		return nil, err
+	}
+	if len(headVal) > len(types.ValidatorQueueKey) && bytes.Compare(headVal, endKey) <= 0 {
+		return store.Iterator(headVal, endKey)
+	}
+	return store.Iterator(types.ValidatorQueueKey, endKey)
 }
 
 // UnbondAllMatureValidators unbonds all the mature unbonding validators that
@@ -542,6 +561,21 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	blockTime := sdkCtx.BlockTime()
 	blockHeight := sdkCtx.BlockHeight()
+
+	// Early exit when no mature entries: if queue head is after (blockTime, blockHeight), skip iterator.
+	store := k.storeService.OpenKVStore(ctx)
+	headVal, err := store.Get(types.ValidatorQueueHeadKey)
+	if err != nil {
+		return err
+	}
+	if len(headVal) > len(types.ValidatorQueueKey) {
+		headTime, headHeight, err := types.ParseValidatorQueueKey(headVal)
+		if err == nil {
+			if headHeight > blockHeight || (headHeight == blockHeight && headTime.After(blockTime)) {
+				return nil
+			}
+		}
+	}
 
 	// unbondingValIterator will contains all validator addresses indexed under
 	// the ValidatorQueueKey prefix. Note, the entire index key is composed as

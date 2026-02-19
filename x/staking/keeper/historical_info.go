@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 
 	storetypes "cosmossdk.io/store/types"
@@ -27,7 +28,8 @@ func (k Keeper) GetHistoricalInfo(ctx context.Context, height int64) (types.Hist
 	return types.UnmarshalHistoricalInfo(k.cdc, value)
 }
 
-// SetHistoricalInfo sets the historical info at a given height
+// SetHistoricalInfo sets the historical info at a given height. When the min-height
+// hint is unset (e.g. genesis), sets it to this height so IterateHistoricalInfo is bounded.
 func (k Keeper) SetHistoricalInfo(ctx context.Context, height int64, hi *types.HistoricalInfo) error {
 	store := k.storeService.OpenKVStore(ctx)
 	key := types.GetHistoricalInfoKey(height)
@@ -35,7 +37,15 @@ func (k Keeper) SetHistoricalInfo(ctx context.Context, height int64, hi *types.H
 	if err != nil {
 		return err
 	}
-	return store.Set(key, value)
+	if err = store.Set(key, value); err != nil {
+		return err
+	}
+	if bz, _ := store.Get(types.HistoricalInfoMinHeightKey); len(bz) < 8 {
+		minHeightBz := make([]byte, 8)
+		binary.BigEndian.PutUint64(minHeightBz, uint64(height))
+		_ = store.Set(types.HistoricalInfoMinHeightKey, minHeightBz)
+	}
+	return nil
 }
 
 // DeleteHistoricalInfo deletes the historical info at a given height
@@ -48,10 +58,17 @@ func (k Keeper) DeleteHistoricalInfo(ctx context.Context, height int64) error {
 
 // IterateHistoricalInfo provides an iterator over all stored HistoricalInfo
 // objects. For each HistoricalInfo object, cb will be called. If the cb returns
-// true, the iterator will break and close.
+// true, the iterator will break and close. Uses HistoricalInfoMinHeightKey when
+// set to start from the minimum stored height instead of the prefix start.
 func (k Keeper) IterateHistoricalInfo(ctx context.Context, cb func(types.HistoricalInfo) bool) error {
 	store := k.storeService.OpenKVStore(ctx)
-	iterator, err := store.Iterator(types.HistoricalInfoKey, storetypes.PrefixEndBytes(types.HistoricalInfoKey))
+	endKey := storetypes.PrefixEndBytes(types.HistoricalInfoKey)
+	startKey := types.HistoricalInfoKey
+	if bz, err := store.Get(types.HistoricalInfoMinHeightKey); err == nil && len(bz) >= 8 {
+		minHeight := int64(binary.BigEndian.Uint64(bz))
+		startKey = types.GetHistoricalInfoKey(minHeight)
+	}
+	iterator, err := store.Iterator(startKey, endKey)
 	if err != nil {
 		return err
 	}
@@ -82,7 +99,8 @@ func (k Keeper) GetAllHistoricalInfo(ctx context.Context) ([]types.HistoricalInf
 }
 
 // TrackHistoricalInfo saves the latest historical-info and deletes the oldest
-// heights that are below pruning height
+// heights that are below pruning height. Updates HistoricalInfoMinHeightKey so
+// IterateHistoricalInfo can start from the minimum stored height.
 func (k Keeper) TrackHistoricalInfo(ctx context.Context) error {
 	entryNum, err := k.HistoricalEntries(ctx)
 	if err != nil {
@@ -90,6 +108,7 @@ func (k Keeper) TrackHistoricalInfo(ctx context.Context) error {
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	blockHeight := sdkCtx.BlockHeight()
 
 	// Prune store to ensure we only have parameter-defined historical entries.
 	// In most cases, this will involve removing a single historical entry.
@@ -98,7 +117,7 @@ func (k Keeper) TrackHistoricalInfo(ctx context.Context) error {
 	// Since the entries to be deleted are always in a continuous range, we can iterate
 	// over the historical entries starting from the most recent version to be pruned
 	// and then return at the first empty entry.
-	for i := sdkCtx.BlockHeight() - int64(entryNum); i >= 0; i-- {
+	for i := blockHeight - int64(entryNum); i >= 0; i-- {
 		_, err := k.GetHistoricalInfo(ctx, i)
 		if err != nil {
 			if errors.Is(err, types.ErrNoHistoricalInfo) {
@@ -116,6 +135,18 @@ func (k Keeper) TrackHistoricalInfo(ctx context.Context) error {
 		return nil
 	}
 
+	// Update min height so IterateHistoricalInfo can start from the oldest stored height.
+	minHeight := blockHeight - int64(entryNum) + 1
+	if minHeight < 0 {
+		minHeight = 0
+	}
+	minHeightBz := make([]byte, 8)
+	binary.BigEndian.PutUint64(minHeightBz, uint64(minHeight))
+	store := k.storeService.OpenKVStore(ctx)
+	if err = store.Set(types.HistoricalInfoMinHeightKey, minHeightBz); err != nil {
+		return err
+	}
+
 	// Create HistoricalInfo struct
 	lastVals, err := k.GetLastValidators(ctx)
 	if err != nil {
@@ -125,5 +156,5 @@ func (k Keeper) TrackHistoricalInfo(ctx context.Context) error {
 	historicalEntry := types.NewHistoricalInfo(sdkCtx.BlockHeader(), types.Validators{Validators: lastVals, ValidatorCodec: k.validatorAddressCodec}, k.PowerReduction(ctx))
 
 	// Set latest HistoricalInfo at current height
-	return k.SetHistoricalInfo(ctx, sdkCtx.BlockHeight(), &historicalEntry)
+	return k.SetHistoricalInfo(ctx, blockHeight, &historicalEntry)
 }
