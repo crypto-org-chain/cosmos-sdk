@@ -489,7 +489,10 @@ func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, k
 	if err != nil {
 		return err
 	}
-	return store.Set(types.GetUnbondingDelegationTimeKey(timestamp), bz)
+	if err = store.Set(types.GetUnbondingDelegationTimeKey(timestamp), bz); err != nil {
+		return err
+	}
+	return k.addUBDQueuePendingSlot(ctx, timestamp)
 }
 
 // InsertUBDQueue inserts an unbonding delegation to the appropriate timeslice
@@ -521,33 +524,46 @@ func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corest
 }
 
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
-// currTime, and deletes the timeslices from the queue.
+// currTime, and deletes the timeslices from the queue. Uses the pending-slot index (populated by
+// Migrate5to6); slots are read once and written once (batch update).
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
-	// gets an iterator for all timeslices from time 0 until the current Blockheader time
-	unbondingTimesliceIterator, err := k.UBDQueueIterator(ctx, currTime)
+	slots, err := k.getUBDQueuePendingSlots(ctx)
 	if err != nil {
-		return matureUnbonds, err
+		return nil, err
 	}
-	defer unbondingTimesliceIterator.Close()
+	if len(slots) == 0 {
+		return matureUnbonds, nil
+	}
 
-	for ; unbondingTimesliceIterator.Valid(); unbondingTimesliceIterator.Next() {
-		timeslice := types.DVPairs{}
-		value := unbondingTimesliceIterator.Value()
-		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
+	var remaining []time.Time
+	for _, t := range slots {
+		if t.After(currTime) {
+			remaining = append(remaining, t)
+			continue
+		}
+		queueKey := types.GetUnbondingDelegationTimeKey(t)
+		bz, err := store.Get(queueKey)
+		if err != nil {
 			return matureUnbonds, err
 		}
+		if bz == nil {
+			continue // already deleted, omit from remaining
+		}
 
+		timeslice := types.DVPairs{}
+		if err = k.cdc.Unmarshal(bz, &timeslice); err != nil {
+			return matureUnbonds, err
+		}
 		matureUnbonds = append(matureUnbonds, timeslice.Pairs...)
 
-		if err = store.Delete(unbondingTimesliceIterator.Key()); err != nil {
+		if err = store.Delete(queueKey); err != nil {
 			return matureUnbonds, err
 		}
-
 	}
 
-	return matureUnbonds, nil
+	return matureUnbonds, k.setUBDQueuePendingSlots(ctx, remaining)
 }
 
 // GetRedelegations returns a given amount of all the delegator redelegations.
@@ -800,7 +816,10 @@ func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 	if err != nil {
 		return err
 	}
-	return store.Set(types.GetRedelegationTimeKey(timestamp), bz)
+	if err = store.Set(types.GetRedelegationTimeKey(timestamp), bz); err != nil {
+		return err
+	}
+	return k.addRedelegationQueuePendingSlot(ctx, timestamp)
 }
 
 // InsertRedelegationQueue insert an redelegation delegation to the appropriate
@@ -833,33 +852,46 @@ func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time
 
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
 // timeslices inclusively previous to currTime, and deletes the timeslices from
-// the queue.
+// the queue. Uses the pending-slot index (populated by Migrate5to6); slots are
+// read once and written once (batch update).
 func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
-	// gets an iterator for all timeslices from time 0 until the current Blockheader time
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	redelegationTimesliceIterator, err := k.RedelegationQueueIterator(ctx, sdkCtx.HeaderInfo().Time)
+	slots, err := k.getRedelegationQueuePendingSlots(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer redelegationTimesliceIterator.Close()
+	if len(slots) == 0 {
+		return matureRedelegations, nil
+	}
 
-	for ; redelegationTimesliceIterator.Valid(); redelegationTimesliceIterator.Next() {
-		timeslice := types.DVVTriplets{}
-		value := redelegationTimesliceIterator.Value()
-		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
-			return nil, err
+	var remaining []time.Time
+	for _, t := range slots {
+		if t.After(currTime) {
+			remaining = append(remaining, t)
+			continue
+		}
+		queueKey := types.GetRedelegationTimeKey(t)
+		bz, err := store.Get(queueKey)
+		if err != nil {
+			return matureRedelegations, err
+		}
+		if bz == nil {
+			continue
 		}
 
+		timeslice := types.DVVTriplets{}
+		if err = k.cdc.Unmarshal(bz, &timeslice); err != nil {
+			return matureRedelegations, err
+		}
 		matureRedelegations = append(matureRedelegations, timeslice.Triplets...)
 
-		if err = store.Delete(redelegationTimesliceIterator.Key()); err != nil {
-			return nil, err
+		if err = store.Delete(queueKey); err != nil {
+			return matureRedelegations, err
 		}
 	}
 
-	return matureRedelegations, nil
+	return matureRedelegations, k.setRedelegationQueuePendingSlots(ctx, remaining)
 }
 
 // Delegate performs a delegation, set/update everything necessary within the store.

@@ -47,3 +47,20 @@ func (m Migrator) Migrate4to5(ctx sdk.Context) error {
 	store := runtime.KVStoreAdapter(m.keeper.storeService.OpenKVStore(ctx))
 	return v5.MigrateStore(ctx, store, m.keeper.cdc)
 }
+
+// Migrate5to6 migrates x/staking state from consensus version 5 to 6 by
+// populating the queue pending-slot indexes (validator, UBD, redelegation)
+// from current queue state. This avoids expensive full-range iteration in
+// end-block on the first block after upgrade.
+func (m Migrator) Migrate5to6(ctx sdk.Context) error {
+	if err := m.keeper.populateValidatorQueuePendingFromIterator(ctx); err != nil {
+		return err
+	}
+	if err := m.keeper.populateUBDQueuePendingFromIterator(ctx); err != nil {
+		return err
+	}
+	if err := m.keeper.populateRedelegationQueuePendingFromIterator(ctx); err != nil {
+		return err
+	}
+	return nil
+}

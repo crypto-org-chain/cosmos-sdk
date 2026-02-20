@@ -50,6 +50,12 @@ var (
 	RedelegationQueueKey = []byte{0x42} // prefix for the timestamps in redelegations queue
 	ValidatorQueueKey    = []byte{0x43} // prefix for the timestamps in validator queue
 
+	// Pending queue slot indexes: store the set of (time, height) or (time) slots that
+	// have queue entries, so end-block can process without iterating from prefix start.
+	ValidatorQueuePendingSlotsKey    = []byte{0x44} // single key: pending validator queue slots
+	UBDQueuePendingSlotsKey          = []byte{0x45} // single key: pending UBD queue times
+	RedelegationQueuePendingSlotsKey = []byte{0x46} // single key: pending redelegation queue times
+
 	HistoricalInfoKey   = []byte{0x50} // prefix for the historical info
 	ValidatorUpdatesKey = []byte{0x61} // prefix for the end block validator updates key
 
