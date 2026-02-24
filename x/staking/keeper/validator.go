@@ -477,7 +477,7 @@ func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Ti
 	if err = store.Set(types.GetValidatorQueueKey(endTime, endHeight), bz); err != nil {
 		return err
 	}
-	return k.addValidatorQueuePendingSlot(ctx, endTime, endHeight)
+	return k.AddValidatorQueuePendingSlot(ctx, endTime, endHeight)
 }
 
 // InsertUnbondingValidatorQueue inserts a given unbonding validator address into
@@ -498,7 +498,7 @@ func (k Keeper) DeleteValidatorQueueTimeSlice(ctx context.Context, endTime time.
 	if err := store.Delete(types.GetValidatorQueueKey(endTime, endHeight)); err != nil {
 		return err
 	}
-	return k.removeValidatorQueuePendingSlot(ctx, endTime, endHeight)
+	return k.RemoveValidatorQueuePendingSlot(ctx, endTime, endHeight)
 }
 
 // DeleteValidatorQueue removes a validator by address from the unbonding queue
@@ -544,7 +544,7 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	blockHeight := sdkCtx.BlockHeight()
 
 	store := k.storeService.OpenKVStore(ctx)
-	slots, err := k.getValidatorQueuePendingSlots(ctx)
+	slots, err := k.GetValidatorQueuePendingSlots(ctx)
 	if err != nil {
 		return err
 	}
@@ -563,7 +563,7 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 		}
 		if bz == nil {
 			// already processed and deleted; remove from pending
-			err := k.removeValidatorQueuePendingSlot(ctx, slot.Time, slot.Height)
+			err := k.RemoveValidatorQueuePendingSlot(ctx, slot.Time, slot.Height)
 			if err != nil {
 				return err
 			}

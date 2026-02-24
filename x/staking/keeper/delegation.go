@@ -491,7 +491,7 @@ func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, k
 	if err = store.Set(types.GetUnbondingDelegationTimeKey(timestamp), bz); err != nil {
 		return err
 	}
-	return k.addUBDQueuePendingSlot(ctx, timestamp)
+	return k.AddUBDQueuePendingSlot(ctx, timestamp)
 }
 
 // InsertUBDQueue inserts an unbonding delegation to the appropriate timeslice
@@ -521,7 +521,7 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
-	slots, err := k.getUBDQueuePendingSlots(ctx)
+	slots, err := k.GetUBDQueuePendingSlots(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +555,7 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 		}
 	}
 
-	return matureUnbonds, k.setUBDQueuePendingSlots(ctx, remaining)
+	return matureUnbonds, k.SetUBDQueuePendingSlots(ctx, remaining)
 }
 
 // GetRedelegations returns a given amount of all the delegator redelegations.
@@ -811,7 +811,7 @@ func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 	if err = store.Set(types.GetRedelegationTimeKey(timestamp), bz); err != nil {
 		return err
 	}
-	return k.addRedelegationQueuePendingSlot(ctx, timestamp)
+	return k.AddRedelegationQueuePendingSlot(ctx, timestamp)
 }
 
 // InsertRedelegationQueue insert an redelegation delegation to the appropriate
@@ -842,7 +842,7 @@ func (k Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelegat
 func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
-	slots, err := k.getRedelegationQueuePendingSlots(ctx)
+	slots, err := k.GetRedelegationQueuePendingSlots(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -876,7 +876,7 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 		}
 	}
 
-	return matureRedelegations, k.setRedelegationQueuePendingSlots(ctx, remaining)
+	return matureRedelegations, k.SetRedelegationQueuePendingSlots(ctx, remaining)
 }
 
 // Delegate performs a delegation, set/update everything necessary within the store.
