@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
@@ -251,7 +252,7 @@ func (k Keeper) addRedelegationQueuePendingSlot(ctx context.Context, completionT
 // pending index from current queue state. End-block does not use the iterator.
 func (k Keeper) populateValidatorQueuePendingFromIterator(ctx context.Context) error {
 	store := k.storeService.OpenKVStore(ctx)
-	iter, err := store.Iterator(types.ValidatorQueueKey, nil)
+	iter, err := store.Iterator(types.ValidatorQueueKey, storetypes.PrefixEndBytes(types.ValidatorQueueKey))
 	if err != nil {
 		return err
 	}
@@ -270,7 +271,7 @@ func (k Keeper) populateValidatorQueuePendingFromIterator(ctx context.Context) e
 // populateUBDQueuePendingFromIterator is used only by Migrate5to6. End-block does not use the iterator.
 func (k Keeper) populateUBDQueuePendingFromIterator(ctx context.Context) error {
 	store := k.storeService.OpenKVStore(ctx)
-	iter, err := store.Iterator(types.UnbondingQueueKey, nil)
+	iter, err := store.Iterator(types.UnbondingQueueKey, storetypes.PrefixEndBytes(types.UnbondingQueueKey))
 	if err != nil {
 		return err
 	}
@@ -294,7 +295,7 @@ func (k Keeper) populateUBDQueuePendingFromIterator(ctx context.Context) error {
 // populateRedelegationQueuePendingFromIterator is used only by Migrate5to6. End-block does not use the iterator.
 func (k Keeper) populateRedelegationQueuePendingFromIterator(ctx context.Context) error {
 	store := k.storeService.OpenKVStore(ctx)
-	iter, err := store.Iterator(types.RedelegationQueueKey, nil)
+	iter, err := store.Iterator(types.RedelegationQueueKey, storetypes.PrefixEndBytes(types.RedelegationQueueKey))
 	if err != nil {
 		return err
 	}
