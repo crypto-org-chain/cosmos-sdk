@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"sort"
 	"time"
 
@@ -24,12 +25,10 @@ const (
 	timeHeightSlotSizeBytes = timeSlotSizeBytes + heightSlotSizeBytes
 )
 
-func countAbsent(bz []byte) bool {
-	return len(bz) < countBytes
-}
-
 func insufficientCapacity(bz []byte, count, slotSize uint64) bool {
-	return uint64(len(bz)) < count*slotSize
+	actualBytes := uint64(len(bz))
+	requiredBytes := count * slotSize
+	return actualBytes < requiredBytes
 }
 
 // GetValidatorQueuePendingSlots reads the list of (time, height) slots that have validator queue entries.
@@ -39,8 +38,11 @@ func (k Keeper) GetValidatorQueuePendingSlots(ctx context.Context) ([]TimeHeight
 	if err != nil {
 		return nil, err
 	}
-	if countAbsent(bz) {
+	if len(bz) == 0 {
 		return nil, nil
+	}
+	if len(bz) < countBytes {
+		return nil, fmt.Errorf("%w: key=%x", types.ErrPendingQueueSlotMissingCount, types.ValidatorQueuePendingSlotsKey)
 	}
 	n := binary.BigEndian.Uint32(bz[:countBytes])
 	if n == 0 {
@@ -48,7 +50,7 @@ func (k Keeper) GetValidatorQueuePendingSlots(ctx context.Context) ([]TimeHeight
 	}
 	bz = bz[countBytes:]
 	if insufficientCapacity(bz, uint64(n), timeHeightSlotSizeBytes) {
-		return nil, nil
+		return nil, fmt.Errorf("%w: key=%x, count=%d", types.ErrPendingQueueSlotInsufficientCapacity, types.ValidatorQueuePendingSlotsKey, n)
 	}
 	slots := make([]TimeHeightQueueSlot, 0, n)
 	for i := uint32(0); i < n; i++ {
@@ -137,8 +139,11 @@ func (k Keeper) getTimeQueuePendingSlots(ctx context.Context, key []byte) ([]tim
 	if err != nil {
 		return nil, err
 	}
-	if countAbsent(bz) {
+	if len(bz) == 0 {
 		return nil, nil
+	}
+	if len(bz) < countBytes {
+		return nil, fmt.Errorf("%w: key=%x", types.ErrPendingQueueSlotMissingCount, key)
 	}
 	n := binary.BigEndian.Uint32(bz[:countBytes])
 	if n == 0 {
@@ -146,7 +151,7 @@ func (k Keeper) getTimeQueuePendingSlots(ctx context.Context, key []byte) ([]tim
 	}
 	bz = bz[countBytes:]
 	if insufficientCapacity(bz, uint64(n), timeSlotSizeBytes) {
-		return nil, nil
+		return nil, fmt.Errorf("%w: key=%x, count=%d", types.ErrPendingQueueSlotInsufficientCapacity, key, n)
 	}
 	slots := make([]time.Time, 0, n)
 	for i := uint32(0); i < n; i++ {
