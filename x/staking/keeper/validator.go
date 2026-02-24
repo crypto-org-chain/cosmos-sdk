@@ -570,7 +570,10 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 		}
 		if bz == nil {
 			// already processed and deleted; remove from pending
-			_ = k.removeValidatorQueuePendingSlot(ctx, slot.Time, slot.Height)
+			err := k.removeValidatorQueuePendingSlot(ctx, slot.Time, slot.Height)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
