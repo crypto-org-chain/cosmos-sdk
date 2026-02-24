@@ -267,7 +267,8 @@ func TestSlashWithUnbondingDelegation(t *testing.T) {
 	// set an unbonding delegation with expiration timestamp beyond which the
 	// unbonding delegation shouldn't be slashed
 	ubdTokens := f.stakingKeeper.TokensFromConsensusPower(f.sdkCtx, 4)
-	ubd := types.NewUnbondingDelegation(addrDels[0], addrVals[0], 11, time.Unix(0, 0), ubdTokens, 0, address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+	completionTime := f.sdkCtx.BlockTime().Add(time.Second)
+	ubd := types.NewUnbondingDelegation(addrDels[0], addrVals[0], 11, completionTime, ubdTokens, 0, address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
 	assert.NilError(t, f.stakingKeeper.SetUnbondingDelegation(f.sdkCtx, ubd))
 
 	// slash validator for the first time
