@@ -10,6 +10,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
+// Can be removed once migration v6 is complete
+
 // PopulateValidatorQueuePendingFromIterator is used only by Migrate5to6 to seed the
 // pending index from current queue state. End-block does not use the iterator.
 func (k Keeper) PopulateValidatorQueuePendingFromIterator(ctx context.Context) error {
