@@ -44,11 +44,11 @@ func (k Keeper) populateTimeQueuePendingFromIterator(ctx context.Context, queueK
 	var slots []time.Time
 	for ; iter.Valid(); iter.Next() {
 		key := iter.Key()
-		if len(key) != len(queueKey) {
-			return fmt.Errorf("invalid key length: expected %d, got %d", len(queueKey), len(key))
-
+		if len(key) <= len(queueKey) {
+			return fmt.Errorf("key length is too short")
 		}
-		t, parseErr := sdk.ParseTimeBytes(iter.Value())
+		timeBz := key[len(queueKey):]
+		t, parseErr := sdk.ParseTimeBytes(timeBz)
 		if parseErr != nil {
 			continue
 		}
