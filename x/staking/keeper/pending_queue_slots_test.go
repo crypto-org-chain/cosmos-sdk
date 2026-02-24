@@ -9,7 +9,7 @@ import (
 func (s *KeeperTestSuite) TestGetValidatorQueuePendingSlots_NoEntries() {
 	slots, err := s.stakingKeeper.GetValidatorQueuePendingSlots(s.ctx)
 	s.Require().NoError(err)
-	s.Require().Nil(slots) 
+	s.Require().Nil(slots)
 }
 
 func (s *KeeperTestSuite) TestGetValidatorQueuePendingSlots_SingleEntry() {
@@ -174,6 +174,7 @@ func (s *KeeperTestSuite) TestRemoveValidatorQueuePendingSlot() {
 	s.Require().Equal(testTime2, slots[0].Time)
 	s.Require().Equal(testHeight2, slots[0].Height)
 }
+
 func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_SortingEdgeCases_SameTimeDifferentHeights() {
 	// Same time, different heights - should sort by height
 	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -375,7 +376,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_TimeWithNanosecondPr
 func (s *KeeperTestSuite) TestGetUBDQueuePendingSlots_NoEntries() {
 	slots, err := s.stakingKeeper.GetUBDQueuePendingSlots(s.ctx)
 	s.Require().NoError(err)
-	s.Require().Nil(slots) 
+	s.Require().Nil(slots)
 }
 
 func (s *KeeperTestSuite) TestGetUBDQueuePendingSlots_SingleEntry() {
@@ -463,7 +464,6 @@ func (s *KeeperTestSuite) TestSetUBDQueuePendingSlots_SingleEntry() {
 }
 
 func (s *KeeperTestSuite) TestSetUBDQueuePendingSlots_MultipleEntries() {
-
 	slots := []time.Time{
 		time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
 		time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -487,7 +487,7 @@ func (s *KeeperTestSuite) TestSetUBDQueuePendingSlots_MultipleEntries() {
 func (s *KeeperTestSuite) TestGetRedelegationQueuePendingSlots_NoEntries() {
 	slots, err := s.stakingKeeper.GetRedelegationQueuePendingSlots(s.ctx)
 	s.Require().NoError(err)
-	s.Require().Nil(slots) 
+	s.Require().Nil(slots)
 }
 
 func (s *KeeperTestSuite) TestGetRedelegationQueuePendingSlots_SingleEntry() {
