@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	corestore "cosmossdk.io/core/store"
 	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
@@ -516,13 +515,6 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 	return k.SetUBDQueueTimeSlice(ctx, completionTime, timeSlice)
 }
 
-// UBDQueueIterator returns all the unbonding queue timeslices from time 0 until endTime.
-func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corestore.Iterator, error) {
-	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.UnbondingQueueKey,
-		storetypes.InclusiveEndBytes(types.GetUnbondingDelegationTimeKey(endTime)))
-}
-
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
 // currTime, and deletes the timeslices from the queue. Uses the pending-slot index (populated by
 // Migrate5to6); slots are read once and written once (batch update).
@@ -841,13 +833,6 @@ func (k Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelegat
 
 	timeSlice = append(timeSlice, dvvTriplet)
 	return k.SetRedelegationQueueTimeSlice(ctx, completionTime, timeSlice)
-}
-
-// RedelegationQueueIterator returns all the redelegation queue timeslices from
-// time 0 until endTime.
-func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time) (storetypes.Iterator, error) {
-	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.RedelegationQueueKey, storetypes.InclusiveEndBytes(types.GetRedelegationTimeKey(endTime)))
 }
 
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
