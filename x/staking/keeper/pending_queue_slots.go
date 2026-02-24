@@ -6,52 +6,56 @@ import (
 	"sort"
 	"time"
 
-	storetypes "cosmossdk.io/store/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-// validatorQueueSlot is a (time, height) slot in the validator unbonding queue.
-type validatorQueueSlot struct {
+// TimeHeightQueueSlot is a (time, height) slot in the validator unbonding queue.
+type TimeHeightQueueSlot struct {
 	Time   time.Time
 	Height int64
 }
 
 // Binary encoding constants for pending slot lists.
-// Layout: [slotCountBytes] (uint32) then for each slot: [timeBytes][heightBytes] (validator) or [timeBytes] (UBD/redelegation).
+// Layout: [countBytes] (uint32) then for each slot: [timeBytes][heightBytes] (validator) or [timeBytes] (UBD/redelegation).
 const (
-	pendingSlotsCountBytes   = 4 // bytes for slot count (uint32 big-endian)
-	bytesPerUint64           = 8 // bytes for uint64 (time UnixNano, or height)
-	validatorSlotTimeBytes   = 8 // bytes per slot for time (UnixNano) in validator queue
-	validatorSlotHeightBytes = 8 // bytes per slot for height in validator queue
-	validatorSlotSize        = validatorSlotTimeBytes + validatorSlotHeightBytes
-	timeSlotSize             = bytesPerUint64 // bytes per slot for time-only queues (UBD, redelegation)
+	countBytes              = 4 // bytes for slot count (uint32 big-endian)
+	timeSlotSizeBytes       = 8 // uint64 bytes per slot for time-only queues  (UBD, redelegation)
+	heightSlotSizeBytes     = 8 // uint64 bytes for height used for unbonding validators
+	timeHeightSlotSizeBytes = timeSlotSizeBytes + heightSlotSizeBytes
 )
 
-// getValidatorQueuePendingSlots reads the list of (time, height) slots that have validator queue entries.
-func (k Keeper) getValidatorQueuePendingSlots(ctx context.Context) ([]validatorQueueSlot, error) {
+func countAbsent(bz []byte) bool {
+	return len(bz) < countBytes
+}
+
+func insufficientCapacity(bz []byte, count, slotSize uint64) bool {
+	return uint64(len(bz)) < count*slotSize
+}
+
+// GetValidatorQueuePendingSlots reads the list of (time, height) slots that have validator queue entries.
+func (k Keeper) GetValidatorQueuePendingSlots(ctx context.Context) ([]TimeHeightQueueSlot, error) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ValidatorQueuePendingSlotsKey)
 	if err != nil {
 		return nil, err
 	}
-	if len(bz) < pendingSlotsCountBytes {
+	if countAbsent(bz) {
 		return nil, nil
 	}
-	n := binary.BigEndian.Uint32(bz[:pendingSlotsCountBytes])
+	n := binary.BigEndian.Uint32(bz[:countBytes])
 	if n == 0 {
 		return nil, nil
 	}
-	bz = bz[pendingSlotsCountBytes:]
-	if uint64(len(bz)) < uint64(n)*validatorSlotSize {
+	bz = bz[countBytes:]
+	if insufficientCapacity(bz, uint64(n), timeHeightSlotSizeBytes) {
 		return nil, nil
 	}
-	slots := make([]validatorQueueSlot, 0, n)
+	slots := make([]TimeHeightQueueSlot, 0, n)
 	for i := uint32(0); i < n; i++ {
-		off := i * validatorSlotSize
-		nanos := binary.BigEndian.Uint64(bz[off : off+validatorSlotTimeBytes])
-		height := int64(binary.BigEndian.Uint64(bz[off+validatorSlotTimeBytes : off+validatorSlotSize]))
-		slots = append(slots, validatorQueueSlot{
+		offset := i * timeHeightSlotSizeBytes
+		nanos := binary.BigEndian.Uint64(bz[offset : offset+timeSlotSizeBytes])
+		height := int64(binary.BigEndian.Uint64(bz[offset+timeSlotSizeBytes : offset+timeHeightSlotSizeBytes]))
+		slots = append(slots, TimeHeightQueueSlot{
 			Time:   time.Unix(0, int64(nanos)).UTC(),
 			Height: height,
 		})
@@ -59,13 +63,14 @@ func (k Keeper) getValidatorQueuePendingSlots(ctx context.Context) ([]validatorQ
 	return slots, nil
 }
 
-func (k Keeper) setValidatorQueuePendingSlots(ctx context.Context, slots []validatorQueueSlot) error {
+// SetValidatorQueuePendingSlots sets the validator queue pending slots.
+func (k Keeper) SetValidatorQueuePendingSlots(ctx context.Context, slots []TimeHeightQueueSlot) error {
 	store := k.storeService.OpenKVStore(ctx)
 	if len(slots) == 0 {
 		return store.Delete(types.ValidatorQueuePendingSlotsKey)
 	}
-	// deterministic order
-	sort.Slice(slots, func(i, j int) bool {
+
+	sortAscending := func(i, j int) bool {
 		if slots[i].Time.Before(slots[j].Time) {
 			return true
 		}
@@ -73,245 +78,149 @@ func (k Keeper) setValidatorQueuePendingSlots(ctx context.Context, slots []valid
 			return false
 		}
 		return slots[i].Height < slots[j].Height
-	})
-	bz := make([]byte, pendingSlotsCountBytes+len(slots)*validatorSlotSize)
-	binary.BigEndian.PutUint32(bz[:pendingSlotsCountBytes], uint32(len(slots)))
-	for i, s := range slots {
-		off := pendingSlotsCountBytes + i*validatorSlotSize
-		binary.BigEndian.PutUint64(bz[off:off+validatorSlotTimeBytes], uint64(s.Time.UnixNano()))
-		binary.BigEndian.PutUint64(bz[off+validatorSlotTimeBytes:off+validatorSlotSize], uint64(s.Height))
+	}
+
+	sort.Slice(slots, sortAscending)
+
+	seen := make(map[string]struct{})
+	uniqueSlots := make([]TimeHeightQueueSlot, 0, len(slots))
+	for _, s := range slots {
+		key := string(binary.BigEndian.AppendUint64(nil, uint64(s.Time.UnixNano()))) +
+			string(binary.BigEndian.AppendUint64(nil, uint64(s.Height)))
+		if _, ok := seen[key]; !ok {
+			seen[key] = struct{}{}
+			uniqueSlots = append(uniqueSlots, s)
+		}
+	}
+
+	bz := make([]byte, countBytes+len(uniqueSlots)*timeHeightSlotSizeBytes)
+	binary.BigEndian.PutUint32(bz[:countBytes], uint32(len(uniqueSlots)))
+	for i, s := range uniqueSlots {
+		offset := countBytes + i*timeHeightSlotSizeBytes
+		binary.BigEndian.PutUint64(bz[offset:offset+timeSlotSizeBytes], uint64(s.Time.UnixNano()))
+		binary.BigEndian.PutUint64(bz[offset+timeSlotSizeBytes:offset+timeHeightSlotSizeBytes], uint64(s.Height))
 	}
 	return store.Set(types.ValidatorQueuePendingSlotsKey, bz)
 }
 
-// addValidatorQueuePendingSlot adds (time, height) to the pending list if not already present.
-func (k Keeper) addValidatorQueuePendingSlot(ctx context.Context, endTime time.Time, endHeight int64) error {
-	slots, err := k.getValidatorQueuePendingSlots(ctx)
+// AddValidatorQueuePendingSlot adds (time, height) to the pending list if not already present.
+func (k Keeper) AddValidatorQueuePendingSlot(ctx context.Context, endTime time.Time, endHeight int64) error {
+	slots, err := k.GetValidatorQueuePendingSlots(ctx)
 	if err != nil {
 		return err
 	}
-	for _, s := range slots {
-		if s.Time.Equal(endTime) && s.Height == endHeight {
-			return nil // already present
-		}
-	}
-	slots = append(slots, validatorQueueSlot{Time: endTime, Height: endHeight})
-	return k.setValidatorQueuePendingSlots(ctx, slots)
+	slots = append(slots, TimeHeightQueueSlot{Time: endTime, Height: endHeight})
+	return k.SetValidatorQueuePendingSlots(ctx, slots)
 }
 
-// removeValidatorQueuePendingSlot removes (time, height) from the pending list.
-func (k Keeper) removeValidatorQueuePendingSlot(ctx context.Context, endTime time.Time, endHeight int64) error {
-	slots, err := k.getValidatorQueuePendingSlots(ctx)
+// RemoveValidatorQueuePendingSlot removes (time, height) from the pending list.
+func (k Keeper) RemoveValidatorQueuePendingSlot(ctx context.Context, endTime time.Time, endHeight int64) error {
+	slots, err := k.GetValidatorQueuePendingSlots(ctx)
 	if err != nil {
 		return err
 	}
-	newSlots := make([]validatorQueueSlot, 0, len(slots))
+	newSlots := make([]TimeHeightQueueSlot, 0, len(slots))
 	for _, s := range slots {
-		if !s.Time.Equal(endTime) || s.Height != endHeight {
+		if absent := !s.Time.Equal(endTime) || s.Height != endHeight; absent {
 			newSlots = append(newSlots, s)
 		}
 	}
-	return k.setValidatorQueuePendingSlots(ctx, newSlots)
+	return k.SetValidatorQueuePendingSlots(ctx, newSlots)
+}
+
+// --- Time queue pending (time only) - shared by UBD and Redelegation ---
+
+// getTimeQueuePendingSlots reads the list of time slots for the given key.
+func (k Keeper) getTimeQueuePendingSlots(ctx context.Context, key []byte) ([]time.Time, error) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	if countAbsent(bz) {
+		return nil, nil
+	}
+	n := binary.BigEndian.Uint32(bz[:countBytes])
+	if n == 0 {
+		return nil, nil
+	}
+	bz = bz[countBytes:]
+	if insufficientCapacity(bz, uint64(n), timeSlotSizeBytes) {
+		return nil, nil
+	}
+	slots := make([]time.Time, 0, n)
+	for i := uint32(0); i < n; i++ {
+		off := i * timeSlotSizeBytes
+		nanos := binary.BigEndian.Uint64(bz[off : off+timeSlotSizeBytes])
+		slots = append(slots, time.Unix(0, int64(nanos)).UTC())
+	}
+	return slots, nil
+}
+
+// setTimeQueuePendingSlots sets the time queue pending slots for the given key.
+func (k Keeper) setTimeQueuePendingSlots(ctx context.Context, key []byte, slots []time.Time) error {
+	store := k.storeService.OpenKVStore(ctx)
+	if len(slots) == 0 {
+		return store.Delete(key)
+	}
+	sort.Slice(slots, func(i, j int) bool { return slots[i].Before(slots[j]) })
+	seen := make(map[int64]struct{})
+	uniqueSlots := make([]time.Time, 0, len(slots))
+	for _, t := range slots {
+		n := t.UnixNano()
+		if _, ok := seen[n]; !ok {
+			seen[n] = struct{}{}
+			uniqueSlots = append(uniqueSlots, t)
+		}
+	}
+	bz := make([]byte, countBytes+len(uniqueSlots)*timeSlotSizeBytes)
+	binary.BigEndian.PutUint32(bz[:countBytes], uint32(len(uniqueSlots)))
+	for i, t := range uniqueSlots {
+		binary.BigEndian.PutUint64(bz[countBytes+i*timeSlotSizeBytes:countBytes+(i+1)*timeSlotSizeBytes], uint64(t.UnixNano()))
+	}
+	return store.Set(key, bz)
+}
+
+// addTimeQueuePendingSlot adds a time slot to the pending list if not already present.
+func (k Keeper) addTimeQueuePendingSlot(ctx context.Context, key []byte, completionTime time.Time) error {
+	slots, err := k.getTimeQueuePendingSlots(ctx, key)
+	if err != nil {
+		return err
+	}
+	slots = append(slots, completionTime)
+	return k.setTimeQueuePendingSlots(ctx, key, slots)
 }
 
 // --- UBD queue pending (time only) ---
 
-func (k Keeper) getUBDQueuePendingSlots(ctx context.Context) ([]time.Time, error) {
-	store := k.storeService.OpenKVStore(ctx)
-	bz, err := store.Get(types.UBDQueuePendingSlotsKey)
-	if err != nil {
-		return nil, err
-	}
-	if len(bz) < pendingSlotsCountBytes {
-		return nil, nil
-	}
-	n := binary.BigEndian.Uint32(bz[:pendingSlotsCountBytes])
-	if n == 0 {
-		return nil, nil
-	}
-	bz = bz[pendingSlotsCountBytes:]
-	if uint64(len(bz)) < uint64(n)*timeSlotSize {
-		return nil, nil
-	}
-	slots := make([]time.Time, 0, n)
-	for i := uint32(0); i < n; i++ {
-		off := i * timeSlotSize
-		nanos := binary.BigEndian.Uint64(bz[off : off+timeSlotSize])
-		slots = append(slots, time.Unix(0, int64(nanos)).UTC())
-	}
-	return slots, nil
+// GetUBDQueuePendingSlots reads the list of time slots that have UBD queue entries.
+func (k Keeper) GetUBDQueuePendingSlots(ctx context.Context) ([]time.Time, error) {
+	return k.getTimeQueuePendingSlots(ctx, types.UBDQueuePendingSlotsKey)
 }
 
-func (k Keeper) setUBDQueuePendingSlots(ctx context.Context, slots []time.Time) error {
-	store := k.storeService.OpenKVStore(ctx)
-	if len(slots) == 0 {
-		return store.Delete(types.UBDQueuePendingSlotsKey)
-	}
-	sort.Slice(slots, func(i, j int) bool { return slots[i].Before(slots[j]) })
-	seen := make(map[int64]struct{})
-	deduped := make([]time.Time, 0, len(slots))
-	for _, t := range slots {
-		n := t.UnixNano()
-		if _, ok := seen[n]; !ok {
-			seen[n] = struct{}{}
-			deduped = append(deduped, t)
-		}
-	}
-	slots = deduped
-	bz := make([]byte, pendingSlotsCountBytes+len(slots)*timeSlotSize)
-	binary.BigEndian.PutUint32(bz[:pendingSlotsCountBytes], uint32(len(slots)))
-	for i, t := range slots {
-		binary.BigEndian.PutUint64(bz[pendingSlotsCountBytes+i*timeSlotSize:pendingSlotsCountBytes+(i+1)*timeSlotSize], uint64(t.UnixNano()))
-	}
-	return store.Set(types.UBDQueuePendingSlotsKey, bz)
+// SetUBDQueuePendingSlots sets the UBD queue pending slots.
+func (k Keeper) SetUBDQueuePendingSlots(ctx context.Context, slots []time.Time) error {
+	return k.setTimeQueuePendingSlots(ctx, types.UBDQueuePendingSlotsKey, slots)
 }
 
-func (k Keeper) addUBDQueuePendingSlot(ctx context.Context, completionTime time.Time) error {
-	slots, err := k.getUBDQueuePendingSlots(ctx)
-	if err != nil {
-		return err
-	}
-	n := completionTime.UnixNano()
-	for _, t := range slots {
-		if t.UnixNano() == n {
-			return nil
-		}
-	}
-	slots = append(slots, completionTime)
-	return k.setUBDQueuePendingSlots(ctx, slots)
+// AddUBDQueuePendingSlot adds a time slot to the UBD pending list if not already present.
+func (k Keeper) AddUBDQueuePendingSlot(ctx context.Context, completionTime time.Time) error {
+	return k.addTimeQueuePendingSlot(ctx, types.UBDQueuePendingSlotsKey, completionTime)
 }
 
 // --- Redelegation queue pending (time only) ---
 
-func (k Keeper) getRedelegationQueuePendingSlots(ctx context.Context) ([]time.Time, error) {
-	store := k.storeService.OpenKVStore(ctx)
-	bz, err := store.Get(types.RedelegationQueuePendingSlotsKey)
-	if err != nil {
-		return nil, err
-	}
-	if len(bz) < pendingSlotsCountBytes {
-		return nil, nil
-	}
-	n := binary.BigEndian.Uint32(bz[:pendingSlotsCountBytes])
-	if n == 0 {
-		return nil, nil
-	}
-	bz = bz[pendingSlotsCountBytes:]
-	if uint64(len(bz)) < uint64(n)*timeSlotSize {
-		return nil, nil
-	}
-	slots := make([]time.Time, 0, n)
-	for i := uint32(0); i < n; i++ {
-		off := i * timeSlotSize
-		nanos := binary.BigEndian.Uint64(bz[off : off+timeSlotSize])
-		slots = append(slots, time.Unix(0, int64(nanos)).UTC())
-	}
-	return slots, nil
+// GetRedelegationQueuePendingSlots reads the list of time slots that have redelegation queue entries.
+func (k Keeper) GetRedelegationQueuePendingSlots(ctx context.Context) ([]time.Time, error) {
+	return k.getTimeQueuePendingSlots(ctx, types.RedelegationQueuePendingSlotsKey)
 }
 
-func (k Keeper) setRedelegationQueuePendingSlots(ctx context.Context, slots []time.Time) error {
-	store := k.storeService.OpenKVStore(ctx)
-	if len(slots) == 0 {
-		return store.Delete(types.RedelegationQueuePendingSlotsKey)
-	}
-	sort.Slice(slots, func(i, j int) bool { return slots[i].Before(slots[j]) })
-	seen := make(map[int64]struct{})
-	deduped := make([]time.Time, 0, len(slots))
-	for _, t := range slots {
-		n := t.UnixNano()
-		if _, ok := seen[n]; !ok {
-			seen[n] = struct{}{}
-			deduped = append(deduped, t)
-		}
-	}
-	slots = deduped
-	bz := make([]byte, pendingSlotsCountBytes+len(slots)*timeSlotSize)
-	binary.BigEndian.PutUint32(bz[:pendingSlotsCountBytes], uint32(len(slots)))
-	for i, t := range slots {
-		binary.BigEndian.PutUint64(bz[pendingSlotsCountBytes+i*timeSlotSize:pendingSlotsCountBytes+(i+1)*timeSlotSize], uint64(t.UnixNano()))
-	}
-	return store.Set(types.RedelegationQueuePendingSlotsKey, bz)
+// SetRedelegationQueuePendingSlots sets the redelegation queue pending slots.
+func (k Keeper) SetRedelegationQueuePendingSlots(ctx context.Context, slots []time.Time) error {
+	return k.setTimeQueuePendingSlots(ctx, types.RedelegationQueuePendingSlotsKey, slots)
 }
 
-func (k Keeper) addRedelegationQueuePendingSlot(ctx context.Context, completionTime time.Time) error {
-	slots, err := k.getRedelegationQueuePendingSlots(ctx)
-	if err != nil {
-		return err
-	}
-	n := completionTime.UnixNano()
-	for _, t := range slots {
-		if t.UnixNano() == n {
-			return nil
-		}
-	}
-	slots = append(slots, completionTime)
-	return k.setRedelegationQueuePendingSlots(ctx, slots)
-}
-
-// populateValidatorQueuePendingFromIterator is used only by Migrate5to6 to seed the
-// pending index from current queue state. End-block does not use the iterator.
-func (k Keeper) populateValidatorQueuePendingFromIterator(ctx context.Context) error {
-	store := k.storeService.OpenKVStore(ctx)
-	iter, err := store.Iterator(types.ValidatorQueueKey, storetypes.PrefixEndBytes(types.ValidatorQueueKey))
-	if err != nil {
-		return err
-	}
-	defer iter.Close()
-	var slots []validatorQueueSlot
-	for ; iter.Valid(); iter.Next() {
-		keyTime, keyHeight, err := types.ParseValidatorQueueKey(iter.Key())
-		if err != nil {
-			return err
-		}
-		slots = append(slots, validatorQueueSlot{Time: keyTime, Height: keyHeight})
-	}
-	return k.setValidatorQueuePendingSlots(ctx, slots)
-}
-
-// populateUBDQueuePendingFromIterator is used only by Migrate5to6. End-block does not use the iterator.
-func (k Keeper) populateUBDQueuePendingFromIterator(ctx context.Context) error {
-	store := k.storeService.OpenKVStore(ctx)
-	iter, err := store.Iterator(types.UnbondingQueueKey, storetypes.PrefixEndBytes(types.UnbondingQueueKey))
-	if err != nil {
-		return err
-	}
-	defer iter.Close()
-	var slots []time.Time
-	for ; iter.Valid(); iter.Next() {
-		key := iter.Key()
-		if len(key) <= len(types.UnbondingQueueKey) {
-			continue
-		}
-		timeBz := key[len(types.UnbondingQueueKey):]
-		t, parseErr := sdk.ParseTimeBytes(timeBz)
-		if parseErr != nil {
-			continue
-		}
-		slots = append(slots, t)
-	}
-	return k.setUBDQueuePendingSlots(ctx, slots)
-}
-
-// populateRedelegationQueuePendingFromIterator is used only by Migrate5to6. End-block does not use the iterator.
-func (k Keeper) populateRedelegationQueuePendingFromIterator(ctx context.Context) error {
-	store := k.storeService.OpenKVStore(ctx)
-	iter, err := store.Iterator(types.RedelegationQueueKey, storetypes.PrefixEndBytes(types.RedelegationQueueKey))
-	if err != nil {
-		return err
-	}
-	defer iter.Close()
-	var slots []time.Time
-	for ; iter.Valid(); iter.Next() {
-		key := iter.Key()
-		if len(key) <= len(types.RedelegationQueueKey) {
-			continue
-		}
-		timeBz := key[len(types.RedelegationQueueKey):]
-		t, err := sdk.ParseTimeBytes(timeBz)
-		if err != nil {
-			continue
-		}
-		slots = append(slots, t)
-	}
-	return k.setRedelegationQueuePendingSlots(ctx, slots)
+// AddRedelegationQueuePendingSlot adds a time slot to the redelegation pending list if not already present.
+func (k Keeper) AddRedelegationQueuePendingSlot(ctx context.Context, completionTime time.Time) error {
+	return k.addTimeQueuePendingSlot(ctx, types.RedelegationQueuePendingSlotsKey, completionTime)
 }

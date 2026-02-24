@@ -53,13 +53,13 @@ func (m Migrator) Migrate4to5(ctx sdk.Context) error {
 // from current queue state. This avoids expensive full-range iteration in
 // end-block on the first block after upgrade.
 func (m Migrator) Migrate5to6(ctx sdk.Context) error {
-	if err := m.keeper.populateValidatorQueuePendingFromIterator(ctx); err != nil {
+	if err := m.keeper.PopulateValidatorQueuePendingFromIterator(ctx); err != nil {
 		return err
 	}
-	if err := m.keeper.populateUBDQueuePendingFromIterator(ctx); err != nil {
+	if err := m.keeper.PopulateUBDQueuePendingFromIterator(ctx); err != nil {
 		return err
 	}
-	if err := m.keeper.populateRedelegationQueuePendingFromIterator(ctx); err != nil {
+	if err := m.keeper.PopulateRedelegationQueuePendingFromIterator(ctx); err != nil {
 		return err
 	}
 	return nil
