@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	storetypes "cosmossdk.io/store/types"
@@ -41,11 +42,11 @@ func (k Keeper) populateTimeQueuePendingFromIterator(ctx context.Context, queueK
 	var slots []time.Time
 	for ; iter.Valid(); iter.Next() {
 		key := iter.Key()
-		if len(key) <= len(queueKey) {
-			continue
+		if len(key) != len(queueKey) {
+			return fmt.Errorf("invalid key length: expected %d, got %d", len(queueKey), len(key))
+
 		}
-		timeBz := key[len(queueKey):]
-		t, parseErr := sdk.ParseTimeBytes(timeBz)
+		t, parseErr := sdk.ParseTimeBytes(iter.Value())
 		if parseErr != nil {
 			continue
 		}
