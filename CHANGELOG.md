@@ -51,6 +51,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (crypto/ledger) [#25435](https://github.com/cosmos/cosmos-sdk/pull/25435) Add SetDERConversion to reset skipDERConversion and App name for ledger.
 * (gRPC) [#25565](https://github.com/cosmos/cosmos-sdk/pull/25565) Support for multi gRPC query clients serve with historical binaries to serve proper historical state.
 * (blockstm) [#25600](https://github.com/cosmos/cosmos-sdk/pull/25600) Allow dynamic retrieval of the coin denomination from multi store at runtime.
+* (staking) [1770](https://github.com/crypto-org-chain/cosmos-sdk/pull/1770) Optimize staking end-block queue through using pending queue slots instead of iterators. 
 
 ### Improvements
 
