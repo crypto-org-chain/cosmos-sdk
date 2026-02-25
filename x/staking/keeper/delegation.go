@@ -518,6 +518,8 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
 // currTime, and deletes the timeslices from the queue. Uses the pending-slot index (populated by
 // Migrate5to6); slots are read once and written once (batch update).
+// Read phase collects mature timeslices; write phase deletes keys and updates pending slots so that
+// on any error no queue keys are deleted and state remains consistent.
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
@@ -530,6 +532,7 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 	}
 
 	var remaining []time.Time
+	var keysToDelete [][]byte
 	for _, t := range slots {
 		if t.After(currTime) {
 			remaining = append(remaining, t)
@@ -538,7 +541,7 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 		queueKey := types.GetUnbondingDelegationTimeKey(t)
 		bz, err := store.Get(queueKey)
 		if err != nil {
-			return matureUnbonds, err
+			return nil, err
 		}
 		if bz == nil {
 			continue // already deleted, omit from remaining
@@ -546,15 +549,17 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 
 		timeslice := types.DVPairs{}
 		if err = k.cdc.Unmarshal(bz, &timeslice); err != nil {
-			return matureUnbonds, err
+			return nil, err
 		}
 		matureUnbonds = append(matureUnbonds, timeslice.Pairs...)
+		keysToDelete = append(keysToDelete, queueKey)
+	}
 
-		if err = store.Delete(queueKey); err != nil {
+	for _, key := range keysToDelete {
+		if err = store.Delete(key); err != nil {
 			return matureUnbonds, err
 		}
 	}
-
 	return matureUnbonds, k.SetUBDQueuePendingSlots(ctx, remaining)
 }
 
@@ -839,6 +844,8 @@ func (k Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelegat
 // timeslices inclusively previous to currTime, and deletes the timeslices from
 // the queue. Uses the pending-slot index (populated by Migrate5to6); slots are
 // read once and written once (batch update).
+// Read phase collects mature timeslices; write phase deletes keys and updates pending slots so that
+// on any error no queue keys are deleted and state remains consistent.
 func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
@@ -851,6 +858,7 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 	}
 
 	var remaining []time.Time
+	var keysToDelete [][]byte
 	for _, t := range slots {
 		if t.After(currTime) {
 			remaining = append(remaining, t)
@@ -859,7 +867,7 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 		queueKey := types.GetRedelegationTimeKey(t)
 		bz, err := store.Get(queueKey)
 		if err != nil {
-			return matureRedelegations, err
+			return nil, err
 		}
 		if bz == nil {
 			continue
@@ -867,15 +875,17 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 
 		timeslice := types.DVVTriplets{}
 		if err = k.cdc.Unmarshal(bz, &timeslice); err != nil {
-			return matureRedelegations, err
+			return nil, err
 		}
 		matureRedelegations = append(matureRedelegations, timeslice.Triplets...)
+		keysToDelete = append(keysToDelete, queueKey)
+	}
 
-		if err = store.Delete(queueKey); err != nil {
+	for _, key := range keysToDelete {
+		if err = store.Delete(key); err != nil {
 			return matureRedelegations, err
 		}
 	}
-
 	return matureRedelegations, k.SetRedelegationQueuePendingSlots(ctx, remaining)
 }
 

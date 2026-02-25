@@ -51,14 +51,14 @@ func (k Keeper) populateTimeQueuePendingFromIterator(ctx context.Context, queueK
 		timeBz := key[len(queueKey):]
 		t, parseErr := sdk.ParseTimeBytes(timeBz)
 		if parseErr != nil {
-			continue
+			return fmt.Errorf("invalid queue key %x: %w", key, parseErr)
 		}
 		slots = append(slots, t)
 	}
 	return setter(ctx, slots)
 }
 
-// PopulateRedelegationQueuePendingFromIterator is used only by Migrate5to6. End-block does not use the iterator.
+// PopulateUBDQueuePendingFromIterator is used only by Migrate5to6. End-block does not use the iterator.
 func (k Keeper) PopulateUBDQueuePendingFromIterator(ctx context.Context) error {
 	return k.populateTimeQueuePendingFromIterator(ctx, types.UnbondingQueueKey, k.SetUBDQueuePendingSlots)
 }
