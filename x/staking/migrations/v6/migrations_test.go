@@ -81,7 +81,6 @@ func TestMigrationsTestSuite(t *testing.T) {
 	suite.Run(t, new(MigrationsTestSuite))
 }
 
-
 // setValidatorQueueEntryPreMigration sets a validator queue entry in the old format (pre-migration)
 // for testing migration functions.
 func (s *MigrationsTestSuite) setValidatorQueueEntryPreMigration(endTime time.Time, endHeight int64, addrs []string) error {
