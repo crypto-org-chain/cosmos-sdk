@@ -448,36 +448,42 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators_PendingSlotCleanup() {
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
-	// Create multiple validators with different unbonding times/heights
-	valPubKey0 := PKs[0]
-	valAddr0 := sdk.ValAddress(valPubKey0.Address().Bytes())
-	validator0 := testutil.NewValidator(s.T(), valAddr0, valPubKey0)
-	validator0, _ = validator0.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
-	validator0.Status = stakingtypes.Unbonding
-
-	valPubKey1 := PKs[1]
-	valAddr1 := sdk.ValAddress(valPubKey1.Address().Bytes())
-	validator1 := testutil.NewValidator(s.T(), valAddr1, valPubKey1)
-	validator1, _ = validator1.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
-	validator1.Status = stakingtypes.Unbonding
-
-	valPubKey2 := PKs[2]
-	valAddr2 := sdk.ValAddress(valPubKey2.Address().Bytes())
-	validator2 := testutil.NewValidator(s.T(), valAddr2, valPubKey2)
-	validator2, _ = validator2.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
-	validator2.Status = stakingtypes.Unbonding
-
-	// Set up validators in the store
-	require.NoError(keeper.SetValidator(ctx, validator0))
-	require.NoError(keeper.SetValidator(ctx, validator1))
-	require.NoError(keeper.SetValidator(ctx, validator2))
-
 	// Create two different slots
 	slot1Time := ctx.BlockTime().Add(time.Hour)
 	slot1Height := ctx.BlockHeight() + 10
 
 	slot2Time := ctx.BlockTime().Add(2 * time.Hour)
 	slot2Height := ctx.BlockHeight() + 20
+
+	// Create multiple validators with different unbonding times/heights
+	valPubKey0 := PKs[0]
+	valAddr0 := sdk.ValAddress(valPubKey0.Address().Bytes())
+	validator0 := testutil.NewValidator(s.T(), valAddr0, valPubKey0)
+	validator0, _ = validator0.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
+	validator0.Status = stakingtypes.Unbonding
+	validator0.UnbondingTime = slot1Time
+	validator0.UnbondingHeight = slot1Height
+
+	valPubKey1 := PKs[1]
+	valAddr1 := sdk.ValAddress(valPubKey1.Address().Bytes())
+	validator1 := testutil.NewValidator(s.T(), valAddr1, valPubKey1)
+	validator1, _ = validator1.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
+	validator1.Status = stakingtypes.Unbonding
+	validator1.UnbondingTime = slot1Time
+	validator1.UnbondingHeight = slot1Height
+
+	valPubKey2 := PKs[2]
+	valAddr2 := sdk.ValAddress(valPubKey2.Address().Bytes())
+	validator2 := testutil.NewValidator(s.T(), valAddr2, valPubKey2)
+	validator2, _ = validator2.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
+	validator2.Status = stakingtypes.Unbonding
+	validator2.UnbondingTime = slot2Time
+	validator2.UnbondingHeight = slot2Height
+
+	// Set up validators in the store
+	require.NoError(keeper.SetValidator(ctx, validator0))
+	require.NoError(keeper.SetValidator(ctx, validator1))
+	require.NoError(keeper.SetValidator(ctx, validator2))
 
 	// Add validators to different slots
 	// Slot 1: validator0 and validator1
@@ -573,23 +579,27 @@ func (s *KeeperTestSuite) TestUnbondAllMatureValidators_PendingSlotCleanup_Multi
 	ctx, keeper := s.ctx, s.stakingKeeper
 	require := s.Require()
 
+	slotTime := ctx.BlockTime().Add(time.Hour)
+	slotHeight := ctx.BlockHeight() + 10
+
 	valPubKey0 := PKs[0]
 	valAddr0 := sdk.ValAddress(valPubKey0.Address().Bytes())
 	validator0 := testutil.NewValidator(s.T(), valAddr0, valPubKey0)
 	validator0, _ = validator0.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
 	validator0.Status = stakingtypes.Unbonding
+	validator0.UnbondingTime = slotTime
+	validator0.UnbondingHeight = slotHeight
 
 	valPubKey1 := PKs[1]
 	valAddr1 := sdk.ValAddress(valPubKey1.Address().Bytes())
 	validator1 := testutil.NewValidator(s.T(), valAddr1, valPubKey1)
 	validator1, _ = validator1.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
 	validator1.Status = stakingtypes.Unbonding
+	validator1.UnbondingTime = slotTime
+	validator1.UnbondingHeight = slotHeight
 
 	require.NoError(keeper.SetValidator(ctx, validator0))
 	require.NoError(keeper.SetValidator(ctx, validator1))
-
-	slotTime := ctx.BlockTime().Add(time.Hour)
-	slotHeight := ctx.BlockHeight() + 10
 
 	// Add both validators to the same slot
 	require.NoError(keeper.SetUnbondingValidatorsQueue(ctx, slotTime, slotHeight, []string{
