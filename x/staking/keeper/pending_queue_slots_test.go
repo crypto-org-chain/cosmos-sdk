@@ -482,6 +482,66 @@ func (s *KeeperTestSuite) TestSetUBDQueuePendingSlots_MultipleEntries() {
 	s.Require().Equal(time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC), retrievedSlots[2])
 }
 
+func (s *KeeperTestSuite) TestAddUBDQueuePendingSlot() {
+	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	err := s.stakingKeeper.AddUBDQueuePendingSlot(s.ctx, testTime)
+	s.Require().NoError(err)
+
+	slots, err := s.stakingKeeper.GetUBDQueuePendingSlots(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Len(slots, 1)
+	s.Require().Equal(testTime, slots[0])
+
+	// Adding the same time again should not create a duplicate
+	// Add calls Set internally, which deduplicates, so there should still be only 1 entry
+	err = s.stakingKeeper.AddUBDQueuePendingSlot(s.ctx, testTime)
+	s.Require().NoError(err)
+
+	slots, err = s.stakingKeeper.GetUBDQueuePendingSlots(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Len(slots, 1) // Still only one entry due to deduplication in Set
+	s.Require().Equal(testTime, slots[0])
+}
+
+func (s *KeeperTestSuite) TestAddUBDQueuePendingSlot_MultipleEntries() {
+	testTimes := []time.Time{
+		time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+	}
+
+	// Add multiple entries
+	for _, t := range testTimes {
+		err := s.stakingKeeper.AddUBDQueuePendingSlot(s.ctx, t)
+		s.Require().NoError(err)
+	}
+
+	// Verify all entries were added and sorted
+	slots, err := s.stakingKeeper.GetUBDQueuePendingSlots(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Len(slots, 3)
+	// Should be sorted
+	for i, slot := range slots {
+		s.Require().Equal(testTimes[i], slot)
+	}
+}
+
+func (s *KeeperTestSuite) TestSetUBDQueuePendingSlots_TimeWithNanosecondPrecision() {
+	// Test with nanosecond precision
+	testTime := time.Date(2024, 1, 1, 12, 34, 56, 123456789, time.UTC)
+
+	slots := []time.Time{testTime}
+
+	err := s.stakingKeeper.SetUBDQueuePendingSlots(s.ctx, slots)
+	s.Require().NoError(err)
+
+	retrievedSlots, err := s.stakingKeeper.GetUBDQueuePendingSlots(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Len(retrievedSlots, 1)
+	s.Require().Equal(testTime, retrievedSlots[0]) // Should preserve nanosecond precision
+}
+
 // --- Redelegation Queue Tests ---
 
 func (s *KeeperTestSuite) TestGetRedelegationQueuePendingSlots_NoEntries() {
@@ -593,43 +653,6 @@ func (s *KeeperTestSuite) TestSetRedelegationQueuePendingSlots_MultipleEntries()
 	s.Require().Equal(time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC), retrievedSlots[2])
 }
 
-func (s *KeeperTestSuite) TestAddUBDQueuePendingSlot() {
-	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	err := s.stakingKeeper.AddUBDQueuePendingSlot(s.ctx, testTime)
-	s.Require().NoError(err)
-
-	slots, err := s.stakingKeeper.GetUBDQueuePendingSlots(s.ctx)
-	s.Require().NoError(err)
-	s.Require().Len(slots, 1)
-	s.Require().Equal(testTime, slots[0])
-
-	// Adding the same time again should not create a duplicate
-	// Add calls Set internally, which deduplicates, so there should still be only 1 entry
-	err = s.stakingKeeper.AddUBDQueuePendingSlot(s.ctx, testTime)
-	s.Require().NoError(err)
-
-	slots, err = s.stakingKeeper.GetUBDQueuePendingSlots(s.ctx)
-	s.Require().NoError(err)
-	s.Require().Len(slots, 1) // Still only one entry due to deduplication in Set
-	s.Require().Equal(testTime, slots[0])
-}
-
-func (s *KeeperTestSuite) TestSetUBDQueuePendingSlots_TimeWithNanosecondPrecision() {
-	// Test with nanosecond precision
-	testTime := time.Date(2024, 1, 1, 12, 34, 56, 123456789, time.UTC)
-
-	slots := []time.Time{testTime}
-
-	err := s.stakingKeeper.SetUBDQueuePendingSlots(s.ctx, slots)
-	s.Require().NoError(err)
-
-	retrievedSlots, err := s.stakingKeeper.GetUBDQueuePendingSlots(s.ctx)
-	s.Require().NoError(err)
-	s.Require().Len(retrievedSlots, 1)
-	s.Require().Equal(testTime, retrievedSlots[0]) // Should preserve nanosecond precision
-}
-
 func (s *KeeperTestSuite) TestAddRedelegationQueuePendingSlot() {
 	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -650,6 +673,29 @@ func (s *KeeperTestSuite) TestAddRedelegationQueuePendingSlot() {
 	s.Require().NoError(err)
 	s.Require().Len(slots, 1) // Still only one entry due to deduplication in Set
 	s.Require().Equal(testTime, slots[0])
+}
+
+func (s *KeeperTestSuite) TestAddRedelegationQueuePendingSlot_MultipleEntries() {
+	testTimes := []time.Time{
+		time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+	}
+
+	// Add multiple entries
+	for _, t := range testTimes {
+		err := s.stakingKeeper.AddRedelegationQueuePendingSlot(s.ctx, t)
+		s.Require().NoError(err)
+	}
+
+	// Verify all entries were added and sorted
+	slots, err := s.stakingKeeper.GetRedelegationQueuePendingSlots(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Len(slots, 3)
+	// Should be sorted
+	for i, slot := range slots {
+		s.Require().Equal(testTimes[i], slot)
+	}
 }
 
 func (s *KeeperTestSuite) TestSetRedelegationQueuePendingSlots_TimeWithNanosecondPrecision() {
