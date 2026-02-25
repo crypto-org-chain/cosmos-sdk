@@ -117,7 +117,7 @@ func (k Keeper) RemoveValidatorQueuePendingSlot(ctx context.Context, endTime tim
 	}
 	newSlots := make([]types.TimeHeightQueueSlot, 0, len(slots))
 	for _, s := range slots {
-		if absent := !s.Time.Equal(endTime) || s.Height != endHeight; absent {
+		if toRemain := !s.Time.Equal(endTime) || s.Height != endHeight; toRemain {
 			newSlots = append(newSlots, s)
 		}
 	}
