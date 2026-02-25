@@ -81,7 +81,6 @@ func TestMigrationsTestSuite(t *testing.T) {
 	suite.Run(t, new(MigrationsTestSuite))
 }
 
-// Can be removed once migration v6 is complete
 
 // setValidatorQueueEntryPreV6Migration sets a validator queue entry in the old format (pre-migration)
 // for testing migration functions. This writes directly to the store without updating pending slots.
