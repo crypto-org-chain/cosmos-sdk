@@ -82,9 +82,9 @@ func TestMigrationsTestSuite(t *testing.T) {
 }
 
 
-// setValidatorQueueEntryPreV6Migration sets a validator queue entry in the old format (pre-migration)
-// for testing migration functions. This writes directly to the store without updating pending slots.
-func (s *MigrationsTestSuite) setValidatorQueueEntryPreV6Migration(endTime time.Time, endHeight int64, addrs []string) error {
+// setValidatorQueueEntryPreMigration sets a validator queue entry in the old format (pre-migration)
+// for testing migration functions.
+func (s *MigrationsTestSuite) setValidatorQueueEntryPreMigration(endTime time.Time, endHeight int64, addrs []string) error {
 	store := s.storeService.OpenKVStore(s.ctx)
 	bz, err := s.cdc.Marshal(&stakingtypes.ValAddresses{Addresses: addrs})
 	if err != nil {
@@ -93,17 +93,17 @@ func (s *MigrationsTestSuite) setValidatorQueueEntryPreV6Migration(endTime time.
 	return store.Set(stakingtypes.GetValidatorQueueKey(endTime, endHeight), bz)
 }
 
-// setUBDQueueEntryPreV6Migration sets a UBD queue entry in the old format (pre-migration)
-// for testing migration functions. The value is time bytes, not marshaled DVPairs.
-func (s *MigrationsTestSuite) setUBDQueueEntryPreV6Migration(timestamp time.Time) error {
+// setUBDQueueEntryPreMigration sets a UBD queue entry in the old format (pre-migration)
+// for testing migration functions.
+func (s *MigrationsTestSuite) setUBDQueueEntryPreMigration(timestamp time.Time) error {
 	store := s.storeService.OpenKVStore(s.ctx)
 	timeBz := sdk.FormatTimeBytes(timestamp)
 	return store.Set(stakingtypes.GetUnbondingDelegationTimeKey(timestamp), timeBz)
 }
 
-// setRedelegationQueueEntryPreV6Migration sets a redelegation queue entry in the old format (pre-migration)
-// for testing migration functions. The value is time bytes, not marshaled DVVTriplets.
-func (s *MigrationsTestSuite) setRedelegationQueueEntryPreV6Migration(timestamp time.Time) error {
+// setRedelegationQueueEntryPreMigration sets a redelegation queue entry in the old format (pre-migration)
+// for testing migration functions.
+func (s *MigrationsTestSuite) setRedelegationQueueEntryPreMigration(timestamp time.Time) error {
 	store := s.storeService.OpenKVStore(s.ctx)
 	timeBz := sdk.FormatTimeBytes(timestamp)
 	return store.Set(stakingtypes.GetRedelegationTimeKey(timestamp), timeBz)
@@ -154,15 +154,15 @@ func (s *MigrationsTestSuite) TestMigrateStore_AllQueues() {
 
 	// Set up old format queue entries directly in store (pre-migration format)
 	for i, t := range valTimes {
-		err := s.setValidatorQueueEntryPreV6Migration(t, valHeights[i], []string{"cosmosvaloper1abc123"})
+		err := s.setValidatorQueueEntryPreMigration(t, valHeights[i], []string{"cosmosvaloper1abc123"})
 		s.Require().NoError(err)
 	}
 	for _, t := range ubdTimes {
-		err := s.setUBDQueueEntryPreV6Migration(t)
+		err := s.setUBDQueueEntryPreMigration(t)
 		s.Require().NoError(err)
 	}
 	for _, t := range redTimes {
-		err := s.setRedelegationQueueEntryPreV6Migration(t)
+		err := s.setRedelegationQueueEntryPreMigration(t)
 		s.Require().NoError(err)
 	}
 
@@ -212,7 +212,7 @@ func (s *MigrationsTestSuite) TestMigrateStore_ValidatorQueue_SingleEntry() {
 	testHeight := int64(100)
 
 	// Set up old format queue entry directly in store (pre-migration format)
-	err := s.setValidatorQueueEntryPreV6Migration(testTime, testHeight, []string{"cosmosvaloper1abc123"})
+	err := s.setValidatorQueueEntryPreMigration(testTime, testHeight, []string{"cosmosvaloper1abc123"})
 	s.Require().NoError(err)
 
 	// Run migration
@@ -238,7 +238,7 @@ func (s *MigrationsTestSuite) TestMigrateStore_ValidatorQueue_MultipleEntries() 
 
 	// Set up old format queue entries directly in store (pre-migration format)
 	for i, t := range testTimes {
-		err := s.setValidatorQueueEntryPreV6Migration(t, testHeights[i], []string{"cosmosvaloper1abc123"})
+		err := s.setValidatorQueueEntryPreMigration(t, testHeights[i], []string{"cosmosvaloper1abc123"})
 		s.Require().NoError(err)
 	}
 
@@ -275,7 +275,7 @@ func (s *MigrationsTestSuite) TestMigrateStore_UBDQueue_SingleEntry() {
 	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Set up old format queue entry directly in store (pre-migration format)
-	err := s.setUBDQueueEntryPreV6Migration(testTime)
+	err := s.setUBDQueueEntryPreMigration(testTime)
 	s.Require().NoError(err)
 
 	// Run migration
@@ -299,7 +299,7 @@ func (s *MigrationsTestSuite) TestMigrateStore_UBDQueue_MultipleEntries() {
 
 	// Set up old format queue entries directly in store (pre-migration format)
 	for _, t := range testTimes {
-		err := s.setUBDQueueEntryPreV6Migration(t)
+		err := s.setUBDQueueEntryPreMigration(t)
 		s.Require().NoError(err)
 	}
 
@@ -333,7 +333,7 @@ func (s *MigrationsTestSuite) TestMigrateStore_RedelegationQueue_SingleEntry() {
 	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Set up old format queue entry directly in store (pre-migration format)
-	err := s.setRedelegationQueueEntryPreV6Migration(testTime)
+	err := s.setRedelegationQueueEntryPreMigration(testTime)
 	s.Require().NoError(err)
 
 	// Run migration
@@ -357,7 +357,7 @@ func (s *MigrationsTestSuite) TestMigrateStore_RedelegationQueue_MultipleEntries
 
 	// Set up old format queue entries directly in store (pre-migration format)
 	for _, t := range testTimes {
-		err := s.setRedelegationQueueEntryPreV6Migration(t)
+		err := s.setRedelegationQueueEntryPreMigration(t)
 		s.Require().NoError(err)
 	}
 
