@@ -77,9 +77,9 @@ func populateTimeQueuePendingFromIterator(
 			return fmt.Errorf("key length is too short")
 		}
 		timeBz := key[len(queueKey):]
-		t, parseErr := sdk.ParseTimeBytes(timeBz)
-		if parseErr != nil {
-			return fmt.Errorf("invalid queue key %x: %w", key, parseErr)
+		t, err := sdk.ParseTimeBytes(timeBz)
+		if err != nil {
+			return fmt.Errorf("unable to parse time from queue key %x: %w", key, err)
 		}
 		slots = append(slots, t)
 	}
