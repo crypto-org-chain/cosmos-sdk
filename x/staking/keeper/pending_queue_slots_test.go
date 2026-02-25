@@ -3,7 +3,7 @@ package keeper_test
 import (
 	"time"
 
-	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
 func (s *KeeperTestSuite) TestGetValidatorQueuePendingSlots_NoEntries() {
@@ -58,7 +58,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_EmptySlice() {
 	s.Require().NoError(err)
 
 	// Set empty slice (should delete)
-	err = s.stakingKeeper.SetValidatorQueuePendingSlots(s.ctx, []stakingkeeper.TimeHeightQueueSlot{})
+	err = s.stakingKeeper.SetValidatorQueuePendingSlots(s.ctx, []stakingtypes.TimeHeightQueueSlot{})
 	s.Require().NoError(err)
 
 	// Verify it's deleted
@@ -72,7 +72,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_DuplicateEntries() {
 	testHeight := int64(100)
 
 	// Set with duplicates
-	slots := []stakingkeeper.TimeHeightQueueSlot{
+	slots := []stakingtypes.TimeHeightQueueSlot{
 		{Time: testTime, Height: testHeight},
 		{Time: testTime, Height: testHeight}, // duplicate
 		{Time: testTime, Height: testHeight}, // duplicate
@@ -93,7 +93,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_SingleEntry() {
 	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	testHeight := int64(100)
 
-	slots := []stakingkeeper.TimeHeightQueueSlot{
+	slots := []stakingtypes.TimeHeightQueueSlot{
 		{Time: testTime, Height: testHeight},
 	}
 
@@ -108,7 +108,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_SingleEntry() {
 }
 
 func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_MultipleEntries() {
-	slots := []stakingkeeper.TimeHeightQueueSlot{
+	slots := []stakingtypes.TimeHeightQueueSlot{
 		{Time: time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC), Height: 300},
 		{Time: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), Height: 100},
 		{Time: time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), Height: 200},
@@ -178,7 +178,7 @@ func (s *KeeperTestSuite) TestRemoveValidatorQueuePendingSlot() {
 func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_SortingEdgeCases_SameTimeDifferentHeights() {
 	// Same time, different heights - should sort by height
 	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	slots := []stakingkeeper.TimeHeightQueueSlot{
+	slots := []stakingtypes.TimeHeightQueueSlot{
 		{Time: testTime, Height: 300},
 		{Time: testTime, Height: 100},
 		{Time: testTime, Height: 200},
@@ -202,7 +202,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_SortingEdgeCases_Sam
 func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_SortingEdgeCases_SameHeightDifferentTimes() {
 	// Same height, different times - should sort by time first
 	testHeight := int64(100)
-	slots := []stakingkeeper.TimeHeightQueueSlot{
+	slots := []stakingtypes.TimeHeightQueueSlot{
 		{Time: time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC), Height: testHeight},
 		{Time: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), Height: testHeight},
 		{Time: time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), Height: testHeight},
@@ -226,7 +226,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_SortingEdgeCases_Sam
 func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_Deduplication_SameTimeDifferentHeight() {
 	// Same time but different height should NOT deduplicate
 	testTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	slots := []stakingkeeper.TimeHeightQueueSlot{
+	slots := []stakingtypes.TimeHeightQueueSlot{
 		{Time: testTime, Height: 100},
 		{Time: testTime, Height: 200}, // Different height, should NOT be deduplicated
 		{Time: testTime, Height: 100}, // Same time+height, should be deduplicated
@@ -249,7 +249,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_Deduplication_SameTi
 func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_Deduplication_SameHeightDifferentTime() {
 	// Same height but different time should NOT deduplicate
 	testHeight := int64(100)
-	slots := []stakingkeeper.TimeHeightQueueSlot{
+	slots := []stakingtypes.TimeHeightQueueSlot{
 		{Time: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), Height: testHeight},
 		{Time: time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), Height: testHeight}, // Different time, should NOT be deduplicated
 		{Time: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), Height: testHeight}, // Same time+height, should be deduplicated
@@ -357,7 +357,7 @@ func (s *KeeperTestSuite) TestSetValidatorQueuePendingSlots_TimeWithNanosecondPr
 	testTime := time.Date(2024, 1, 1, 12, 34, 56, 123456789, time.UTC)
 	testHeight := int64(100)
 
-	slots := []stakingkeeper.TimeHeightQueueSlot{
+	slots := []stakingtypes.TimeHeightQueueSlot{
 		{Time: testTime, Height: testHeight},
 	}
 

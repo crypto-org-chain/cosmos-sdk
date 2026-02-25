@@ -3,7 +3,6 @@ package keeper // noalias
 import (
 	"bytes"
 	"context"
-	"time"
 
 	storetypes "cosmossdk.io/store/types"
 
@@ -76,33 +75,4 @@ func TestingUpdateValidator(keeper *Keeper, ctx sdk.Context, validator types.Val
 	}
 
 	return validator
-}
-
-// Can be removed once migration v6 is complete
-
-// SetValidatorQueueEntryPreV6Migration sets a validator queue entry in the old format (pre-migration)
-// for testing migration functions. This writes directly to the store without updating pending slots.
-func SetValidatorQueueEntryPreV6Migration(keeper *Keeper, ctx context.Context, endTime time.Time, endHeight int64, addrs []string) error {
-	store := keeper.storeService.OpenKVStore(ctx)
-	bz, err := keeper.cdc.Marshal(&types.ValAddresses{Addresses: addrs})
-	if err != nil {
-		return err
-	}
-	return store.Set(types.GetValidatorQueueKey(endTime, endHeight), bz)
-}
-
-// SetUBDQueueEntryPreV6Migration sets a UBD queue entry in the old format (pre-migration)
-// for testing migration functions. The value is time bytes, not marshaled DVPairs.
-func SetUBDQueueEntryPreV6Migration(keeper *Keeper, ctx context.Context, timestamp time.Time) error {
-	store := keeper.storeService.OpenKVStore(ctx)
-	timeBz := sdk.FormatTimeBytes(timestamp)
-	return store.Set(types.GetUnbondingDelegationTimeKey(timestamp), timeBz)
-}
-
-// SetRedelegationQueueEntryPreV6Migration sets a redelegation queue entry in the old format (pre-migration)
-// for testing migration functions. The value is time bytes, not marshaled DVVTriplets.
-func SetRedelegationQueueEntryPreV6Migration(keeper *Keeper, ctx context.Context, timestamp time.Time) error {
-	store := keeper.storeService.OpenKVStore(ctx)
-	timeBz := sdk.FormatTimeBytes(timestamp)
-	return store.Set(types.GetRedelegationTimeKey(timestamp), timeBz)
 }

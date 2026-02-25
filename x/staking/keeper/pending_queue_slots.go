@@ -10,12 +10,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-// TimeHeightQueueSlot is a (time, height) slot in the validator unbonding queue.
-type TimeHeightQueueSlot struct {
-	Time   time.Time
-	Height int64
-}
-
 // Binary encoding constants for pending slot lists.
 // Layout: [countBytes] (uint32) then for each slot: [timeBytes][heightBytes] (validator) or [timeBytes] (UBD/redelegation).
 const (
@@ -32,7 +26,7 @@ func insufficientCapacity(bz []byte, count, slotSize uint64) bool {
 }
 
 // GetValidatorQueuePendingSlots reads the list of (time, height) slots that have validator queue entries.
-func (k Keeper) GetValidatorQueuePendingSlots(ctx context.Context) ([]TimeHeightQueueSlot, error) {
+func (k Keeper) GetValidatorQueuePendingSlots(ctx context.Context) ([]types.TimeHeightQueueSlot, error) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ValidatorQueuePendingSlotsKey)
 	if err != nil {
@@ -52,12 +46,12 @@ func (k Keeper) GetValidatorQueuePendingSlots(ctx context.Context) ([]TimeHeight
 	if insufficientCapacity(bz, uint64(n), timeHeightSlotSizeBytes) {
 		return nil, fmt.Errorf("%w: key=%x, count=%d", types.ErrPendingQueueSlotInsufficientCapacity, types.ValidatorQueuePendingSlotsKey, n)
 	}
-	slots := make([]TimeHeightQueueSlot, 0, n)
+	slots := make([]types.TimeHeightQueueSlot, 0, n)
 	for i := uint32(0); i < n; i++ {
 		offset := i * timeHeightSlotSizeBytes
 		nanos := binary.BigEndian.Uint64(bz[offset : offset+timeSlotSizeBytes])
 		height := int64(binary.BigEndian.Uint64(bz[offset+timeSlotSizeBytes : offset+timeHeightSlotSizeBytes]))
-		slots = append(slots, TimeHeightQueueSlot{
+		slots = append(slots, types.TimeHeightQueueSlot{
 			Time:   time.Unix(0, int64(nanos)).UTC(),
 			Height: height,
 		})
@@ -66,7 +60,7 @@ func (k Keeper) GetValidatorQueuePendingSlots(ctx context.Context) ([]TimeHeight
 }
 
 // SetValidatorQueuePendingSlots sets the validator queue pending slots.
-func (k Keeper) SetValidatorQueuePendingSlots(ctx context.Context, slots []TimeHeightQueueSlot) error {
+func (k Keeper) SetValidatorQueuePendingSlots(ctx context.Context, slots []types.TimeHeightQueueSlot) error {
 	store := k.storeService.OpenKVStore(ctx)
 	if len(slots) == 0 {
 		return store.Delete(types.ValidatorQueuePendingSlotsKey)
@@ -85,7 +79,7 @@ func (k Keeper) SetValidatorQueuePendingSlots(ctx context.Context, slots []TimeH
 	sort.Slice(slots, sortAscending)
 
 	seen := make(map[string]struct{})
-	uniqueSlots := make([]TimeHeightQueueSlot, 0, len(slots))
+	uniqueSlots := make([]types.TimeHeightQueueSlot, 0, len(slots))
 	for _, s := range slots {
 		key := string(binary.BigEndian.AppendUint64(nil, uint64(s.Time.UnixNano()))) +
 			string(binary.BigEndian.AppendUint64(nil, uint64(s.Height)))
@@ -111,7 +105,7 @@ func (k Keeper) AddValidatorQueuePendingSlot(ctx context.Context, endTime time.T
 	if err != nil {
 		return err
 	}
-	slots = append(slots, TimeHeightQueueSlot{Time: endTime, Height: endHeight})
+	slots = append(slots, types.TimeHeightQueueSlot{Time: endTime, Height: endHeight})
 	return k.SetValidatorQueuePendingSlots(ctx, slots)
 }
 
@@ -121,7 +115,7 @@ func (k Keeper) RemoveValidatorQueuePendingSlot(ctx context.Context, endTime tim
 	if err != nil {
 		return err
 	}
-	newSlots := make([]TimeHeightQueueSlot, 0, len(slots))
+	newSlots := make([]types.TimeHeightQueueSlot, 0, len(slots))
 	for _, s := range slots {
 		if absent := !s.Time.Equal(endTime) || s.Height != endHeight; absent {
 			newSlots = append(newSlots, s)

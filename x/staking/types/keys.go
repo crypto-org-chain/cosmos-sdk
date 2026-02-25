@@ -67,6 +67,12 @@ var (
 	// Module developers MUST NOT use these keys and MUST consider them "reserved".
 )
 
+// TimeHeightQueueSlot is a (time, height) slot in the validator unbonding queue.
+type TimeHeightQueueSlot struct {
+	Time   time.Time
+	Height int64
+}
+
 // UnbondingType defines the type of unbonding operation
 type UnbondingType int
 

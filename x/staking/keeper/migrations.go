@@ -8,6 +8,7 @@ import (
 	v3 "github.com/cosmos/cosmos-sdk/x/staking/migrations/v3"
 	v4 "github.com/cosmos/cosmos-sdk/x/staking/migrations/v4"
 	v5 "github.com/cosmos/cosmos-sdk/x/staking/migrations/v5"
+	v6 "github.com/cosmos/cosmos-sdk/x/staking/migrations/v6"
 )
 
 // Migrator is a struct for handling in-place store migrations.
@@ -48,19 +49,8 @@ func (m Migrator) Migrate4to5(ctx sdk.Context) error {
 	return v5.MigrateStore(ctx, store, m.keeper.cdc)
 }
 
-// Migrate5to6 migrates x/staking state from consensus version 5 to 6 by
-// populating the queue pending-slot indexes (validator, UBD, redelegation)
-// from current queue state. This avoids expensive full-range iteration in
-// end-block on the first block after upgrade.
+// Migrate5to6 migrates x/staking state from consensus version 5 to 6.
 func (m Migrator) Migrate5to6(ctx sdk.Context) error {
-	if err := m.keeper.PopulateValidatorQueuePendingFromIterator(ctx); err != nil {
-		return err
-	}
-	if err := m.keeper.PopulateUBDQueuePendingFromIterator(ctx); err != nil {
-		return err
-	}
-	if err := m.keeper.PopulateRedelegationQueuePendingFromIterator(ctx); err != nil {
-		return err
-	}
-	return nil
+	store := m.keeper.storeService.OpenKVStore(ctx)
+	return v6.MigrateStore(ctx, store, m.keeper)
 }
