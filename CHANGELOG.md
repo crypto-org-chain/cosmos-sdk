@@ -46,6 +46,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
+* (mint) [#1779](https://github.com/crypto-org-chain/cosmos-sdk/pull/1779) feat: add GetParams interface for mint module for chain-main tokenomics feature
+
 ### Bug Fixes
 
 ### Deprecated
