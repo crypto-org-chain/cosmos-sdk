@@ -116,3 +116,31 @@ func (h MultiStakingHooks) AfterUnbondingInitiated(ctx context.Context, id uint6
 	}
 	return nil
 }
+
+
+func (h MultiStakingHooks) AfterSlashUnbondingDelegation(ctx context.Context, unbondingId uint64, slashAmount sdkmath.Int) error {
+	for i := range h {
+		if err := h[i].AfterSlashUnbondingDelegation(ctx, unbondingId, slashAmount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h MultiStakingHooks) AfterSlashUnbondingRedelegation(ctx context.Context, unbondingId uint64, slashAmount sdkmath.Int) error {
+	for i := range h {
+		if err := h[i].AfterSlashUnbondingRedelegation(ctx, unbondingId, slashAmount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h MultiStakingHooks) AfterSlashRedelegation(ctx context.Context, unbondingId uint64, tokensToBurn sdkmath.Int, sharesToUnbond sdkmath.LegacyDec) error {
+	for i := range h {
+		if err := h[i].AfterSlashRedelegation(ctx, unbondingId, tokensToBurn, sharesToUnbond); err != nil {
+			return err
+		}
+	}
+	return nil
+}

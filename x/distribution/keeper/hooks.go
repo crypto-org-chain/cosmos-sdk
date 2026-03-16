@@ -180,3 +180,15 @@ func (h Hooks) BeforeDelegationRemoved(_ context.Context, _ sdk.AccAddress, _ sd
 func (h Hooks) AfterUnbondingInitiated(_ context.Context, _ uint64) error {
 	return nil
 }
+
+func (h Hooks) AfterSlashUnbondingDelegation(_ context.Context, _ uint64, _ sdkmath.Int) error {
+	return nil
+}
+
+func (h Hooks) AfterSlashUnbondingRedelegation(_ context.Context, _ uint64, _ sdkmath.Int) error {
+	return nil
+}
+
+func (h Hooks) AfterSlashRedelegation(_ context.Context, _ uint64, _ sdkmath.Int, _ sdkmath.LegacyDec) error {
+	return nil
+}
