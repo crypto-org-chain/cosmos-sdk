@@ -609,7 +609,7 @@ func TestMigrateVestingAccounts(t *testing.T) {
 				require.NoError(t, err)
 
 				// un-delegation of the original vesting
-				_, _, err = stakingKeeper.Undelegate(ctx, delegatorAddr, valAddr, sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(300)))
+				_, _, _, err = stakingKeeper.Undelegate(ctx, delegatorAddr, valAddr, sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(300)))
 				require.NoError(t, err)
 			},
 			cleartTrackingFields,

@@ -1107,52 +1107,54 @@ func (k Keeper) getBeginInfo(
 // processed during the staking EndBlocker.
 func (k Keeper) Undelegate(
 	ctx context.Context, delAddr sdk.AccAddress, valAddr sdk.ValAddress, sharesAmount math.LegacyDec,
-) (time.Time, math.Int, error) {
+) (time.Time, math.Int, uint64, error) {
 	validator, err := k.GetValidator(ctx, valAddr)
 	if err != nil {
-		return time.Time{}, math.Int{}, err
+		return time.Time{}, math.Int{}, 0, err
 	}
 
 	hasMaxEntries, err := k.HasMaxUnbondingDelegationEntries(ctx, delAddr, valAddr)
 	if err != nil {
-		return time.Time{}, math.Int{}, err
+		return time.Time{}, math.Int{}, 0, err
 	}
 
 	if hasMaxEntries {
-		return time.Time{}, math.Int{}, types.ErrMaxUnbondingDelegationEntries
+		return time.Time{}, math.Int{}, 0, types.ErrMaxUnbondingDelegationEntries
 	}
 
 	returnAmount, err := k.Unbond(ctx, delAddr, valAddr, sharesAmount)
 	if err != nil {
-		return time.Time{}, math.Int{}, err
+		return time.Time{}, math.Int{}, 0, err
 	}
 
 	// transfer the validator tokens to the not bonded pool
 	if validator.IsBonded() {
 		err = k.bondedTokensToNotBonded(ctx, returnAmount)
 		if err != nil {
-			return time.Time{}, math.Int{}, err
+			return time.Time{}, math.Int{}, 0, err
 		}
 	}
 
 	unbondingTime, err := k.UnbondingTime(ctx)
 	if err != nil {
-		return time.Time{}, math.Int{}, err
+		return time.Time{}, math.Int{}, 0, err
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	completionTime := sdkCtx.BlockHeader().Time.Add(unbondingTime)
 	ubd, err := k.SetUnbondingDelegationEntry(ctx, delAddr, valAddr, sdkCtx.BlockHeight(), completionTime, returnAmount)
 	if err != nil {
-		return time.Time{}, math.Int{}, err
+		return time.Time{}, math.Int{}, 0, err
 	}
+
+	unbondingId := ubd.Entries[len(ubd.Entries)-1].UnbondingId
 
 	err = k.InsertUBDQueue(ctx, ubd, completionTime)
 	if err != nil {
-		return time.Time{}, math.Int{}, err
+		return time.Time{}, math.Int{}, 0, err
 	}
 
-	return completionTime, returnAmount, nil
+	return completionTime, returnAmount, unbondingId, nil
 }
 
 // CompleteUnbonding completes the unbonding of all mature entries in the
@@ -1220,66 +1222,66 @@ func (k Keeper) CompleteUnbonding(ctx context.Context, delAddr sdk.AccAddress, v
 // record.
 func (k Keeper) BeginRedelegation(
 	ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, sharesAmount math.LegacyDec,
-) (completionTime time.Time, err error) {
+) (completionTime time.Time, newShares math.LegacyDec, unbondingId uint64, err error) {
 	if bytes.Equal(valSrcAddr, valDstAddr) {
-		return time.Time{}, types.ErrSelfRedelegation
+		return time.Time{}, math.LegacyDec{}, 0, types.ErrSelfRedelegation
 	}
 
 	dstValidator, err := k.GetValidator(ctx, valDstAddr)
 	if errors.Is(err, types.ErrNoValidatorFound) {
-		return time.Time{}, types.ErrBadRedelegationDst
+		return time.Time{}, math.LegacyDec{}, 0, types.ErrBadRedelegationDst
 	} else if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
 
 	srcValidator, err := k.GetValidator(ctx, valSrcAddr)
 	if errors.Is(err, types.ErrNoValidatorFound) {
-		return time.Time{}, types.ErrBadRedelegationSrc
+		return time.Time{}, math.LegacyDec{}, 0, types.ErrBadRedelegationSrc
 	} else if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
 
 	// check if this is a transitive redelegation
 	hasRecRedel, err := k.HasReceivingRedelegation(ctx, delAddr, valSrcAddr)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
 
 	if hasRecRedel {
-		return time.Time{}, types.ErrTransitiveRedelegation
+		return time.Time{}, math.LegacyDec{}, 0, types.ErrTransitiveRedelegation
 	}
 
 	hasMaxRedels, err := k.HasMaxRedelegationEntries(ctx, delAddr, valSrcAddr, valDstAddr)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
 
 	if hasMaxRedels {
-		return time.Time{}, types.ErrMaxRedelegationEntries
+		return time.Time{}, math.LegacyDec{}, 0, types.ErrMaxRedelegationEntries
 	}
 
 	returnAmount, err := k.Unbond(ctx, delAddr, valSrcAddr, sharesAmount)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
 
 	if returnAmount.IsZero() {
-		return time.Time{}, types.ErrTinyRedelegationAmount
+		return time.Time{}, math.LegacyDec{}, 0, types.ErrTinyRedelegationAmount
 	}
 
 	sharesCreated, err := k.Delegate(ctx, delAddr, returnAmount, srcValidator.GetStatus(), dstValidator, false)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
 
 	// create the unbonding delegation
 	completionTime, height, completeNow, err := k.getBeginInfo(ctx, valSrcAddr)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
 
 	if completeNow { // no need to create the redelegation object
-		return completionTime, nil
+		return completionTime, sharesCreated, 0, nil
 	}
 
 	red, err := k.SetRedelegationEntry(
@@ -1287,15 +1289,17 @@ func (k Keeper) BeginRedelegation(
 		height, completionTime, returnAmount, sharesAmount, sharesCreated,
 	)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
+
+	redUnbondingId := red.Entries[len(red.Entries)-1].UnbondingId
 
 	err = k.InsertRedelegationQueue(ctx, red, completionTime)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, math.LegacyDec{}, 0, err
 	}
 
-	return completionTime, nil
+	return completionTime, sharesCreated, redUnbondingId, nil
 }
 
 // CompleteRedelegation completes the redelegations of all mature entries in the
