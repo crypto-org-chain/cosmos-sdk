@@ -38,9 +38,15 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## UNRELEASED
 
+### Features
+
+* (x/staking) [#1786](https://github.com/crypto-org-chain/cosmos-sdk/pull/1786) add extra hooks - AfterSlashUnbondingDelegation + AfterSlashUnbondingRedelegation + AfterSlashRedelegation
+
 ### Improvements
 
 * (mint) [#1779](https://github.com/crypto-org-chain/cosmos-sdk/pull/1779) feat: add GetParams interface for mint module for chain-main tokenomics feature
+
+### Bug Fixes
 
 ## [v0.53.6](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.6) - 2026-02-10
 

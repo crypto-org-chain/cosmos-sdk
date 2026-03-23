@@ -117,7 +117,6 @@ func (h MultiStakingHooks) AfterUnbondingInitiated(ctx context.Context, id uint6
 	return nil
 }
 
-
 func (h MultiStakingHooks) AfterSlashUnbondingDelegation(ctx context.Context, unbondingId uint64, slashAmount sdkmath.Int) error {
 	for i := range h {
 		if err := h[i].AfterSlashUnbondingDelegation(ctx, unbondingId, slashAmount); err != nil {

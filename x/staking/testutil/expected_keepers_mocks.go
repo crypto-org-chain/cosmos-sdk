@@ -733,3 +733,45 @@ func (mr *MockStakingHooksMockRecorder) BeforeValidatorSlashed(ctx, valAddr, fra
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeforeValidatorSlashed", reflect.TypeOf((*MockStakingHooks)(nil).BeforeValidatorSlashed), ctx, valAddr, fraction)
 }
+
+// AfterSlashUnbondingDelegation mocks base method.
+func (m *MockStakingHooks) AfterSlashUnbondingDelegation(ctx context.Context, unbondingId uint64, slashAmount math.Int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AfterSlashUnbondingDelegation", ctx, unbondingId, slashAmount)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AfterSlashUnbondingDelegation indicates an expected call of AfterSlashUnbondingDelegation.
+func (mr *MockStakingHooksMockRecorder) AfterSlashUnbondingDelegation(ctx, unbondingId, slashAmount any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterSlashUnbondingDelegation", reflect.TypeOf((*MockStakingHooks)(nil).AfterSlashUnbondingDelegation), ctx, unbondingId, slashAmount)
+}
+
+// AfterSlashUnbondingRedelegation mocks base method.
+func (m *MockStakingHooks) AfterSlashUnbondingRedelegation(ctx context.Context, unbondingId uint64, slashAmount math.Int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AfterSlashUnbondingRedelegation", ctx, unbondingId, slashAmount)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AfterSlashUnbondingRedelegation indicates an expected call of AfterSlashUnbondingRedelegation.
+func (mr *MockStakingHooksMockRecorder) AfterSlashUnbondingRedelegation(ctx, unbondingId, slashAmount any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterSlashUnbondingRedelegation", reflect.TypeOf((*MockStakingHooks)(nil).AfterSlashUnbondingRedelegation), ctx, unbondingId, slashAmount)
+}
+
+// AfterSlashRedelegation mocks base method.
+func (m *MockStakingHooks) AfterSlashRedelegation(ctx context.Context, unbondingId uint64, tokensToBurn math.Int, sharesToUnbond math.LegacyDec) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AfterSlashRedelegation", ctx, unbondingId, tokensToBurn, sharesToUnbond)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AfterSlashRedelegation indicates an expected call of AfterSlashRedelegation.
+func (mr *MockStakingHooksMockRecorder) AfterSlashRedelegation(ctx, unbondingId, tokensToBurn, sharesToUnbond any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterSlashRedelegation", reflect.TypeOf((*MockStakingHooks)(nil).AfterSlashRedelegation), ctx, unbondingId, tokensToBurn, sharesToUnbond)
+}

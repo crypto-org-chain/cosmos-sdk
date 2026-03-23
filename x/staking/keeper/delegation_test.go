@@ -1126,7 +1126,7 @@ func (s *KeeperTestSuite) TestSetUnbondingDelegationEntry() {
 
 	// set unbonding delegation entry for existing creationHeight
 	// entries are expected to be merged
-	_, err = keeper.SetUnbondingDelegationEntry(
+	_, _, err = keeper.SetUnbondingDelegationEntry(
 		ctx,
 		delAddr,
 		valAddr,
@@ -1146,7 +1146,7 @@ func (s *KeeperTestSuite) TestSetUnbondingDelegationEntry() {
 	// set unbonding delegation entry for newCreationHeight
 	// new entry is expected to be appended to the existing entries
 	newCreationHeight := int64(1)
-	_, err = keeper.SetUnbondingDelegationEntry(
+	_, _, err = keeper.SetUnbondingDelegationEntry(
 		ctx,
 		delAddr,
 		valAddr,

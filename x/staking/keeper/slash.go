@@ -413,5 +413,13 @@ func (k Keeper) SlashRedelegation(ctx context.Context, srcValidator types.Valida
 		}
 	}
 
+	if err := k.burnBondedTokens(ctx, bondedBurnedAmount); err != nil {
+		return math.ZeroInt(), err
+	}
+
+	if err := k.burnNotBondedTokens(ctx, notBondedBurnedAmount); err != nil {
+		return math.ZeroInt(), err
+	}
+
 	return totalSlashAmount, nil
 }

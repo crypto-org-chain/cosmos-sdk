@@ -428,10 +428,10 @@ func (k Keeper) RemoveUnbondingDelegation(ctx context.Context, ubd types.Unbondi
 func (k Keeper) SetUnbondingDelegationEntry(
 	ctx context.Context, delegatorAddr sdk.AccAddress, validatorAddr sdk.ValAddress,
 	creationHeight int64, minTime time.Time, balance math.Int,
-) (types.UnbondingDelegation, error) {
+) (types.UnbondingDelegation, uint64, error) {
 	id, err := k.IncrementUnbondingID(ctx)
 	if err != nil {
-		return types.UnbondingDelegation{}, err
+		return types.UnbondingDelegation{}, 0, err
 	}
 
 	isNewUbdEntry := true
@@ -441,11 +441,11 @@ func (k Keeper) SetUnbondingDelegationEntry(
 	} else if errors.Is(err, types.ErrNoUnbondingDelegation) {
 		ubd = types.NewUnbondingDelegation(delegatorAddr, validatorAddr, creationHeight, minTime, balance, id, k.validatorAddressCodec, k.authKeeper.AddressCodec())
 	} else {
-		return ubd, err
+		return ubd, 0, err
 	}
 
 	if err = k.SetUnbondingDelegation(ctx, ubd); err != nil {
-		return ubd, err
+		return ubd, 0, err
 	}
 
 	// only call the hook for new entries since
@@ -453,14 +453,14 @@ func (k Keeper) SetUnbondingDelegationEntry(
 	if isNewUbdEntry {
 		// Add to the UBDByUnbondingOp index to look up the UBD by the UBDE ID
 		if err = k.SetUnbondingDelegationByUnbondingID(ctx, ubd, id); err != nil {
-			return ubd, err
+			return ubd, 0, err
 		}
 
 		if err := k.Hooks().AfterUnbondingInitiated(ctx, id); err != nil {
 			k.Logger(ctx).Error("failed to call after unbonding initiated hook", "error", err)
 		}
 	}
-	return ubd, nil
+	return ubd, id, nil
 }
 
 // unbonding delegation queue timeslice operations
@@ -684,10 +684,10 @@ func (k Keeper) SetRedelegationEntry(ctx context.Context,
 	validatorDstAddr sdk.ValAddress, creationHeight int64,
 	minTime time.Time, balance math.Int,
 	sharesSrc, sharesDst math.LegacyDec,
-) (types.Redelegation, error) {
+) (types.Redelegation, uint64, error) {
 	id, err := k.IncrementUnbondingID(ctx)
 	if err != nil {
-		return types.Redelegation{}, err
+		return types.Redelegation{}, 0, err
 	}
 
 	red, err := k.GetRedelegation(ctx, delegatorAddr, validatorSrcAddr, validatorDstAddr)
@@ -697,16 +697,16 @@ func (k Keeper) SetRedelegationEntry(ctx context.Context,
 		red = types.NewRedelegation(delegatorAddr, validatorSrcAddr,
 			validatorDstAddr, creationHeight, minTime, balance, sharesDst, id, k.validatorAddressCodec, k.authKeeper.AddressCodec())
 	} else {
-		return types.Redelegation{}, err
+		return types.Redelegation{}, 0, err
 	}
 
 	if err = k.SetRedelegation(ctx, red); err != nil {
-		return types.Redelegation{}, err
+		return types.Redelegation{}, 0, err
 	}
 
 	// Add to the UBDByEntry index to look up the UBD by the UBDE ID
 	if err = k.SetRedelegationByUnbondingID(ctx, red, id); err != nil {
-		return types.Redelegation{}, err
+		return types.Redelegation{}, 0, err
 	}
 
 	if err := k.Hooks().AfterUnbondingInitiated(ctx, id); err != nil {
@@ -714,7 +714,7 @@ func (k Keeper) SetRedelegationEntry(ctx context.Context,
 		// TODO (Facu): Should we return here? We are ignoring this error
 	}
 
-	return red, nil
+	return red, id, nil
 }
 
 // IterateRedelegations iterates through all redelegations.
@@ -1142,12 +1142,10 @@ func (k Keeper) Undelegate(
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	completionTime := sdkCtx.BlockHeader().Time.Add(unbondingTime)
-	ubd, err := k.SetUnbondingDelegationEntry(ctx, delAddr, valAddr, sdkCtx.BlockHeight(), completionTime, returnAmount)
+	ubd, unbondingId, err := k.SetUnbondingDelegationEntry(ctx, delAddr, valAddr, sdkCtx.BlockHeight(), completionTime, returnAmount)
 	if err != nil {
 		return time.Time{}, math.Int{}, 0, err
 	}
-
-	unbondingId := ubd.Entries[len(ubd.Entries)-1].UnbondingId
 
 	err = k.InsertUBDQueue(ctx, ubd, completionTime)
 	if err != nil {
@@ -1284,15 +1282,13 @@ func (k Keeper) BeginRedelegation(
 		return completionTime, sharesCreated, 0, nil
 	}
 
-	red, err := k.SetRedelegationEntry(
+	red, redUnbondingId, err := k.SetRedelegationEntry(
 		ctx, delAddr, valSrcAddr, valDstAddr,
 		height, completionTime, returnAmount, sharesAmount, sharesCreated,
 	)
 	if err != nil {
 		return time.Time{}, math.LegacyDec{}, 0, err
 	}
-
-	redUnbondingId := red.Entries[len(red.Entries)-1].UnbondingId
 
 	err = k.InsertRedelegationQueue(ctx, red, completionTime)
 	if err != nil {
