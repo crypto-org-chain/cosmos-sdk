@@ -1179,11 +1179,13 @@ func (k Keeper) CompleteUnbonding(ctx context.Context, delAddr sdk.AccAddress, v
 	}
 
 	// loop through all the entries and complete unbonding mature entries
+	var completedIds []uint64
 	for i := 0; i < len(ubd.Entries); i++ {
 		entry := ubd.Entries[i]
 		if entry.IsMature(ctxTime) && !entry.OnHold() {
 			ubd.RemoveEntry(int64(i))
 			i--
+			completedIds = append(completedIds, entry.UnbondingId)
 			if err = k.DeleteUnbondingIndex(ctx, entry.UnbondingId); err != nil {
 				return nil, err
 			}
@@ -1211,6 +1213,12 @@ func (k Keeper) CompleteUnbonding(ctx context.Context, delAddr sdk.AccAddress, v
 
 	if err != nil {
 		return nil, err
+	}
+
+	if len(completedIds) > 0 {
+		if err = k.Hooks().AfterUnbondingCompleted(ctx, delAddr, valAddr, completedIds); err != nil {
+			return nil, err
+		}
 	}
 
 	return balances, nil
@@ -1319,11 +1327,13 @@ func (k Keeper) CompleteRedelegation(
 	ctxTime := sdkCtx.BlockHeader().Time
 
 	// loop through all the entries and complete mature redelegation entries
+	var completedIds []uint64
 	for i := 0; i < len(red.Entries); i++ {
 		entry := red.Entries[i]
 		if entry.IsMature(ctxTime) && !entry.OnHold() {
 			red.RemoveEntry(int64(i))
 			i--
+			completedIds = append(completedIds, entry.UnbondingId)
 			if err = k.DeleteUnbondingIndex(ctx, entry.UnbondingId); err != nil {
 				return nil, err
 			}
@@ -1343,6 +1353,12 @@ func (k Keeper) CompleteRedelegation(
 
 	if err != nil {
 		return nil, err
+	}
+
+	if len(completedIds) > 0 {
+		if err = k.Hooks().AfterRedelegationCompleted(ctx, delAddr, valSrcAddr, valDstAddr, completedIds); err != nil {
+			return nil, err
+		}
 	}
 
 	return balances, nil

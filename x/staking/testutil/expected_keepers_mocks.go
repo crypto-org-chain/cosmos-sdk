@@ -775,3 +775,31 @@ func (mr *MockStakingHooksMockRecorder) AfterSlashRedelegation(ctx, unbondingId,
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterSlashRedelegation", reflect.TypeOf((*MockStakingHooks)(nil).AfterSlashRedelegation), ctx, unbondingId, tokensToBurn, sharesToUnbond)
 }
+
+// AfterUnbondingCompleted mocks base method.
+func (m *MockStakingHooks) AfterUnbondingCompleted(ctx context.Context, delAddr types.AccAddress, valAddr types.ValAddress, unbondingIds []uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AfterUnbondingCompleted", ctx, delAddr, valAddr, unbondingIds)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AfterUnbondingCompleted indicates an expected call of AfterUnbondingCompleted.
+func (mr *MockStakingHooksMockRecorder) AfterUnbondingCompleted(ctx, delAddr, valAddr, unbondingIds any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterUnbondingCompleted", reflect.TypeOf((*MockStakingHooks)(nil).AfterUnbondingCompleted), ctx, delAddr, valAddr, unbondingIds)
+}
+
+// AfterRedelegationCompleted mocks base method.
+func (m *MockStakingHooks) AfterRedelegationCompleted(ctx context.Context, delAddr types.AccAddress, valSrcAddr, valDstAddr types.ValAddress, unbondingIds []uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AfterRedelegationCompleted", ctx, delAddr, valSrcAddr, valDstAddr, unbondingIds)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AfterRedelegationCompleted indicates an expected call of AfterRedelegationCompleted.
+func (mr *MockStakingHooksMockRecorder) AfterRedelegationCompleted(ctx, delAddr, valSrcAddr, valDstAddr, unbondingIds any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterRedelegationCompleted", reflect.TypeOf((*MockStakingHooks)(nil).AfterRedelegationCompleted), ctx, delAddr, valSrcAddr, valDstAddr, unbondingIds)
+}

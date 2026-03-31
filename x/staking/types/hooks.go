@@ -143,3 +143,21 @@ func (h MultiStakingHooks) AfterSlashRedelegation(ctx context.Context, unbonding
 	}
 	return nil
 }
+
+func (h MultiStakingHooks) AfterUnbondingCompleted(ctx context.Context, delAddr sdk.AccAddress, valAddr sdk.ValAddress, unbondingIds []uint64) error {
+	for i := range h {
+		if err := h[i].AfterUnbondingCompleted(ctx, delAddr, valAddr, unbondingIds); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h MultiStakingHooks) AfterRedelegationCompleted(ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, unbondingIds []uint64) error {
+	for i := range h {
+		if err := h[i].AfterRedelegationCompleted(ctx, delAddr, valSrcAddr, valDstAddr, unbondingIds); err != nil {
+			return err
+		}
+	}
+	return nil
+}

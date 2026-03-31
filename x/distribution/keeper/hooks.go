@@ -192,3 +192,11 @@ func (h Hooks) AfterSlashUnbondingRedelegation(_ context.Context, _ uint64, _ sd
 func (h Hooks) AfterSlashRedelegation(_ context.Context, _ uint64, _ sdkmath.Int, _ sdkmath.LegacyDec) error {
 	return nil
 }
+
+func (h Hooks) AfterUnbondingCompleted(_ context.Context, _ sdk.AccAddress, _ sdk.ValAddress, _ []uint64) error {
+	return nil
+}
+
+func (h Hooks) AfterRedelegationCompleted(_ context.Context, _ sdk.AccAddress, _, _ sdk.ValAddress, _ []uint64) error {
+	return nil
+}
