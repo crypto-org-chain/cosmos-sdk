@@ -42,9 +42,9 @@ func (s *KeeperTestSuite) TestSlashUnbondingDelegationHook() {
 
 	slashFactor := sdkmath.LegacyNewDecWithPrec(5, 1) // 50%
 
-	// Expect the AfterSlashUnbondingDelegation hook to be called
+	// Expect the AfterUnbondingDelegationSlashed hook to be called
 	mockHooks.EXPECT().
-		AfterSlashUnbondingDelegation(gomock.Any(), uint64(1), gomock.Any()).
+		AfterUnbondingDelegationSlashed(gomock.Any(), uint64(1), gomock.Any()).
 		Return(nil).
 		Times(1)
 
@@ -94,7 +94,7 @@ func (s *KeeperTestSuite) TestSlashUnbondingDelegationHookErrorAbortsSlash() {
 
 	// Hook returns an error - slash should be aborted and error propagated
 	mockHooks.EXPECT().
-		AfterSlashUnbondingDelegation(gomock.Any(), gomock.Any(), gomock.Any()).
+		AfterUnbondingDelegationSlashed(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(fmt.Errorf("hook error")).
 		Times(1)
 

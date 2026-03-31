@@ -109,9 +109,9 @@ type StakingHooks interface {
 	AfterDelegationModified(ctx context.Context, delAddr sdk.AccAddress, valAddr sdk.ValAddress) error
 	BeforeValidatorSlashed(ctx context.Context, valAddr sdk.ValAddress, fraction math.LegacyDec) error
 	AfterUnbondingInitiated(ctx context.Context, id uint64) error
-	AfterSlashUnbondingDelegation(ctx context.Context, unbondingId uint64, slashAmount math.Int) error                                          // Must be called when an unbonding delegation entry is slashed
-	AfterSlashUnbondingRedelegation(ctx context.Context, unbondingId uint64, slashAmount math.Int) error                                        // Must be called when an unbonding delegation entry tied to a redelegation is slashed
-	AfterSlashRedelegation(ctx context.Context, unbondingId uint64, tokensToBurn math.Int, sharesToUnbond math.LegacyDec) error                 // Must be called when a redelegation entry is slashed
+	AfterUnbondingDelegationSlashed(ctx context.Context, unbondingId uint64, slashAmount math.Int) error                                        // Must be called when an unbonding delegation entry is slashed
+	AfterUnbondingRedelegationSlashed(ctx context.Context, unbondingId uint64, slashAmount math.Int) error                                      // Must be called when an unbonding delegation entry tied to a redelegation is slashed
+	AfterRedelegationSlashed(ctx context.Context, unbondingId uint64, tokensToBurn math.Int, sharesToUnbond math.LegacyDec) error               // Must be called when a redelegation entry is slashed
 	AfterUnbondingCompleted(ctx context.Context, delAddr sdk.AccAddress, valAddr sdk.ValAddress, unbondingIds []uint64) error                   // Must be called when unbonding delegation entries mature
 	AfterRedelegationCompleted(ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, unbondingIds []uint64) error // Must be called when redelegation entries mature
 }
