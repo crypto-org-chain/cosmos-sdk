@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	sdkmath "cosmossdk.io/math"
 	"go.uber.org/mock/gomock"
+
+	sdkmath "cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
@@ -121,7 +122,7 @@ func (s *KeeperTestSuite) TestUndelegateReturnsUnbondingId() {
 
 	// TestingUpdateValidator with apply=true triggers notBondedToBonded
 	s.bankKeeper.EXPECT().SendCoinsFromModuleToModule(gomock.Any(), stakingtypes.NotBondedPoolName, stakingtypes.BondedPoolName, gomock.Any()).Return(nil)
-	validator = stakingkeeper.TestingUpdateValidator(keeper, ctx, validator, true)
+	_ = stakingkeeper.TestingUpdateValidator(keeper, ctx, validator, true)
 
 	// Create delegation
 	delegation := stakingtypes.NewDelegation(delAddr.String(), valAddr.String(), issuedShares)
@@ -163,13 +164,13 @@ func (s *KeeperTestSuite) TestBeginRedelegationReturnsUnbondingIdAndShares() {
 
 	// Apply validators (triggers notBondedToBonded for each)
 	s.bankKeeper.EXPECT().SendCoinsFromModuleToModule(gomock.Any(), stakingtypes.NotBondedPoolName, stakingtypes.BondedPoolName, gomock.Any()).Return(nil)
-	srcValidator = stakingkeeper.TestingUpdateValidator(keeper, ctx, srcValidator, true)
+	_ = stakingkeeper.TestingUpdateValidator(keeper, ctx, srcValidator, true)
 
 	dstValidator := stakingtestutil.NewValidator(s.T(), valDstAddr, PKs[1])
 	dstTokens := keeper.TokensFromConsensusPower(ctx, 10)
 	dstValidator, _ = dstValidator.AddTokensFromDel(dstTokens)
 	s.bankKeeper.EXPECT().SendCoinsFromModuleToModule(gomock.Any(), stakingtypes.NotBondedPoolName, stakingtypes.BondedPoolName, gomock.Any()).Return(nil)
-	dstValidator = stakingkeeper.TestingUpdateValidator(keeper, ctx, dstValidator, true)
+	_ = stakingkeeper.TestingUpdateValidator(keeper, ctx, dstValidator, true)
 
 	// Create delegation to source
 	delegation := stakingtypes.NewDelegation(delAddr.String(), valSrcAddr.String(), issuedShares)
@@ -213,7 +214,7 @@ func (s *KeeperTestSuite) TestSlashRedelegationBurnsTokens() {
 	dstTokens := keeper.TokensFromConsensusPower(ctx, 10)
 	dstValidator, _ = dstValidator.AddTokensFromDel(dstTokens)
 	s.bankKeeper.EXPECT().SendCoinsFromModuleToModule(gomock.Any(), stakingtypes.NotBondedPoolName, stakingtypes.BondedPoolName, gomock.Any()).Return(nil)
-	dstValidator = stakingkeeper.TestingUpdateValidator(keeper, ctx, dstValidator, true)
+	_ = stakingkeeper.TestingUpdateValidator(keeper, ctx, dstValidator, true)
 
 	// Create delegation to source
 	delegation := stakingtypes.NewDelegation(delAddr.String(), valSrcAddr.String(), issuedShares)

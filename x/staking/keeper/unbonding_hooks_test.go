@@ -3,14 +3,14 @@ package keeper_test
 import (
 	"time"
 
-	sdkmath "cosmossdk.io/math"
 	"go.uber.org/mock/gomock"
+
+	sdkmath "cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtestutil "github.com/cosmos/cosmos-sdk/x/staking/testutil"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
-
 
 func (s *KeeperTestSuite) TestAfterUnbondingCompletedHook() {
 	ctx, keeper := s.ctx, s.stakingKeeper
