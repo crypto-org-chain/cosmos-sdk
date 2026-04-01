@@ -27,7 +27,7 @@ jobs:
           check-latest: true
       - name: install aarch64-gcc
         if: matrix.go-arch == 'arm64'
-        run: sudo apt-get install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
         ###################
         #### Build App ####
         ###################
