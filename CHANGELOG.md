@@ -50,6 +50,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (x/staking) [#1786](https://github.com/crypto-org-chain/cosmos-sdk/pull/1786) feat(staking): implement hooks to support tiered rewards module in Cronos pos chain
 * (mempool) [#1850](https://github.com/crypto-org-chain/cosmos-sdk/pull/1850) Add `UnorderedTxs` to `PriorityNonceMempool`.
 
 ### Improvements
