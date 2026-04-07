@@ -44,6 +44,8 @@ func SetupUnbondingTests(t *testing.T, f *fixture, hookCalled *bool, ubdeID *uin
 	mockStackingHooks.EXPECT().BeforeDelegationSharesModified(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockStackingHooks.EXPECT().BeforeValidatorModified(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockStackingHooks.EXPECT().BeforeValidatorSlashed(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().AfterUnbondingCompleted(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().AfterRedelegationCompleted(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	f.stakingKeeper.SetHooks(types.NewMultiStakingHooks(mockStackingHooks))
 
 	addrDels = simtestutil.AddTestAddrsIncremental(f.bankKeeper, f.stakingKeeper, f.sdkCtx, 2, math.NewInt(10000))
@@ -103,7 +105,7 @@ func doUnbondingDelegation(
 
 	var err error
 	undelegateAmount := math.LegacyNewDec(1)
-	completionTime, undelegatedAmount, err := stakingKeeper.Undelegate(ctx, addrDels[0], addrVals[0], undelegateAmount)
+	completionTime, undelegatedAmount, _, err := stakingKeeper.Undelegate(ctx, addrDels[0], addrVals[0], undelegateAmount)
 	assert.NilError(t, err)
 	assert.Assert(t, undelegateAmount.Equal(math.LegacyNewDecFromInt(undelegatedAmount)))
 	// check that the unbonding actually happened
@@ -136,7 +138,7 @@ func doRedelegation(
 	t.Helper()
 
 	var err error
-	completionTime, err = stakingKeeper.BeginRedelegation(ctx, addrDels[0], addrVals[0], addrVals[1], math.LegacyNewDec(1))
+	completionTime, _, _, err = stakingKeeper.BeginRedelegation(ctx, addrDels[0], addrVals[0], addrVals[1], math.LegacyNewDec(1))
 	assert.NilError(t, err)
 
 	// Check that the redelegation happened- we look up the entry and see that it has the correct number of shares

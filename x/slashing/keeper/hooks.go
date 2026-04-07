@@ -96,3 +96,23 @@ func (h Hooks) BeforeValidatorSlashed(_ context.Context, _ sdk.ValAddress, _ sdk
 func (h Hooks) AfterUnbondingInitiated(_ context.Context, _ uint64) error {
 	return nil
 }
+
+func (h Hooks) AfterUnbondingDelegationSlashed(_ context.Context, _ uint64, _ sdkmath.Int) error {
+	return nil
+}
+
+func (h Hooks) AfterUnbondingRedelegationSlashed(_ context.Context, _ uint64, _ sdkmath.Int) error {
+	return nil
+}
+
+func (h Hooks) AfterRedelegationSlashed(_ context.Context, _ uint64, _ sdkmath.Int, _ sdkmath.LegacyDec) error {
+	return nil
+}
+
+func (h Hooks) AfterUnbondingCompleted(_ context.Context, _ sdk.AccAddress, _ sdk.ValAddress, _ []uint64) error {
+	return nil
+}
+
+func (h Hooks) AfterRedelegationCompleted(_ context.Context, _ sdk.AccAddress, _, _ sdk.ValAddress, _ []uint64) error {
+	return nil
+}

@@ -38,6 +38,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## UNRELEASED
 
+### Features
+
+* (x/staking) [#1786](https://github.com/crypto-org-chain/cosmos-sdk/pull/1786) feat(staking): implement hooks to support tiered rewards module in Cronos pos chain
+
 ### Improvements
 
 * (mint) [#1779](https://github.com/crypto-org-chain/cosmos-sdk/pull/1779) feat: add GetParams interface for mint module for chain-main tokenomics feature

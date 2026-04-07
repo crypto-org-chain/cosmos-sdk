@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         go-arch: ["amd64", "arm64"] # drop 32 bit support for now (and maybe forever)
@@ -27,7 +27,7 @@ jobs:
           check-latest: true
       - name: install aarch64-gcc
         if: matrix.go-arch == 'arm64'
-        run: sudo apt-get install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
         ###################
         #### Build App ####
         ###################

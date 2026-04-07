@@ -116,3 +116,48 @@ func (h MultiStakingHooks) AfterUnbondingInitiated(ctx context.Context, id uint6
 	}
 	return nil
 }
+
+func (h MultiStakingHooks) AfterUnbondingDelegationSlashed(ctx context.Context, unbondingId uint64, slashAmount sdkmath.Int) error {
+	for i := range h {
+		if err := h[i].AfterUnbondingDelegationSlashed(ctx, unbondingId, slashAmount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h MultiStakingHooks) AfterUnbondingRedelegationSlashed(ctx context.Context, unbondingId uint64, slashAmount sdkmath.Int) error {
+	for i := range h {
+		if err := h[i].AfterUnbondingRedelegationSlashed(ctx, unbondingId, slashAmount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h MultiStakingHooks) AfterRedelegationSlashed(ctx context.Context, unbondingId uint64, tokensToBurn sdkmath.Int, sharesToUnbond sdkmath.LegacyDec) error {
+	for i := range h {
+		if err := h[i].AfterRedelegationSlashed(ctx, unbondingId, tokensToBurn, sharesToUnbond); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h MultiStakingHooks) AfterUnbondingCompleted(ctx context.Context, delAddr sdk.AccAddress, valAddr sdk.ValAddress, unbondingIds []uint64) error {
+	for i := range h {
+		if err := h[i].AfterUnbondingCompleted(ctx, delAddr, valAddr, unbondingIds); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h MultiStakingHooks) AfterRedelegationCompleted(ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, unbondingIds []uint64) error {
+	for i := range h {
+		if err := h[i].AfterRedelegationCompleted(ctx, delAddr, valSrcAddr, valDstAddr, unbondingIds); err != nil {
+			return err
+		}
+	}
+	return nil
+}
