@@ -279,6 +279,9 @@ func (k Keeper) SlashUnbondingDelegation(ctx context.Context, unbondingDelegatio
 		if err = k.SetUnbondingDelegation(ctx, unbondingDelegation); err != nil {
 			return math.ZeroInt(), err
 		}
+		if err := k.Hooks().AfterUnbondingDelegationSlashed(ctx, entry.UnbondingId, unbondingSlashAmount); err != nil {
+			return math.ZeroInt(), err
+		}
 	}
 
 	if err := k.burnNotBondedTokens(ctx, burnedAmount); err != nil {
@@ -362,6 +365,9 @@ func (k Keeper) SlashRedelegation(ctx context.Context, srcValidator types.Valida
 					if err = k.SetUnbondingDelegation(ctx, unbondingDelegation); err != nil {
 						return math.ZeroInt(), err
 					}
+					if err := k.Hooks().AfterUnbondingRedelegationSlashed(ctx, entry.UnbondingId, unbondingSlashAmount); err != nil {
+						return math.ZeroInt(), err
+					}
 				}
 			}
 		}
@@ -403,6 +409,10 @@ func (k Keeper) SlashRedelegation(ctx context.Context, srcValidator types.Valida
 			notBondedBurnedAmount = notBondedBurnedAmount.Add(tokensToBurn)
 		default:
 			panic("unknown validator status")
+		}
+
+		if err := k.Hooks().AfterRedelegationSlashed(ctx, entry.UnbondingId, tokensToBurn, sharesToUnbond); err != nil {
+			return math.ZeroInt(), err
 		}
 	}
 
