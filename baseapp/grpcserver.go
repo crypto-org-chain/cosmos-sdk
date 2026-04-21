@@ -64,6 +64,11 @@ func (app *BaseApp) RegisterGRPCServer(server gogogrpc.Server) {
 			app.logger.Error("failed to set gRPC header", "err", err)
 		}
 
+		// Release resources held by the multistore opened for this historical query.
+		defer func() {
+			closeQueryMultiStore(app.logger, sdkCtx.MultiStore())
+		}()
+
 		return handler(grpcCtx, req)
 	}
 
