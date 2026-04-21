@@ -16,6 +16,7 @@ import (
 
 	coreheader "cosmossdk.io/core/header"
 	errorsmod "cosmossdk.io/errors"
+	"cosmossdk.io/log"
 	"cosmossdk.io/store/rootmulti"
 	snapshottypes "cosmossdk.io/store/snapshots/types"
 	storetypes "cosmossdk.io/store/types"
@@ -26,6 +27,22 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 )
+
+// closableMultiStore is optionally implemented by MultiStore backends that need
+// explicit resource cleanup after historical queries (e.g. releasing open DB handles).
+type closableMultiStore interface {
+	Close() error
+}
+
+// closeQueryMultiStore releases resources held by the multistore if it implements
+// closableMultiStore. Any close error is logged rather than silently dropped.
+func closeQueryMultiStore(logger log.Logger, ms storetypes.MultiStore) {
+	if c, ok := ms.(closableMultiStore); ok {
+		if err := c.Close(); err != nil {
+			logger.Error("failed to close query multistore", "err", err)
+		}
+	}
+}
 
 // Supported ABCI Query prefixes and paths
 const (
@@ -1172,6 +1189,11 @@ func (app *BaseApp) handleQueryGRPC(handler GRPCQueryHandler, req *abci.RequestQ
 		return sdkerrors.QueryResult(err, app.trace)
 	}
 
+	// Release resources held by the multistore opened for this historical query.
+	defer func() {
+		closeQueryMultiStore(app.logger, ctx.MultiStore())
+	}()
+
 	resp, err := handler(ctx, req)
 	if err != nil {
 		resp = sdkerrors.QueryResult(gRPCErrorToSDKError(err), app.trace)
@@ -1216,12 +1238,16 @@ func checkNegativeHeight(height int64) error {
 
 // CreateQueryContext creates a new sdk.Context for a query, taking as args
 // the block height and whether the query needs a proof or not.
+// If the returned context's MultiStore implements io.Closer, the caller is
+// responsible for closing it to release any resources (e.g. open DB handles).
 func (app *BaseApp) CreateQueryContext(height int64, prove bool) (sdk.Context, error) {
 	return app.CreateQueryContextWithCheckHeader(height, prove, true)
 }
 
 // CreateQueryContextWithCheckHeader creates a new sdk.Context for a query, taking as args
 // the block height, whether the query needs a proof or not, and whether to check the header or not.
+// If the returned context's MultiStore implements io.Closer, the caller is
+// responsible for closing it to release any resources (e.g. open DB handles).
 func (app *BaseApp) CreateQueryContextWithCheckHeader(height int64, prove, checkHeader bool) (sdk.Context, error) {
 	if err := checkNegativeHeight(height); err != nil {
 		return sdk.Context{}, err
