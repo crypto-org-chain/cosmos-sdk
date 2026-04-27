@@ -62,6 +62,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (baseapp) [#1807](https://github.com/crypto-org-chain/cosmos-sdk/pull/1807) Close multistore opened by `CacheMultiStoreWithVersion` after historical gRPC queries to prevent DB handle leaks.
 * (x/auth) [#23741](https://github.com/cosmos/cosmos-sdk/pull/23741) Support legacy global AccountNumber.
 
 ## [v0.50.14](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.14) - 2025-07-08
