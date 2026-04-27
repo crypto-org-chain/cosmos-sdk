@@ -67,6 +67,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (cli) [#25485](https://github.com/cosmos/cosmos-sdk/pull/25485) Avoid failed to convert address field in `withdraw-validator-commission` cmd.
 * (baseapp) [#25642](https://github.com/cosmos/cosmos-sdk/pull/25642) Mark pre-block events for indexing based on local configuration.
 * (blockstm) [#1765](https://github.com/crypto-org-chain/cosmos-sdk/pull/1765) Remove `SigVerificationDecorator` signature incarnation cache causing state divergence under blockstm.
+* (baseapp) [#1808](https://github.com/crypto-org-chain/cosmos-sdk/pull/1808) Close multistore opened by `CacheMultiStoreWithVersion` after historical gRPC queries to prevent DB handle leaks.
 
 
 ## [v0.53.4](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.4) - 2025-07-25
