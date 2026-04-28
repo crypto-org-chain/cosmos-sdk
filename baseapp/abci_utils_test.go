@@ -671,7 +671,7 @@ func (s *ABCIUtilsTestSuite) TestDefaultProposalHandler_PriorityNonceMempoolTxSe
 		s.Run(name, func() {
 			ctrl := gomock.NewController(s.T())
 			app := mock.NewMockProposalTxVerifier(ctrl)
-			mp := mempool.NewPriorityMempool(
+			mp := mempool.NewMultiLanePriorityMempool(
 				mempool.PriorityNonceMempoolConfig[int64]{
 					TxPriority:      mempool.NewDefaultTxPriority(),
 					MaxTx:           0,
