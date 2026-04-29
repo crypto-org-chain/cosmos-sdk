@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/stretchr/testify/require"
 )
 
 // mockClosableStore satisfies storetypes.MultiStore via embedding and adds Close().
