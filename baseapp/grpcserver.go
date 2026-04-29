@@ -93,6 +93,11 @@ func (app *BaseApp) RegisterGRPCServerWithSkipCheckHeader(server gogogrpc.Server
 			}
 		}()
 
+		// Release resources held by the multistore opened for this historical query.
+		defer func() {
+			closeQueryMultiStore(app.logger, sdkCtx.MultiStore())
+		}()
+
 		return handler(grpcCtx, req)
 	}
 
