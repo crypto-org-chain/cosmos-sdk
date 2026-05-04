@@ -222,14 +222,17 @@ func appExport(
 	appOpts = viperAppOpts
 
 	var simApp *simapp.SimApp
+	// Only wire mempool from app config for export; avoid snapshot/genesis parsing and
+	// other DefaultBaseappOptions side effects unrelated to state export.
+	mempoolOpt := server.MempoolBaseappOption(appOpts)
 	if height != -1 {
-		simApp = simapp.NewSimApp(logger, db, traceStore, false, appOpts)
+		simApp = simapp.NewSimApp(logger, db, traceStore, false, appOpts, mempoolOpt)
 
 		if err := simApp.LoadHeight(height); err != nil {
 			return servertypes.ExportedApp{}, err
 		}
 	} else {
-		simApp = simapp.NewSimApp(logger, db, traceStore, true, appOpts)
+		simApp = simapp.NewSimApp(logger, db, traceStore, true, appOpts, mempoolOpt)
 	}
 
 	return simApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)

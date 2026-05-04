@@ -33,6 +33,16 @@ const (
 	DefaultGRPCMaxSendMsgSize = math.MaxInt32
 )
 
+// Built-in app-side mempool [mempool] type values in app.toml (when max-txs >= 0).
+const (
+	// MempoolTypeSenderNonce selects SenderNonceMempool (historical SDK node behavior).
+	MempoolTypeSenderNonce = "sender-nonce"
+	// MempoolTypePriorityNonce is PriorityNonceMempool (first signer lane only).
+	MempoolTypePriorityNonce = "priority-nonce"
+	// MempoolTypeMultiLanePriorityNonce is MultiLanePriorityNonceMempool (all signer lanes from SignerExtractor).
+	MempoolTypeMultiLanePriorityNonce = "multi-lane-priority-nonce"
+)
+
 // BaseConfig defines the server's basic configuration
 type BaseConfig struct {
 	// The minimum gas prices a validator is willing to accept for processing a
@@ -189,6 +199,9 @@ type MempoolConfig struct {
 	// unbounded in how many txs it may contain, and a positive value indicates
 	// the maximum amount of txs it may contain.
 	MaxTxs int `mapstructure:"max-txs"`
+	// Type selects the built-in mempool implementation when MaxTxs >= 0.
+	// Empty string defaults to MempoolTypeMultiLanePriorityNonce. See MempoolType* constants.
+	Type string `mapstructure:"type"`
 }
 
 // State Streaming configuration
@@ -288,6 +301,7 @@ func DefaultConfig() *Config {
 		},
 		Mempool: MempoolConfig{
 			MaxTxs: -1,
+			Type:   MempoolTypeMultiLanePriorityNonce,
 		},
 	}
 }

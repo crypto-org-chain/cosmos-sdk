@@ -16,12 +16,18 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
+	"cosmossdk.io/log"
+
+	dbm "github.com/cosmos/cosmos-db"
+
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/types/module/testutil"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
@@ -458,6 +464,61 @@ func TestEmptyMinGasPrices(t *testing.T) {
 	}
 	err = cmd.ExecuteContext(ctx)
 	require.Errorf(t, err, sdkerrors.ErrAppConfig.Error())
+}
+
+func TestMempoolBaseappOption(t *testing.T) {
+	encCfg := testutil.MakeTestEncodingConfig()
+	logger := log.NewNopLogger()
+
+	t.Run("unset max-txs defaults to no-op", func(t *testing.T) {
+		app := baseapp.NewBaseApp("t", logger, dbm.NewMemDB(), encCfg.TxConfig.TxDecoder(),
+			server.MempoolBaseappOption(mapGetter{}))
+		_, ok := app.Mempool().(mempool.NoOpMempool)
+		require.True(t, ok)
+	})
+
+	t.Run("max-txs -1 is no-op", func(t *testing.T) {
+		app := baseapp.NewBaseApp("t", logger, dbm.NewMemDB(), encCfg.TxConfig.TxDecoder(),
+			server.MempoolBaseappOption(mapGetter{server.FlagMempoolMaxTxs: -1}))
+		_, ok := app.Mempool().(mempool.NoOpMempool)
+		require.True(t, ok)
+	})
+
+	t.Run("max-txs 0 and empty type is multi-lane", func(t *testing.T) {
+		app := baseapp.NewBaseApp("t", logger, dbm.NewMemDB(), encCfg.TxConfig.TxDecoder(),
+			server.MempoolBaseappOption(mapGetter{server.FlagMempoolMaxTxs: 0}))
+		_, ok := app.Mempool().(*mempool.MultiLanePriorityNonceMempool[int64])
+		require.True(t, ok)
+	})
+
+	t.Run("sender-nonce", func(t *testing.T) {
+		app := baseapp.NewBaseApp("t", logger, dbm.NewMemDB(), encCfg.TxConfig.TxDecoder(),
+			server.MempoolBaseappOption(mapGetter{
+				server.FlagMempoolMaxTxs: 0,
+				server.FlagMempoolType:   config.MempoolTypeSenderNonce,
+			}))
+		_, ok := app.Mempool().(*mempool.SenderNonceMempool)
+		require.True(t, ok)
+	})
+
+	t.Run("priority-nonce", func(t *testing.T) {
+		app := baseapp.NewBaseApp("t", logger, dbm.NewMemDB(), encCfg.TxConfig.TxDecoder(),
+			server.MempoolBaseappOption(mapGetter{
+				server.FlagMempoolMaxTxs: 0,
+				server.FlagMempoolType:   config.MempoolTypePriorityNonce,
+			}))
+		_, ok := app.Mempool().(*mempool.PriorityNonceMempool[int64])
+		require.True(t, ok)
+	})
+
+	t.Run("invalid type panics", func(t *testing.T) {
+		require.Panics(t, func() {
+			server.MempoolBaseappOption(mapGetter{
+				server.FlagMempoolMaxTxs: 0,
+				server.FlagMempoolType:   "not-a-mempool-type",
+			})
+		})
+	})
 }
 
 type mapGetter map[string]any

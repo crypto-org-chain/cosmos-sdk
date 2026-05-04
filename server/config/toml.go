@@ -250,9 +250,17 @@ stop-node-on-err = {{ .Streaming.ABCI.StopNodeOnErr }}
 # Setting max_txs to negative 1 (-1) will disable transactions from being inserted into the mempool (no-op mempool).
 # Setting max_txs to a positive number (> 0) will limit the number of transactions in the mempool, by the specified amount.
 #
+# When max-txs >= 0, type selects which SDK built-in app-side mempool to use:
+#   "" or "multi-lane-priority-nonce" (default) — MultiLanePriorityNonceMempool (priority; all signer lanes from SignerExtractor)
+#   "sender-nonce"                — SenderNonceMempool (historical SDK default behavior)
+#   "priority-nonce"              — PriorityNonceMempool (gas-price priority; first signer lane only)
+#
 # Note, this configuration only applies to SDK built-in app-side mempool
 # implementations.
 max-txs = {{ .Mempool.MaxTxs }}
+{{- if ne .Mempool.Type "" }}
+type = "{{ .Mempool.Type }}"
+{{- end }}
 `
 
 var configTemplate *template.Template

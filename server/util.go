@@ -496,6 +496,51 @@ func openTraceWriter(traceWriterFile string) (w io.WriteCloser, err error) {
 	)
 }
 
+// MempoolBaseappOption returns a BaseApp option that sets the app-side mempool from
+// mempool.max-txs and mempool.type (see server start flags). When mempool.max-txs is
+// unset in appOpts, it defaults to mempool.DefaultMaxTx (-1, no-op mempool).
+func MempoolBaseappOption(appOpts types.AppOptions) func(*baseapp.BaseApp) {
+	maxTxs := mempool.DefaultMaxTx
+	if v := appOpts.Get(FlagMempoolMaxTxs); v != nil {
+		maxTxs = cast.ToInt(v)
+	}
+	if maxTxs < 0 {
+		return baseapp.SetMempool(mempool.NoOpMempool{})
+	}
+	mempoolType := strings.ToLower(strings.TrimSpace(cast.ToString(appOpts.Get(FlagMempoolType))))
+	if mempoolType == "" {
+		mempoolType = config.MempoolTypeMultiLanePriorityNonce
+	}
+	switch mempoolType {
+	case config.MempoolTypeSenderNonce:
+		return baseapp.SetMempool(
+			mempool.NewSenderNonceMempool(
+				mempool.SenderNonceMaxTxOpt(maxTxs),
+			),
+		)
+	case config.MempoolTypePriorityNonce:
+		return baseapp.SetMempool(
+			mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+				TxPriority:      mempool.NewDefaultTxPriority(),
+				MaxTx:           maxTxs,
+				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
+			}),
+		)
+	case config.MempoolTypeMultiLanePriorityNonce:
+		return baseapp.SetMempool(
+			mempool.NewMultiLanePriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+				TxPriority:      mempool.NewDefaultTxPriority(),
+				MaxTx:           maxTxs,
+				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
+			}),
+		)
+	default:
+		panic(fmt.Sprintf("invalid app mempool type %q (from %s); valid: %q, %q, %q",
+			mempoolType, FlagMempoolType,
+			config.MempoolTypeSenderNonce, config.MempoolTypePriorityNonce, config.MempoolTypeMultiLanePriorityNonce))
+	}
+}
+
 // DefaultBaseappOptions returns the default baseapp options provided by the Cosmos SDK
 func DefaultBaseappOptions(appOpts types.AppOptions) []func(*baseapp.BaseApp) {
 	var cache storetypes.MultiStorePersistentCache
@@ -540,15 +585,6 @@ func DefaultBaseappOptions(appOpts types.AppOptions) []func(*baseapp.BaseApp) {
 		cast.ToUint32(appOpts.Get(FlagStateSyncSnapshotKeepRecent)),
 	)
 
-	defaultMempool := baseapp.SetMempool(mempool.NoOpMempool{})
-	if maxTxs := cast.ToInt(appOpts.Get(FlagMempoolMaxTxs)); maxTxs >= 0 {
-		defaultMempool = baseapp.SetMempool(
-			mempool.NewSenderNonceMempool(
-				mempool.SenderNonceMaxTxOpt(maxTxs),
-			),
-		)
-	}
-
 	return []func(*baseapp.BaseApp){
 		baseapp.SetPruning(pruningOpts),
 		baseapp.SetMinGasPrices(cast.ToString(appOpts.Get(FlagMinGasPrices))),
@@ -562,7 +598,7 @@ func DefaultBaseappOptions(appOpts types.AppOptions) []func(*baseapp.BaseApp) {
 		baseapp.SetIAVLCacheSize(cast.ToInt(appOpts.Get(FlagIAVLCacheSize))),
 		baseapp.SetIAVLDisableFastNode(cast.ToBool(appOpts.Get(FlagDisableIAVLFastNode))),
 		baseapp.SetIAVLSyncPruning(cast.ToBool(appOpts.Get(FlagIAVLSyncPruning))),
-		defaultMempool,
+		MempoolBaseappOption(appOpts),
 		baseapp.SetChainID(chainID),
 		baseapp.SetQueryGasLimit(cast.ToUint64(appOpts.Get(FlagQueryGasLimit))),
 	}

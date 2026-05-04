@@ -214,6 +214,8 @@ func NewSimApp(
 	// }
 	// baseAppOptions = append(baseAppOptions, prepareOpt)
 
+	baseAppOptions = append([]func(*baseapp.BaseApp){server.MempoolBaseappOption(appOpts)}, baseAppOptions...)
+
 	// create and set dummy vote extension handler
 	voteExtOp := func(bApp *baseapp.BaseApp) {
 		voteExtHandler := NewVoteExtensionHandler()

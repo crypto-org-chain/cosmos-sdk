@@ -102,6 +102,7 @@ const (
 
 	// mempool flags
 	FlagMempoolMaxTxs = "mempool.max-txs"
+	FlagMempoolType   = "mempool.type"
 
 	// testnet keys
 	KeyIsTestnet             = "is-testnet"
@@ -1008,6 +1009,8 @@ func addStartNodeFlags(cmd *cobra.Command, opts StartCmdOptions) {
 	cmd.Flags().Uint32(FlagStateSyncSnapshotKeepRecent, 2, "State sync snapshot to keep")
 	cmd.Flags().Bool(FlagDisableIAVLFastNode, false, "Disable fast node for IAVL tree")
 	cmd.Flags().Int(FlagMempoolMaxTxs, mempool.DefaultMaxTx, "Sets MaxTx value for the app-side mempool")
+	cmd.Flags().String(FlagMempoolType, serverconfig.MempoolTypeMultiLanePriorityNonce,
+		"Built-in app mempool when max-txs >= 0: multi-lane-priority-nonce (default), sender-nonce, priority-nonce")
 	cmd.Flags().Duration(FlagShutdownGrace, 0*time.Second, "On Shutdown, duration to wait for resource clean up")
 
 	// support old flags name for backwards compatibility
