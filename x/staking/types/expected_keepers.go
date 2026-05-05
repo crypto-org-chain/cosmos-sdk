@@ -110,7 +110,7 @@ type StakingHooks interface {
 	BeforeValidatorSlashed(ctx context.Context, valAddr sdk.ValAddress, fraction math.LegacyDec) error
 	AfterUnbondingInitiated(ctx context.Context, id uint64) error
 	AfterRedelegationSlashed(ctx context.Context, delAddr sdk.AccAddress, dstValAddr sdk.ValAddress, tokensToBurn math.Int, sharesToUnbond math.LegacyDec) error // Must be called when a redelegation entry is slashed
-	AfterRedelegationCompleted(ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, unbondingIds []uint64) error                 // Must be called when redelegation entries mature
+	AfterRedelegationCompleted(ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, unbondingIds []uint64) error                  // Must be called when redelegation entries mature
 }
 
 // StakingHooksWrapper is a wrapper for modules to inject StakingHooks using depinject.
