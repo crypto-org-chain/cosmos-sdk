@@ -3,6 +3,7 @@ package mempool
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/huandu/skiplist"
@@ -31,8 +32,9 @@ type (
 		mempool       *MultiLanePriorityNonceMempool[C]
 		priorityNode  *skiplist.Element
 		senderCursors map[string]*skiplist.Element
-		sender        string
-		nextPriority  C
+		selected      Tx
+		deferred      map[multiLaneKey]struct{}
+		deferredIndex *skiplist.SkipList
 	}
 
 	multiLaneKey struct {
@@ -82,9 +84,7 @@ func (mp *MultiLanePriorityNonceMempool[C]) InsertWithGasWanted(ctx context.Cont
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 
-	if mp.cfg.MaxTx > 0 && mp.priorityIndex.Len() >= mp.cfg.MaxTx {
-		return ErrMempoolTxMaxCapacity
-	} else if mp.cfg.MaxTx < 0 {
+	if mp.cfg.MaxTx < 0 {
 		return nil
 	}
 
@@ -138,6 +138,12 @@ func (mp *MultiLanePriorityNonceMempool[C]) InsertWithGasWanted(ctx context.Cont
 		conflicts[conflictAnchor] = struct{}{}
 	}
 
+	// Replacement conflicts can free up existing entries and should count
+	// toward max-txs admission.
+	if mp.cfg.MaxTx > 0 && (mp.priorityIndex.Len()-len(conflicts)+1) > mp.cfg.MaxTx {
+		return ErrMempoolTxMaxCapacity
+	}
+
 	for conflict := range conflicts {
 		if err := mp.removeByAnchor(conflict); err != nil {
 			return err
@@ -171,50 +177,34 @@ func (mp *MultiLanePriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.T
 	return mp.InsertWithGasWanted(ctx, tx, gasLimit)
 }
 
-func (i *MultiLanePriorityNonceIterator[C]) iteratePriority() Iterator {
-	node, sender, nextPriority, ok := nextPriorityCursor(i.priorityNode, i.mempool.priorityIndex, i.mempool.cfg.TxPriority.MinValue)
-	if !ok {
-		return nil
-	}
-
-	i.priorityNode = node
-	i.sender = sender
-	i.nextPriority = nextPriority
-
-	return i.Next()
-}
-
 func (i *MultiLanePriorityNonceIterator[C]) Next() Iterator {
-	if i.priorityNode == nil {
+	if i.mempool == nil {
 		return nil
 	}
 
-	cursor := nextSenderCursor(i.sender, i.senderCursors, i.mempool.senderIndices)
-
-	if cursor == nil {
-		return i.iteratePriority()
+	if i.selectFromDeferred() {
+		return i
 	}
 
-	key := cursor.Key().(txMeta[C])
-	if i.mempool.cfg.TxPriority.Compare(key.priority, i.nextPriority) < 0 {
-		return i.iteratePriority()
-	} else if i.priorityNode.Next() != nil && i.mempool.cfg.TxPriority.Compare(key.priority, i.nextPriority) == 0 {
-		score, ok := i.mempool.scoreForLane(multiLaneKey{sender: key.sender, nonce: key.nonce})
+	for {
+		node, sender, _, ok := nextPriorityCursor(i.priorityNode, i.mempool.priorityIndex, i.mempool.cfg.TxPriority.MinValue)
 		if !ok {
-			return i.iteratePriority()
+			return nil
+		}
+		i.priorityNode = node
+
+		anchor := multiLaneKey{sender: sender, nonce: node.Key().(txMeta[C]).nonce}
+
+		if i.trySelectAnchor(anchor) {
+			return i
 		}
 
-		if i.mempool.cfg.TxPriority.Compare(score.weight, i.priorityNode.Next().Key().(txMeta[C]).weight) < 0 {
-			return i.iteratePriority()
-		}
+		i.deferAnchor(anchor)
 	}
-
-	i.senderCursors[i.sender] = cursor
-	return i
 }
 
 func (i *MultiLanePriorityNonceIterator[C]) Tx() Tx {
-	return i.senderCursors[i.sender].Value.(Tx)
+	return i.selected
 }
 
 func (mp *MultiLanePriorityNonceMempool[C]) Select(ctx context.Context, txs [][]byte) Iterator {
@@ -233,9 +223,11 @@ func (mp *MultiLanePriorityNonceMempool[C]) doSelect(_ context.Context, _ [][]by
 	iterator := &MultiLanePriorityNonceIterator[C]{
 		mempool:       mp,
 		senderCursors: make(map[string]*skiplist.Element),
+		deferred:      make(map[multiLaneKey]struct{}),
+		deferredIndex: skiplist.New(skiplistComparable(mp.cfg.TxPriority)),
 	}
 
-	return iterator.iteratePriority()
+	return iterator.Next()
 }
 
 func (mp *MultiLanePriorityNonceMempool[C]) SelectBy(ctx context.Context, txs [][]byte, callback func(Tx) bool) {
@@ -348,16 +340,6 @@ func (mp *MultiLanePriorityNonceMempool[C]) insertTxLanes(lanes []multiLaneKey, 
 	return anchorElement
 }
 
-func (mp *MultiLanePriorityNonceMempool[C]) scoreForLane(lane multiLaneKey) (txMeta[C], bool) {
-	anchor := lane
-	if owner, ok := mp.laneOwners[lane]; ok {
-		anchor = owner
-	}
-
-	score, ok := mp.scores[multiLaneToMeta[C](anchor)]
-	return score, ok
-}
-
 func (mp *MultiLanePriorityNonceMempool[C]) getLaneTx(lane multiLaneKey, priority C) (sdk.Tx, error) {
 	senderIndex := mp.senderIndices[lane.sender]
 	if senderIndex == nil {
@@ -432,6 +414,98 @@ func newMultiLaneSenderIndex[C comparable]() *skiplist.SkipList {
 	return skiplist.New(skiplist.LessThanFunc(func(a, b any) int {
 		return skiplist.Uint64.Compare(b.(txMeta[C]).nonce, a.(txMeta[C]).nonce)
 	}))
+}
+
+func (i *MultiLanePriorityNonceIterator[C]) selectFromDeferred() bool {
+	for node := i.deferredIndex.Front(); node != nil; {
+		next := node.Next()
+		anchor := node.Value.(multiLaneKey)
+
+		if i.trySelectAnchor(anchor) {
+			i.deferredIndex.Remove(node.Key())
+			delete(i.deferred, anchor)
+			return true
+		}
+		node = next
+	}
+	return false
+}
+
+func (i *MultiLanePriorityNonceIterator[C]) trySelectAnchor(anchor multiLaneKey) bool {
+	lanes := i.mempool.txLanes[anchor]
+	if len(lanes) == 0 {
+		lanes = []multiLaneKey{anchor}
+	}
+
+	lanesBySender := make(map[string][]uint64, len(lanes))
+	for _, lane := range lanes {
+		lanesBySender[lane.sender] = append(lanesBySender[lane.sender], lane.nonce)
+	}
+
+	nextCursors := make(map[string]*skiplist.Element, len(lanesBySender))
+	for sender, nonces := range lanesBySender {
+		slices.Sort(nonces)
+		cursor := i.senderCursors[sender]
+		senderIndex := i.mempool.senderIndices[sender]
+		if senderIndex == nil {
+			return false
+		}
+
+		for _, nonce := range nonces {
+			if cursor == nil {
+				cursor = senderIndex.Front()
+			} else {
+				cursor = cursor.Next()
+			}
+			if cursor == nil {
+				return false
+			}
+
+			cursorKey := cursor.Key().(txMeta[C])
+			if cursorKey.sender != sender || cursorKey.nonce != nonce {
+				return false
+			}
+
+			owner, ok := i.mempool.laneOwners[multiLaneKey{sender: sender, nonce: nonce}]
+			if !ok || owner != anchor {
+				return false
+			}
+		}
+		nextCursors[sender] = cursor
+	}
+
+	for sender, cursor := range nextCursors {
+		i.senderCursors[sender] = cursor
+	}
+	i.selected = nextCursors[anchor.sender].Value.(Tx)
+	return true
+}
+
+func (i *MultiLanePriorityNonceIterator[C]) deferAnchor(anchor multiLaneKey) {
+	if _, ok := i.deferred[anchor]; ok {
+		return
+	}
+
+	key, ok := i.mempool.anchorPriorityKey(anchor)
+	if !ok {
+		return
+	}
+	i.deferredIndex.Set(key, anchor)
+	i.deferred[anchor] = struct{}{}
+}
+
+func (mp *MultiLanePriorityNonceMempool[C]) anchorPriorityKey(anchor multiLaneKey) (txMeta[C], bool) {
+	score, ok := mp.scores[multiLaneToMeta[C](anchor)]
+	if !ok {
+		var zero txMeta[C]
+		return zero, false
+	}
+	return txMeta[C]{
+		nonce:    anchor.nonce,
+		priority: score.priority,
+		sender:   anchor.sender,
+		weight:   score.weight,
+	}, true
 }
 
 func IsMultiLaneEmpty[C comparable](mempool Mempool) error {

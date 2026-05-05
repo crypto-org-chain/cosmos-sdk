@@ -3,12 +3,15 @@ package simapp
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/gogoproto/proto"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -24,11 +27,14 @@ import (
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/runtime"
+	"github.com/cosmos/cosmos-sdk/server/config"
 	"github.com/cosmos/cosmos-sdk/testutil/mock"
 	"github.com/cosmos/cosmos-sdk/testutil/network"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
 	"github.com/cosmos/cosmos-sdk/x/auth"
@@ -97,6 +103,82 @@ func TestSimAppExportAndBlockedAddrs(t *testing.T) {
 	app2 := NewSimApp(logger.With("instance", "second"), db, nil, true, simtestutil.NewAppOptionsWithFlagHome(t.TempDir()))
 	_, err = app2.ExportAppStateAndValidators(false, []string{}, []string{})
 	require.NoError(t, err, "ExportAppStateAndValidators should not have an error")
+}
+
+func TestNewSimAppLoadsMempoolFromAppToml(t *testing.T) {
+	logger := log.NewTestLogger(t)
+
+	testCases := []struct {
+		name        string
+		maxTxs      int
+		mempoolType string
+		assert      func(*testing.T, any)
+	}{
+		{
+			name:        "empty mempool type defaults to multi-lane",
+			maxTxs:      0,
+			mempoolType: "",
+			assert: func(t *testing.T, mp any) {
+				t.Helper()
+				_, ok := mp.(*mempool.MultiLanePriorityNonceMempool[int64])
+				require.True(t, ok)
+			},
+		},
+		{
+			name:        "sender nonce mempool",
+			maxTxs:      0,
+			mempoolType: config.MempoolTypeSenderNonce,
+			assert: func(t *testing.T, mp any) {
+				t.Helper()
+				_, ok := mp.(*mempool.SenderNonceMempool)
+				require.True(t, ok)
+			},
+		},
+		{
+			name:        "priority nonce mempool",
+			maxTxs:      0,
+			mempoolType: config.MempoolTypePriorityNonce,
+			assert: func(t *testing.T, mp any) {
+				t.Helper()
+				_, ok := mp.(*mempool.PriorityNonceMempool[int64])
+				require.True(t, ok)
+			},
+		},
+		{
+			name:        "negative max txs disables mempool",
+			maxTxs:      -1,
+			mempoolType: config.MempoolTypeSenderNonce,
+			assert: func(t *testing.T, mp any) {
+				t.Helper()
+				_, ok := mp.(mempool.NoOpMempool)
+				require.True(t, ok)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			configDir := filepath.Join(home, "config")
+			require.NoError(t, os.MkdirAll(configDir, 0o755))
+
+			appCfg := config.DefaultConfig()
+			appCfg.Mempool.MaxTxs = tc.maxTxs
+			appCfg.Mempool.Type = tc.mempoolType
+
+			appTomlPath := filepath.Join(configDir, "app.toml")
+			config.WriteConfigFile(appTomlPath, appCfg)
+
+			appOpts := viper.New()
+			appOpts.SetConfigFile(appTomlPath)
+			require.NoError(t, appOpts.ReadInConfig())
+			appOpts.Set(flags.FlagHome, home)
+
+			app := NewSimApp(logger.With("case", tc.name), dbm.NewMemDB(), nil, true, appOpts)
+			tc.assert(t, app.Mempool())
+		})
+	}
 }
 
 func TestRunMigrations(t *testing.T) {

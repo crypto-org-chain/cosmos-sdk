@@ -21,12 +21,3 @@ func nextPriorityCursor[C comparable](current *skiplist.Element, index *skiplist
 
 	return current, sender, minPriority, true
 }
-
-func nextSenderCursor(sender string, senderCursors map[string]*skiplist.Element, senderIndices map[string]*skiplist.SkipList) *skiplist.Element {
-	cursor, ok := senderCursors[sender]
-	if !ok {
-		return senderIndices[sender].Front()
-	}
-
-	return cursor.Next()
-}

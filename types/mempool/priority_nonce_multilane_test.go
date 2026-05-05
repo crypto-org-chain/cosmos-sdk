@@ -242,3 +242,147 @@ func TestMultiLanePriorityNonceMempool_SelectTieUsesAnchorWeightForNonAnchorLane
 	first := iter.Tx().Tx.(testTx)
 	require.Equal(t, txC.id, first.id)
 }
+
+func TestMultiLanePriorityNonceMempool_SelectDefersUntilAllLanesReady(t *testing.T) {
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(6)), 2)
+	a := accounts[0].Address
+	b := accounts[1].Address
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+
+	txAB := testTx{id: 700, priority: 100, nonce: 1, address: a} // blocked on B nonce gap
+	txB1 := testTx{id: 701, priority: 10, nonce: 1, address: b}
+	pool := mempool.NewMultiLanePriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+		TxPriority: mempool.NewDefaultTxPriority(),
+		SignerExtractor: multiLaneSignerAdapter{
+			lanesByID: map[int][]laneSigner{
+				txAB.id: {
+					{address: a, nonce: 1},
+					{address: b, nonce: 2},
+				},
+				txB1.id: {
+					{address: b, nonce: 1},
+				},
+			},
+		},
+	})
+
+	require.NoError(t, pool.Insert(ctx.WithPriority(txAB.priority), txAB))
+	require.NoError(t, pool.Insert(ctx.WithPriority(txB1.priority), txB1))
+
+	iter := pool.Select(ctx, nil)
+	require.NotNil(t, iter)
+	first := iter.Tx().Tx.(testTx)
+	require.Equal(t, txB1.id, first.id)
+
+	iter = iter.Next()
+	require.NotNil(t, iter)
+	second := iter.Tx().Tx.(testTx)
+	require.Equal(t, txAB.id, second.id)
+}
+
+func TestMultiLanePriorityNonceMempool_SelectEmitsEachTxOnce(t *testing.T) {
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(7)), 2)
+	a := accounts[0].Address
+	b := accounts[1].Address
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+
+	txAB := testTx{id: 710, priority: 50, nonce: 1, address: a}
+	txB2 := testTx{id: 711, priority: 40, nonce: 2, address: b}
+	pool := mempool.NewMultiLanePriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+		TxPriority: mempool.NewDefaultTxPriority(),
+		SignerExtractor: multiLaneSignerAdapter{
+			lanesByID: map[int][]laneSigner{
+				txAB.id: {
+					{address: a, nonce: 1},
+					{address: b, nonce: 1},
+				},
+				txB2.id: {
+					{address: b, nonce: 2},
+				},
+			},
+		},
+	})
+
+	require.NoError(t, pool.Insert(ctx.WithPriority(txAB.priority), txAB))
+	require.NoError(t, pool.Insert(ctx.WithPriority(txB2.priority), txB2))
+
+	iter := pool.Select(ctx, nil)
+	require.NotNil(t, iter)
+	first := iter.Tx().Tx.(testTx)
+	require.Equal(t, txAB.id, first.id)
+
+	iter = iter.Next()
+	require.NotNil(t, iter)
+	second := iter.Tx().Tx.(testTx)
+	require.Equal(t, txB2.id, second.id)
+
+	require.Nil(t, iter.Next())
+}
+
+func TestMultiLanePriorityNonceMempool_ReplacementAllowedWhenFull(t *testing.T) {
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(8)), 2)
+	a := accounts[0].Address
+	b := accounts[1].Address
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+
+	original := testTx{id: 720, priority: 1, nonce: 1, address: a}
+	replacement := testTx{id: 721, priority: 2, nonce: 1, address: b}
+	pool := mempool.NewMultiLanePriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+		TxPriority: mempool.NewDefaultTxPriority(),
+		MaxTx:      1,
+		SignerExtractor: multiLaneSignerAdapter{
+			lanesByID: map[int][]laneSigner{
+				original.id: {
+					{address: a, nonce: 1},
+					{address: b, nonce: 1},
+				},
+				replacement.id: {
+					{address: b, nonce: 1},
+				},
+			},
+		},
+	})
+
+	require.NoError(t, pool.Insert(ctx.WithPriority(original.priority), original))
+	require.NoError(t, pool.Insert(ctx.WithPriority(replacement.priority), replacement))
+
+	require.Equal(t, 1, pool.CountTx())
+	require.Nil(t, pool.NextSenderTx(a.String()))
+	require.Equal(t, replacement, pool.NextSenderTx(b.String()))
+}
+
+func TestMultiLanePriorityNonceMempool_SelectHandlesSameSenderMultipleLanes(t *testing.T) {
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(9)), 1)
+	a := accounts[0].Address
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+
+	txA12 := testTx{id: 730, priority: 100, nonce: 1, address: a}
+	txA3 := testTx{id: 731, priority: 90, nonce: 3, address: a}
+	pool := mempool.NewMultiLanePriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+		TxPriority: mempool.NewDefaultTxPriority(),
+		SignerExtractor: multiLaneSignerAdapter{
+			lanesByID: map[int][]laneSigner{
+				txA12.id: {
+					{address: a, nonce: 1},
+					{address: a, nonce: 2},
+				},
+				txA3.id: {
+					{address: a, nonce: 3},
+				},
+			},
+		},
+	})
+
+	require.NoError(t, pool.Insert(ctx.WithPriority(txA12.priority), txA12))
+	require.NoError(t, pool.Insert(ctx.WithPriority(txA3.priority), txA3))
+
+	iter := pool.Select(ctx, nil)
+	require.NotNil(t, iter)
+	first := iter.Tx().Tx.(testTx)
+	require.Equal(t, txA12.id, first.id)
+
+	iter = iter.Next()
+	require.NotNil(t, iter)
+	second := iter.Tx().Tx.(testTx)
+	require.Equal(t, txA3.id, second.id)
+}
