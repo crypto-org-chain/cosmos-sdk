@@ -52,6 +52,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (deps) [#25710](https://github.com/cosmos/cosmos-sdk/pull/25710) Bump github.com/cosmos/ledger-cosmos-go from 0.16.0 to 1.0.0
 * (deps) [#25820](https://github.com/cosmos/cosmos-sdk/pull/25820) Bump github.com/cometbft/cometbft from 0.80.20 to 0.38.21
+* (x/staking) [#1809](https://github.com/crypto-org-chain/cosmos-sdk/pull/1809) refactor: Remove unneeded hooks based on one position one delegation implementation in tieredrewards
 
 ### Bug Fixes
 
