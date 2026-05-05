@@ -358,7 +358,7 @@ func (k msgServer) BeginRedelegate(ctx context.Context, msg *types.MsgBeginRedel
 	}
 
 	ctx = types.WithStrictWithdraw(ctx)
-	completionTime, _, _, err := k.BeginRedelegation(
+	completionTime, err := k.BeginRedelegation(
 		ctx, delegatorAddress, valSrcAddr, valDstAddr, shares,
 	)
 	if err != nil {
@@ -431,7 +431,7 @@ func (k msgServer) Undelegate(ctx context.Context, msg *types.MsgUndelegate) (*t
 	}
 
 	ctx = types.WithStrictWithdraw(ctx)
-	completionTime, undelegatedAmt, _, err := k.Keeper.Undelegate(ctx, delegatorAddress, addr, shares)
+	completionTime, undelegatedAmt, err := k.Keeper.Undelegate(ctx, delegatorAddress, addr, shares)
 	if err != nil {
 		return nil, err
 	}
