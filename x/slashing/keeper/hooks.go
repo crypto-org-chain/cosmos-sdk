@@ -97,7 +97,7 @@ func (h Hooks) AfterUnbondingInitiated(_ context.Context, _ uint64) error {
 	return nil
 }
 
-func (h Hooks) AfterRedelegationSlashed(_ context.Context, _ sdk.AccAddress, _ sdk.ValAddress, _ sdkmath.Int, _ sdkmath.LegacyDec) error {
+func (h Hooks) BeforeRedelegationSlashed(_ context.Context, _ uint64, _ sdkmath.LegacyDec) error {
 	return nil
 }
 

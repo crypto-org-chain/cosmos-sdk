@@ -608,20 +608,6 @@ func (mr *MockStakingHooksMockRecorder) AfterRedelegationCompleted(ctx, delAddr,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterRedelegationCompleted", reflect.TypeOf((*MockStakingHooks)(nil).AfterRedelegationCompleted), ctx, delAddr, valSrcAddr, valDstAddr, unbondingIds)
 }
 
-// AfterRedelegationSlashed mocks base method.
-func (m *MockStakingHooks) AfterRedelegationSlashed(ctx context.Context, delAddr types.AccAddress, dstValAddr types.ValAddress, tokensToBurn math.Int, sharesToUnbond math.LegacyDec) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AfterRedelegationSlashed", ctx, delAddr, dstValAddr, tokensToBurn, sharesToUnbond)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AfterRedelegationSlashed indicates an expected call of AfterRedelegationSlashed.
-func (mr *MockStakingHooksMockRecorder) AfterRedelegationSlashed(ctx, delAddr, dstValAddr, tokensToBurn, sharesToUnbond any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterRedelegationSlashed", reflect.TypeOf((*MockStakingHooks)(nil).AfterRedelegationSlashed), ctx, delAddr, dstValAddr, tokensToBurn, sharesToUnbond)
-}
-
 // AfterUnbondingInitiated mocks base method.
 func (m *MockStakingHooks) AfterUnbondingInitiated(ctx context.Context, id uint64) error {
 	m.ctrl.T.Helper()
@@ -732,6 +718,20 @@ func (m *MockStakingHooks) BeforeDelegationSharesModified(ctx context.Context, d
 func (mr *MockStakingHooksMockRecorder) BeforeDelegationSharesModified(ctx, delAddr, valAddr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeforeDelegationSharesModified", reflect.TypeOf((*MockStakingHooks)(nil).BeforeDelegationSharesModified), ctx, delAddr, valAddr)
+}
+
+// BeforeRedelegationSlashed mocks base method.
+func (m *MockStakingHooks) BeforeRedelegationSlashed(ctx context.Context, unbondingID uint64, sharesToUnbond math.LegacyDec) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BeforeRedelegationSlashed", ctx, unbondingID, sharesToUnbond)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BeforeRedelegationSlashed indicates an expected call of BeforeRedelegationSlashed.
+func (mr *MockStakingHooksMockRecorder) BeforeRedelegationSlashed(ctx, unbondingID, sharesToUnbond any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeforeRedelegationSlashed", reflect.TypeOf((*MockStakingHooks)(nil).BeforeRedelegationSlashed), ctx, unbondingID, sharesToUnbond)
 }
 
 // BeforeValidatorModified mocks base method.

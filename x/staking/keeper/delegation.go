@@ -684,10 +684,10 @@ func (k Keeper) SetRedelegationEntry(ctx context.Context,
 	validatorDstAddr sdk.ValAddress, creationHeight int64,
 	minTime time.Time, balance math.Int,
 	sharesSrc, sharesDst math.LegacyDec,
-) (types.Redelegation, error) {
+) (types.Redelegation, uint64, error) {
 	id, err := k.IncrementUnbondingID(ctx)
 	if err != nil {
-		return types.Redelegation{}, err
+		return types.Redelegation{}, 0, err
 	}
 
 	red, err := k.GetRedelegation(ctx, delegatorAddr, validatorSrcAddr, validatorDstAddr)
@@ -697,16 +697,16 @@ func (k Keeper) SetRedelegationEntry(ctx context.Context,
 		red = types.NewRedelegation(delegatorAddr, validatorSrcAddr,
 			validatorDstAddr, creationHeight, minTime, balance, sharesDst, id, k.validatorAddressCodec, k.authKeeper.AddressCodec())
 	} else {
-		return types.Redelegation{}, err
+		return types.Redelegation{}, 0, err
 	}
 
 	if err = k.SetRedelegation(ctx, red); err != nil {
-		return types.Redelegation{}, err
+		return types.Redelegation{}, 0, err
 	}
 
 	// Add to the UBDByEntry index to look up the UBD by the UBDE ID
 	if err = k.SetRedelegationByUnbondingID(ctx, red, id); err != nil {
-		return types.Redelegation{}, err
+		return types.Redelegation{}, 0, err
 	}
 
 	if err := k.Hooks().AfterUnbondingInitiated(ctx, id); err != nil {
@@ -714,7 +714,7 @@ func (k Keeper) SetRedelegationEntry(ctx context.Context,
 		// TODO (Facu): Should we return here? We are ignoring this error
 	}
 
-	return red, nil
+	return red, id, nil
 }
 
 // IterateRedelegations iterates through all redelegations.
@@ -1220,82 +1220,82 @@ func (k Keeper) CompleteUnbonding(ctx context.Context, delAddr sdk.AccAddress, v
 // record.
 func (k Keeper) BeginRedelegation(
 	ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, sharesAmount math.LegacyDec,
-) (completionTime time.Time, err error) {
+) (completionTime time.Time, unbondingID uint64, err error) {
 	if bytes.Equal(valSrcAddr, valDstAddr) {
-		return time.Time{}, types.ErrSelfRedelegation
+		return time.Time{}, 0, types.ErrSelfRedelegation
 	}
 
 	dstValidator, err := k.GetValidator(ctx, valDstAddr)
 	if errors.Is(err, types.ErrNoValidatorFound) {
-		return time.Time{}, types.ErrBadRedelegationDst
+		return time.Time{}, 0, types.ErrBadRedelegationDst
 	} else if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
 	srcValidator, err := k.GetValidator(ctx, valSrcAddr)
 	if errors.Is(err, types.ErrNoValidatorFound) {
-		return time.Time{}, types.ErrBadRedelegationSrc
+		return time.Time{}, 0, types.ErrBadRedelegationSrc
 	} else if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
 	// check if this is a transitive redelegation
 	hasRecRedel, err := k.HasReceivingRedelegation(ctx, delAddr, valSrcAddr)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
 	if hasRecRedel {
-		return time.Time{}, types.ErrTransitiveRedelegation
+		return time.Time{}, 0, types.ErrTransitiveRedelegation
 	}
 
 	hasMaxRedels, err := k.HasMaxRedelegationEntries(ctx, delAddr, valSrcAddr, valDstAddr)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
 	if hasMaxRedels {
-		return time.Time{}, types.ErrMaxRedelegationEntries
+		return time.Time{}, 0, types.ErrMaxRedelegationEntries
 	}
 
 	returnAmount, err := k.Unbond(ctx, delAddr, valSrcAddr, sharesAmount)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
 	if returnAmount.IsZero() {
-		return time.Time{}, types.ErrTinyRedelegationAmount
+		return time.Time{}, 0, types.ErrTinyRedelegationAmount
 	}
 
 	sharesCreated, err := k.Delegate(ctx, delAddr, returnAmount, srcValidator.GetStatus(), dstValidator, false)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
 	// create the unbonding delegation
 	completionTime, height, completeNow, err := k.getBeginInfo(ctx, valSrcAddr)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
 	if completeNow { // no need to create the redelegation object
-		return completionTime, nil
+		return completionTime, 0, nil
 	}
 
-	red, err := k.SetRedelegationEntry(
+	red, id, err := k.SetRedelegationEntry(
 		ctx, delAddr, valSrcAddr, valDstAddr,
 		height, completionTime, returnAmount, sharesAmount, sharesCreated,
 	)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
 	err = k.InsertRedelegationQueue(ctx, red, completionTime)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, 0, err
 	}
 
-	return completionTime, nil
+	return completionTime, id, nil
 }
 
 // CompleteRedelegation completes the redelegations of all mature entries in the
