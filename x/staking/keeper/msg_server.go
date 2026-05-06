@@ -349,7 +349,7 @@ func (k msgServer) BeginRedelegate(ctx context.Context, msg *types.MsgBeginRedel
 		)
 	}
 
-	completionTime, err := k.BeginRedelegation(
+	completionTime, _, err := k.BeginRedelegation(
 		ctx, delegatorAddress, valSrcAddr, valDstAddr, shares,
 	)
 	if err != nil {

@@ -117,9 +117,9 @@ func (h MultiStakingHooks) AfterUnbondingInitiated(ctx context.Context, id uint6
 	return nil
 }
 
-func (h MultiStakingHooks) AfterRedelegationSlashed(ctx context.Context, delAddr sdk.AccAddress, dstValAddr sdk.ValAddress, tokensToBurn sdkmath.Int, sharesToUnbond sdkmath.LegacyDec) error {
+func (h MultiStakingHooks) BeforeRedelegationSlashed(ctx context.Context, unbondingID uint64, sharesToUnbond sdkmath.LegacyDec) error {
 	for i := range h {
-		if err := h[i].AfterRedelegationSlashed(ctx, delAddr, dstValAddr, tokensToBurn, sharesToUnbond); err != nil {
+		if err := h[i].BeforeRedelegationSlashed(ctx, unbondingID, sharesToUnbond); err != nil {
 			return err
 		}
 	}
