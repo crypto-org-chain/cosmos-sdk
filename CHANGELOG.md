@@ -46,6 +46,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (x/staking) [#1786](https://github.com/crypto-org-chain/cosmos-sdk/pull/1786) feat(staking): implement hooks to support tiered rewards module in Cronos pos chain
 * (x/staking) [#1809](https://github.com/crypto-org-chain/cosmos-sdk/pull/1809) refactor: Remove unneeded hooks based on one position one delegation implementation in tieredrewards
+* (x/staking) [#1810](https://github.com/crypto-org-chain/cosmos-sdk/pull/1810) feat(staking): return unbondingId for redelegation and change AfterRedelegationSlashed to BeforeRedelegationSlashed for tieredrewards module
 
 ### Improvements
 

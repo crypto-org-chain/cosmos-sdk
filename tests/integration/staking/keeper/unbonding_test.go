@@ -137,7 +137,7 @@ func doRedelegation(
 	t.Helper()
 
 	var err error
-	completionTime, err = stakingKeeper.BeginRedelegation(ctx, addrDels[0], addrVals[0], addrVals[1], math.LegacyNewDec(1))
+	completionTime, _, err = stakingKeeper.BeginRedelegation(ctx, addrDels[0], addrVals[0], addrVals[1], math.LegacyNewDec(1))
 	assert.NilError(t, err)
 
 	// Check that the redelegation happened- we look up the entry and see that it has the correct number of shares
