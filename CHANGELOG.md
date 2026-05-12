@@ -63,6 +63,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport #1760).
 * (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport #1808).
+* (x/distribution) [#26406](https://github.com/cosmos/cosmos-sdk/pull/26406) Add fallback paths (delegator/validator owner, then community pool) when withdrawing delegator rewards or validator commission to a blocked address during `Begin/EndBlockers`. user msg initiated paths still return `ErrUnauthorized` when withdrawing to blocked addresses.
 * (x/gov) [#26353](https://github.com/cosmos/cosmos-sdk/pull/26353) Fix leading comma in `proposal_messages` event attribute emitted by `SubmitProposal`.
 
 ## [v0.54.2](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.54.2) - 2026-04-15
