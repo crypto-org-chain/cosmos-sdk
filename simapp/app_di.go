@@ -214,6 +214,8 @@ func NewSimApp(
 	// }
 	// baseAppOptions = append(baseAppOptions, prepareOpt)
 
+	// Prepend so a caller-supplied mempool option at the end of baseAppOptions can
+	// still override (e.g. tests or custom app configs).
 	baseAppOptions = append([]func(*baseapp.BaseApp){server.MempoolBaseappOption(appOpts)}, baseAppOptions...)
 
 	// create and set dummy vote extension handler

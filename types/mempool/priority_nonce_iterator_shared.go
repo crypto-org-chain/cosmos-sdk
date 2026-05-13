@@ -2,7 +2,7 @@ package mempool
 
 import "github.com/huandu/skiplist"
 
-func nextPriorityCursor[C comparable](current *skiplist.Element, index *skiplist.SkipList, minPriority C) (*skiplist.Element, string, C, bool) {
+func nextPriorityCursor[C comparable](current *skiplist.Element, index *skiplist.SkipList) (*skiplist.Element, string, bool) {
 	if current == nil {
 		current = index.Front()
 	} else {
@@ -10,14 +10,9 @@ func nextPriorityCursor[C comparable](current *skiplist.Element, index *skiplist
 	}
 
 	if current == nil {
-		return nil, "", minPriority, false
+		return nil, "", false
 	}
 
 	sender := current.Key().(txMeta[C]).sender
-	nextPriorityNode := current.Next()
-	if nextPriorityNode != nil {
-		return current, sender, nextPriorityNode.Key().(txMeta[C]).priority, true
-	}
-
-	return current, sender, minPriority, true
+	return current, sender, true
 }

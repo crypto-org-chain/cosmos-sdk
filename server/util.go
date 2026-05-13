@@ -518,22 +518,16 @@ func MempoolBaseappOption(appOpts types.AppOptions) func(*baseapp.BaseApp) {
 				mempool.SenderNonceMaxTxOpt(maxTxs),
 			),
 		)
-	case config.MempoolTypePriorityNonce:
-		return baseapp.SetMempool(
-			mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
-				TxPriority:      mempool.NewDefaultTxPriority(),
-				MaxTx:           maxTxs,
-				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
-			}),
-		)
-	case config.MempoolTypeMultiLanePriorityNonce:
-		return baseapp.SetMempool(
-			mempool.NewMultiLanePriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
-				TxPriority:      mempool.NewDefaultTxPriority(),
-				MaxTx:           maxTxs,
-				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
-			}),
-		)
+	case config.MempoolTypePriorityNonce, config.MempoolTypeMultiLanePriorityNonce:
+		cfg := mempool.PriorityNonceMempoolConfig[int64]{
+			TxPriority:      mempool.NewDefaultTxPriority(),
+			MaxTx:           maxTxs,
+			SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
+		}
+		if mempoolType == config.MempoolTypePriorityNonce {
+			return baseapp.SetMempool(mempool.NewPriorityMempool(cfg))
+		}
+		return baseapp.SetMempool(mempool.NewMultiLanePriorityMempool(cfg))
 	default:
 		panic(fmt.Sprintf("invalid app mempool type %q (from %s); valid: %q, %q, %q",
 			mempoolType, FlagMempoolType,

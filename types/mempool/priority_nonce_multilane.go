@@ -3,6 +3,7 @@ package mempool
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 
@@ -103,7 +104,7 @@ func (mp *MultiLanePriorityNonceMempool[C]) InsertWithGasWanted(ctx context.Cont
 		return err
 	}
 
-	anchor := lanes[0]
+	anchor := lanes[0] // first signer is the priority-index representative
 	priority := mp.cfg.TxPriority.GetTxPriority(ctx, tx)
 	conflicts := make(map[multiLaneKey]struct{})
 	for _, lane := range lanes {
@@ -187,7 +188,7 @@ func (i *MultiLanePriorityNonceIterator[C]) Next() Iterator {
 	}
 
 	for {
-		node, sender, _, ok := nextPriorityCursor(i.priorityNode, i.mempool.priorityIndex, i.mempool.cfg.TxPriority.MinValue)
+		node, sender, ok := nextPriorityCursor[C](i.priorityNode, i.mempool.priorityIndex)
 		if !ok {
 			return nil
 		}
@@ -474,9 +475,7 @@ func (i *MultiLanePriorityNonceIterator[C]) trySelectAnchor(anchor multiLaneKey)
 		nextCursors[sender] = cursor
 	}
 
-	for sender, cursor := range nextCursors {
-		i.senderCursors[sender] = cursor
-	}
+	maps.Copy(i.senderCursors, nextCursors)
 	i.selected = nextCursors[anchor.sender].Value.(Tx)
 	return true
 }
@@ -508,38 +507,3 @@ func (mp *MultiLanePriorityNonceMempool[C]) anchorPriorityKey(anchor multiLaneKe
 	}, true
 }
 
-func IsMultiLaneEmpty[C comparable](mempool Mempool) error {
-	mp := mempool.(*MultiLanePriorityNonceMempool[C])
-	if mp.priorityIndex.Len() != 0 {
-		return fmt.Errorf("priorityIndex not empty")
-	}
-
-	countKeys := make([]C, 0, len(mp.priorityCounts))
-	for k := range mp.priorityCounts {
-		countKeys = append(countKeys, k)
-	}
-	for _, k := range countKeys {
-		if mp.priorityCounts[k] != 0 {
-			return fmt.Errorf("priorityCounts not zero at %v, got %v", k, mp.priorityCounts[k])
-		}
-	}
-
-	senderKeys := make([]string, 0, len(mp.senderIndices))
-	for k := range mp.senderIndices {
-		senderKeys = append(senderKeys, k)
-	}
-	for _, k := range senderKeys {
-		if mp.senderIndices[k].Len() != 0 {
-			return fmt.Errorf("senderIndex not empty for sender %v", k)
-		}
-	}
-
-	if len(mp.laneOwners) != 0 {
-		return fmt.Errorf("laneOwners not empty")
-	}
-	if len(mp.txLanes) != 0 {
-		return fmt.Errorf("txLanes not empty")
-	}
-
-	return nil
-}

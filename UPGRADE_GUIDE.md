@@ -13,6 +13,7 @@ After completing this guide, applications will have:
 ## Table of Contents
 
 - [App Wiring Changes (REQUIRED)](#app-wiring-changes-required)
+- [Default Mempool Changed (REQUIRED)](#default-mempool-changed-required)
 - [Adding ProtocolPool Module (OPTIONAL)](#adding-protocolpool-module-optional)
   - [ProtocolPool Manual Wiring](#protocolpool-manual-wiring)
   - [ProtocolPool DI Wiring](#protocolpool-di-wiring)
@@ -32,6 +33,24 @@ app.ModuleManager.SetOrderPreBlockers(
     authtypes.ModuleName, // NEW
 )
 ```
+
+## Default Mempool Changed **REQUIRED**
+
+The default app-side mempool when `mempool.max-txs >= 0` has changed from
+`sender-nonce` to `multi-lane-priority-nonce`. If your chain used the previous
+default behavior, add the following to the `[mempool]` section of `app.toml` to
+preserve it:
+
+```toml
+[mempool]
+max-txs = 0    # or whatever value you had before
+type = "sender-nonce"
+```
+
+The new default (`multi-lane-priority-nonce`) indexes every `(signer, nonce)`
+lane from the configured `SignerExtractor`, enabling correct nonce tracking for
+transactions that contain multiple signers (e.g. EVM-compatible envelopes).
+Chains that use only single-signer transactions see no behavioral difference.
 
 ## Adding ProtocolPool Module **OPTIONAL**
 
