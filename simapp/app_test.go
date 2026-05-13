@@ -157,7 +157,6 @@ func TestNewSimAppLoadsMempoolFromAppToml(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
 			configDir := filepath.Join(home, "config")
