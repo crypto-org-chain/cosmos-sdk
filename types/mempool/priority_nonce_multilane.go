@@ -506,4 +506,3 @@ func (mp *MultiLanePriorityNonceMempool[C]) anchorPriorityKey(anchor multiLaneKe
 		weight:   score.weight,
 	}, true
 }
-
