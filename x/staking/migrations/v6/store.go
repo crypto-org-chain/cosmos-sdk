@@ -6,7 +6,7 @@ import (
 	"time"
 
 	storetypes "cosmossdk.io/core/store"
-	storetypesv1 "cosmossdk.io/store/types"
+	storetypesv1 "github.com/cosmos/cosmos-sdk/store/v2/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"

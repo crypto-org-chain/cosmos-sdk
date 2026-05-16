@@ -10,7 +10,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	storetypes "cosmossdk.io/core/store"
-	storetypesv1 "cosmossdk.io/store/types"
+	storetypesv1 "github.com/cosmos/cosmos-sdk/store/v2/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/address"
