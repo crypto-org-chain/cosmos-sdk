@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, 'skip-sims')"
     steps:
       - uses: actions/checkout@v6
@@ -28,7 +28,7 @@ jobs:
   install-runsim:
     permissions:
       contents: none
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/setup-go@v6
@@ -42,7 +42,7 @@ jobs:
           key: ${{ runner.os }}-go-runsim-binary
 
   test-sim-import-export:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     needs: [build, install-runsim]
     timeout-minutes: 60
     steps:
@@ -61,7 +61,7 @@ jobs:
           make test-sim-import-export
 
   test-sim-after-import:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     needs: [build, install-runsim]
     steps:
       - uses: actions/checkout@v6
@@ -79,7 +79,7 @@ jobs:
           make test-sim-after-import
 
   test-sim-multi-seed-short:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     needs: [build, install-runsim]
     steps:
       - uses: actions/checkout@v6
@@ -101,7 +101,7 @@ jobs:
       contents: none
     needs:
       [test-sim-multi-seed-short, test-sim-after-import, test-sim-import-export]
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     if: ${{ failure() }}
     steps:
       - name: Notify Slack on failure
