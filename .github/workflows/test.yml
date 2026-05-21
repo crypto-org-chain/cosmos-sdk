@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   split-test-files:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -45,7 +45,7 @@ jobs:
           path: ./pkgs.txt.part.03
 
   tests:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     needs: split-test-files
     strategy:
       fail-fast: false
@@ -84,7 +84,7 @@ jobs:
           path: ./${{ matrix.part }}profile.out
 
   test-integration:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -146,7 +146,7 @@ jobs:
           path: ./tests/e2e-profile.out
 
   repo-analysis:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     needs: [tests, test-integration, test-e2e, test-clientv2, test-core, test-depinject, test-errors, test-math, test-collections, test-cosmovisor, test-confix, test-store, test-log, test-poa]
     steps:
       - uses: actions/checkout@v6
@@ -269,7 +269,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-sim-nondeterminism:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -302,7 +302,7 @@ jobs:
   # They run when there is a diff in their respective directories.
 
   test-clientv2:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -330,7 +330,7 @@ jobs:
           path: ./client/v2/coverage.out
 
   test-core:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -358,7 +358,7 @@ jobs:
           path: ./core/coverage.out
 
   test-depinject:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -386,7 +386,7 @@ jobs:
           path: ./depinject/coverage.out
 
   test-errors:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -414,7 +414,7 @@ jobs:
           path: ./errors/coverage.out
 
   test-math:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -442,7 +442,7 @@ jobs:
           path: ./math/coverage.out
 
   test-collections:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -470,7 +470,7 @@ jobs:
           path: ./collections/coverage.out
 
   test-cosmovisor:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -498,7 +498,7 @@ jobs:
           path: ./tools/cosmovisor/coverage.out
 
   test-confix:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -526,7 +526,7 @@ jobs:
           path: ./tools/confix/coverage.out
 
   test-store:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -555,7 +555,7 @@ jobs:
           path: ./store/coverage.out
 
   test-log:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -587,7 +587,7 @@ jobs:
   #############################
 
   test-poa:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
