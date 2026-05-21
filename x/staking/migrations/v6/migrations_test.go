@@ -4,17 +4,13 @@ import (
 	"testing"
 	"time"
 
+	storetypes "cosmossdk.io/core/store"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
-	"github.com/stretchr/testify/suite"
-	"go.uber.org/mock/gomock"
-
-	storetypes "cosmossdk.io/core/store"
-	storetypesv1 "github.com/cosmos/cosmos-sdk/store/v2/types"
-
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/runtime"
+	storetypesv1 "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
@@ -24,6 +20,8 @@ import (
 	v6 "github.com/cosmos/cosmos-sdk/x/staking/migrations/v6"
 	stakingtestutil "github.com/cosmos/cosmos-sdk/x/staking/testutil"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	"github.com/stretchr/testify/suite"
+	"go.uber.org/mock/gomock"
 )
 
 var (
