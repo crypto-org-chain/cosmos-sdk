@@ -7,7 +7,10 @@ import (
 	"sort"
 	"time"
 
-	v6 "github.com/cosmos/cosmos-sdk/x/staking/migrations/v6"
+	corestore "cosmossdk.io/core/store"
+
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -17,7 +20,61 @@ import (
 // upgrade handler instead of relying on a consensus version migration.
 func (k Keeper) PopulateQueuePendingSlots(ctx context.Context) error {
 	store := k.storeService.OpenKVStore(ctx)
-	return v6.MigrateStore(ctx, store, k)
+	if err := populateValidatorQueuePending(ctx, store, k.SetValidatorQueuePendingSlots); err != nil {
+		return err
+	}
+	if err := populateTimeQueuePending(ctx, store, types.UnbondingQueueKey, k.SetUBDQueuePendingSlots); err != nil {
+		return err
+	}
+	return populateTimeQueuePending(ctx, store, types.RedelegationQueueKey, k.SetRedelegationQueuePendingSlots)
+}
+
+func populateValidatorQueuePending(
+	ctx context.Context,
+	store corestore.KVStore,
+	setter func(context.Context, []types.TimeHeightQueueSlot) error,
+) error {
+	iter, err := store.Iterator(types.ValidatorQueueKey, storetypes.PrefixEndBytes(types.ValidatorQueueKey))
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+	var slots []types.TimeHeightQueueSlot
+	for ; iter.Valid(); iter.Next() {
+		keyTime, keyHeight, err := types.ParseValidatorQueueKey(iter.Key())
+		if err != nil {
+			return err
+		}
+		slots = append(slots, types.TimeHeightQueueSlot{Time: keyTime, Height: keyHeight})
+	}
+	return setter(ctx, slots)
+}
+
+func populateTimeQueuePending(
+	ctx context.Context,
+	store corestore.KVStore,
+	queueKey []byte,
+	setter func(context.Context, []time.Time) error,
+) error {
+	iter, err := store.Iterator(queueKey, storetypes.PrefixEndBytes(queueKey))
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+	var slots []time.Time
+	for ; iter.Valid(); iter.Next() {
+		key := iter.Key()
+		if len(key) <= len(queueKey) {
+			return fmt.Errorf("key length is too short")
+		}
+		timeBz := key[len(queueKey):]
+		t, err := sdk.ParseTimeBytes(timeBz)
+		if err != nil {
+			return fmt.Errorf("unable to parse time from queue key %x: %w", key, err)
+		}
+		slots = append(slots, t)
+	}
+	return setter(ctx, slots)
 }
 
 // Binary encoding constants for pending slot lists.
