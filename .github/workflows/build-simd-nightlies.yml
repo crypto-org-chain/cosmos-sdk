@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     timeout-minutes: 15
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
@@ -75,7 +75,7 @@ jobs:
   publish:
     timeout-minutes: 15
     needs: build
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
