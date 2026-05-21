@@ -117,7 +117,7 @@ This patch release contains only minor dependency bumps.
 * (collections/codec) [#25614] (https://github.com/cosmos/cosmos-sdk/pull/25827)  Add `TimeValue` (`ValueCodec[time.Time]`) to collections/codec.
 * (enterprise/poa) [#25838](https://github.com/cosmos/cosmos-sdk/pull/25838) Add the `poa` module under the `enterprise` directory.
 * (grpc) [#25850](https://github.com/cosmos/cosmos-sdk/pull/25850) Add `GetBlockResults` and `GetLatestBlockResults` gRPC endpoints to expose CometBFT block results including `finalize_block_events`.
-* (staking) [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023) Add `Keeper.PopulateQueuePendingSlots` utility to optimize staking end-block queue through using pending queue slots instead of iterators. The migration is not registered against a consensus version bump; chains must invoke it from their upgrade handler.
+* (staking) [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023) Expose v6 queue migration as utility, keep consensus version at 5.
 
 ### Improvements
 
