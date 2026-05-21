@@ -25,7 +25,7 @@ type QueuePendingSlotSetter interface {
 // from current queue state. This avoids expensive full-range iteration in
 // end-block on the first block after upgrade.
 func MigrateStore(
-	ctx sdk.Context,
+	ctx context.Context,
 	store storetypes.KVStore,
 	k QueuePendingSlotSetter,
 ) error {

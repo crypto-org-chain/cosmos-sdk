@@ -7,8 +7,18 @@ import (
 	"sort"
 	"time"
 
+	v6 "github.com/cosmos/cosmos-sdk/x/staking/migrations/v6"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
+
+// PopulateQueuePendingSlots scans existing validator, UBD, and redelegation queue entries
+// and populates the corresponding pending slot indexes used by the end-block optimization.
+// Chains upgrading from a state without these indexes should call this once from their
+// upgrade handler instead of relying on a consensus version migration.
+func (k Keeper) PopulateQueuePendingSlots(ctx context.Context) error {
+	store := k.storeService.OpenKVStore(ctx)
+	return v6.MigrateStore(ctx, store, k)
+}
 
 // Binary encoding constants for pending slot lists.
 // Layout: [countBytes] (uint32) then for each slot: [timeBytes][heightBytes] (validator) or [timeBytes] (UBD/redelegation).
