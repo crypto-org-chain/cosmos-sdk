@@ -420,6 +420,12 @@ func (app *BaseApp) InsertTx(req *abci.RequestInsertTx) (*abci.ResponseInsertTx,
 		// are intentionally discarded.
 		_, _, _, err := app.RunTx(execModeCheck, req.Tx, nil, -1, nil, nil)
 		if err != nil {
+			// ErrMempoolIsFull is transient — translate to CometBFT's
+			// CodeTypeRetry so the peer backs off and resubmits instead of
+			// dropping the tx as a permanent reject.
+			if errors.Is(err, sdkerrors.ErrMempoolIsFull) {
+				return &abci.ResponseInsertTx{Code: abci.CodeTypeRetry}, nil
+			}
 			_, code, _ := errorsmod.ABCIInfo(err, app.trace)
 			return &abci.ResponseInsertTx{Code: code}, nil
 		}
