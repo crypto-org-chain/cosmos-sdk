@@ -374,6 +374,20 @@ func (app *BaseApp) SetInsertTxHandler(handler sdk.InsertTxHandler) {
 	app.abciHandlers.InsertTxHandler = handler
 }
 
+// SetInsertTxSeenCacheSize sets the max number of recent tx-hashes the
+// default InsertTx handler remembers in order to skip AnteHandler runs on
+// gossip-back duplicates under mempool.type=app. Must be called before the
+// BaseApp is sealed.
+//
+// Default: 16384 entries (~512KB at 32-byte sha256). A value <= 0 disables
+// the cache and every InsertTx call runs RunTx(execModeCheck).
+func (app *BaseApp) SetInsertTxSeenCacheSize(n int) {
+	if app.sealed {
+		panic("SetInsertTxSeenCacheSize() on sealed BaseApp")
+	}
+	app.insertTxCacheSizeHint = n
+}
+
 // SetReapTxsHandler sets the ReapTxs function for the BaseApp.
 func (app *BaseApp) SetReapTxsHandler(handler sdk.ReapTxsHandler) {
 	if app.sealed {

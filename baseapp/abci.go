@@ -2,6 +2,7 @@ package baseapp
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"sort"
 	"strings"
@@ -416,6 +417,22 @@ func (app *BaseApp) InsertTx(req *abci.RequestInsertTx) (*abci.ResponseInsertTx,
 	defer span.End()
 
 	if app.abciHandlers.InsertTxHandler == nil {
+		// Skip AnteHandler if we admitted this tx-hash recently. CometBFT v0.39
+		// AppReactor delivers gossiped txs via InsertTx, with no built-in
+		// dedup (the network-side cache lives in the flood mempool, which is
+		// inactive under mempool.type=app). N peers gossiping the same tx
+		// would otherwise trigger N full ECDSA-recover + state reads. The
+		// seen-cache reproduces flood-mempool's tx-hash dedup at the app
+		// layer; cache hits return CodeTypeOK without running RunTx because
+		// the original admission already inserted the tx into the mempool.
+		var hash [32]byte
+		if app.insertTxSeenCache != nil {
+			hash = sha256.Sum256(req.Tx)
+			if app.insertTxSeenCache.Has(hash) {
+				return &abci.ResponseInsertTx{Code: abci.CodeTypeOK}, nil
+			}
+		}
+
 		// ResponseInsertTx only carries Code, so gas/result/events from RunTx
 		// are intentionally discarded.
 		_, _, _, err := app.RunTx(execModeCheck, req.Tx, nil, -1, nil, nil)
@@ -428,6 +445,9 @@ func (app *BaseApp) InsertTx(req *abci.RequestInsertTx) (*abci.ResponseInsertTx,
 			}
 			_, code, _ := errorsmod.ABCIInfo(err, app.trace)
 			return &abci.ResponseInsertTx{Code: code}, nil
+		}
+		if app.insertTxSeenCache != nil {
+			app.insertTxSeenCache.Add(hash)
 		}
 		return &abci.ResponseInsertTx{Code: abci.CodeTypeOK}, nil
 	}

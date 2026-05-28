@@ -81,6 +81,12 @@ type BaseApp struct {
 
 	abciHandlers sdk.ABCIHandlers
 
+	// insertTxSeenCache deduplicates AnteHandler invocations on gossip fan-out
+	// under mempool.type=app. Keyed by tx-hash; a hit short-circuits the
+	// default InsertTx handler. Set via SetInsertTxSeenCacheSize before sealing.
+	insertTxSeenCache     *insertTxCache
+	insertTxCacheSizeHint int
+
 	addrPeerFilter sdk.PeerFilter // filter peers by address and port
 	idPeerFilter   sdk.PeerFilter // filter peers by node ID
 	fauxMerkleMode bool           // if true, IAVL MountStores uses MountStoresDB for simulation speed.
@@ -234,7 +240,53 @@ func NewBaseApp(
 
 	app.stateManager = state.NewManager(app.gasConfig)
 
+	// Default cache size matches CometBFT's mempool cache_size default
+	// (10K) with headroom for high-fanout gossip windows.
+	if app.insertTxCacheSizeHint == 0 {
+		app.insertTxCacheSizeHint = 16384
+	}
+	if app.insertTxCacheSizeHint > 0 {
+		app.insertTxSeenCache = newInsertTxCache(app.insertTxCacheSizeHint)
+	}
+
 	return app
+}
+
+// insertTxCache is a fixed-size FIFO of tx-hashes used by the default
+// InsertTx handler to skip AnteHandler runs on gossip fan-out duplicates.
+// Lookups go through sync.Map (lock-free reads); the eviction queue is
+// guarded by a small mutex so writers don't race the FIFO.
+type insertTxCache struct {
+	max int
+	m   sync.Map // map[[32]byte]struct{}
+	mu  sync.Mutex
+	q   [][32]byte // FIFO of recent hashes
+}
+
+func newInsertTxCache(max int) *insertTxCache {
+	return &insertTxCache{max: max, q: make([][32]byte, 0, max)}
+}
+
+// Has reports whether the tx-hash was admitted recently.
+func (c *insertTxCache) Has(h [32]byte) bool {
+	_, ok := c.m.Load(h)
+	return ok
+}
+
+// Add records a tx-hash, evicting the oldest entry if at capacity.
+// Safe for concurrent use; duplicates are no-ops.
+func (c *insertTxCache) Add(h [32]byte) {
+	if _, loaded := c.m.LoadOrStore(h, struct{}{}); loaded {
+		return
+	}
+	c.mu.Lock()
+	c.q = append(c.q, h)
+	if len(c.q) > c.max {
+		evict := c.q[0]
+		c.q = c.q[1:]
+		c.m.Delete(evict)
+	}
+	c.mu.Unlock()
 }
 
 // Name returns the name of the BaseApp.
