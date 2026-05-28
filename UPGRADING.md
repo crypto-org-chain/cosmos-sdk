@@ -165,6 +165,10 @@ func (app SimApp) RegisterUpgradeHandlers() {
     app.UpgradeKeeper.SetUpgradeHandler(
         UpgradeName,
         func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+            // crypto-org-chain fork: see Staking Queue Pending-Slot Index below.
+            if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
+                return nil, err
+            }
             return app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
         },
     )
@@ -186,11 +190,22 @@ func (app SimApp) RegisterUpgradeHandlers() {
 
 Add `"params"` to `Deleted` as well if your app still had the `x/params` store mounted.
 
+#### Staking Queue Pending-Slot Index (crypto-org-chain fork)
+
+End-block maturity of unbonding validators, unbonding delegations and redelegations reads a pending-slot index instead of iterating the queues. Queue entries written before the index existed are invisible to end-block and never mature. If the chain did not already run it on the fork's `release/v0.54.x`, call it from the upgrade handler, as the reference handler in `simapp/upgrades.go` does; it rebuilds the index from a full queue scan, so running it again is safe:
+
+```go
+if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
+    return nil, err
+}
+```
+
 ### crypto-org-chain Fork Changes
 
 Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
 
 * `x/staking`: an error from the `AfterUnbondingInitiated` hook now fails `MsgUndelegate` and `MsgBeginRedelegate` instead of being logged and ignored. Apps whose staking hooks can return an error must expect those txs to fail.
+* `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)).
 * `baseapp`: `CheckTx` inserts into the mempool before writing the AnteHandler state, so a custom `Mempool.Insert` or `TxPriority` that reads state from `ctx` sees pre-ante state. The SDK mempools take the nonce from the tx signature and are unaffected.
 * `server`: the default gRPC `max-send-msg-size` drops from ~2GB to 10MB. An `app.toml` that sets `max-send-msg-size` keeps its value (generated files do); one that omits the key gets 10MB. Raise `grpc.max-send-msg-size` if queries return larger responses. **RPC and archive operators of ethermint-based chains such as Cronos:** JSON-RPC `debug_traceTransaction`, `debug_traceBlock*` and large paginated queries go through the app's gRPC server and can exceed 10MB. They fail with `ResourceExhausted` on nodes initialised with `init` and on any `app.toml` that omits the key, so set `max-send-msg-size` explicitly on those nodes.
 
