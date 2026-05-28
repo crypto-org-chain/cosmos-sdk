@@ -48,6 +48,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### FEATURES
 
+* (staking) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) expose queue migration as utility, keep consensus version at 5
+
 ### STATE-BREAKING
 
 ### API-BREAKING
@@ -155,7 +157,7 @@ This patch release contains only minor dependency bumps.
 * (collections/codec) [#25614] (https://github.com/cosmos/cosmos-sdk/pull/25827)  Add `TimeValue` (`ValueCodec[time.Time]`) to collections/codec.
 * (enterprise/poa) [#25838](https://github.com/cosmos/cosmos-sdk/pull/25838) Add the `poa` module under the `enterprise` directory.
 * (grpc) [#25850](https://github.com/cosmos/cosmos-sdk/pull/25850) Add `GetBlockResults` and `GetLatestBlockResults` gRPC endpoints to expose CometBFT block results including `finalize_block_events`.
-* (staking) [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023) Optimize staking end-block queue through using pending queue slots instead of iterators.
+* (staking) [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023) Expose queue migration as utility, keep consensus version at 5.
 
 ### Improvements
 
