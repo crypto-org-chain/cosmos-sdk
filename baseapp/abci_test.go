@@ -2701,3 +2701,130 @@ func TestABCI_Race_Commit_Query(t *testing.T) {
 
 	require.Equal(t, int64(1001), app.GetContextForCheckTx(nil).BlockHeight())
 }
+
+func TestABCI_InsertTx_DefaultRunsAnteHandler(t *testing.T) {
+	anteKey := []byte("ante-key")
+	deliverKey := []byte("deliver-key")
+	// SenderNonceMaxTxOpt required: DefaultMaxTx=-1 short-circuits Insert into a no-op.
+	pool := mempool.NewSenderNonceMempool(mempool.SenderNonceMaxTxOpt(5000))
+	anteOpt := func(bapp *baseapp.BaseApp) { bapp.SetAnteHandler(anteHandlerTxTest(t, capKey1, anteKey)) }
+	suite := NewBaseAppSuite(t, anteOpt, baseapp.SetMempool(pool))
+	baseapptestutil.RegisterCounterServer(suite.baseApp.MsgServiceRouter(), CounterServerImpl{t, capKey1, deliverKey})
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	tx := newTxCounter(t, suite.txConfig, 0, 0)
+	txBytes, err := suite.txConfig.TxEncoder()(tx)
+	require.NoError(t, err)
+
+	r, err := suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: txBytes})
+	require.NoError(t, err)
+	require.Equal(t, abci.CodeTypeOK, r.Code)
+
+	// AnteHandler ran and persisted to checkState (counter advanced from 0 to 1).
+	checkStateStore := getCheckStateCtx(suite.baseApp).KVStore(capKey1)
+	require.Equal(t, int64(1), getIntFromStore(t, checkStateStore, anteKey))
+
+	// Tx admitted to mempool.
+	require.Equal(t, 1, pool.CountTx())
+}
+
+func TestABCI_InsertTx_DefaultRejectsBadTx(t *testing.T) {
+	anteKey := []byte("ante-key")
+	deliverKey := []byte("deliver-key")
+	pool := mempool.NewSenderNonceMempool(mempool.SenderNonceMaxTxOpt(5000))
+	anteOpt := func(bapp *baseapp.BaseApp) { bapp.SetAnteHandler(anteHandlerTxTest(t, capKey1, anteKey)) }
+	suite := NewBaseAppSuite(t, anteOpt, baseapp.SetMempool(pool))
+	baseapptestutil.RegisterCounterServer(suite.baseApp.MsgServiceRouter(), CounterServerImpl{t, capKey1, deliverKey})
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	tx := newTxCounter(t, suite.txConfig, 0, 0)
+	tx = setFailOnAnte(t, suite.txConfig, tx, true)
+	txBytes, err := suite.txConfig.TxEncoder()(tx)
+	require.NoError(t, err)
+
+	r, err := suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: txBytes})
+	require.NoError(t, err)
+	require.Equal(t, sdkerrors.ErrUnauthorized.ABCICode(), r.Code,
+		"AnteHandler-failing tx must surface the ante's ABCI code")
+	require.Equal(t, 0, pool.CountTx(), "rejected tx must not enter mempool")
+}
+
+func TestABCI_InsertTx_DefaultDuplicateTx(t *testing.T) {
+	// The default mempools (PriorityNonce, SenderNonce) dedup by (sender, nonce)
+	// via overwrite, so a second InsertTx of the same (sender, nonce) still
+	// returns OK but must not double-count the mempool. Use a passthrough
+	// AnteHandler so the second pass isn't rejected by the test ante's
+	// counter-equality check.
+	deliverKey := []byte("deliver-key")
+	pool := mempool.NewSenderNonceMempool(mempool.SenderNonceMaxTxOpt(5000))
+	anteOpt := func(bapp *baseapp.BaseApp) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
+			return ctx, nil
+		})
+	}
+	suite := NewBaseAppSuite(t, anteOpt, baseapp.SetMempool(pool))
+	baseapptestutil.RegisterCounterServer(suite.baseApp.MsgServiceRouter(), CounterServerImpl{t, capKey1, deliverKey})
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	tx := newTxCounter(t, suite.txConfig, 0, 0)
+	txBytes, err := suite.txConfig.TxEncoder()(tx)
+	require.NoError(t, err)
+
+	r1, err := suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: txBytes})
+	require.NoError(t, err)
+	require.Equal(t, abci.CodeTypeOK, r1.Code)
+	require.Equal(t, 1, pool.CountTx())
+
+	// Same tx bytes again: same (sender, nonce). SenderNonceMempool overwrites
+	// rather than erroring, so InsertTx returns OK and the count stays at 1.
+	r2, err := suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: txBytes})
+	require.NoError(t, err)
+	require.Equal(t, abci.CodeTypeOK, r2.Code)
+	require.Equal(t, 1, pool.CountTx(),
+		"duplicate (sender,nonce) must not grow the mempool")
+}
+
+func TestABCI_InsertTx_CustomHandlerOverridesDefault(t *testing.T) {
+	const customCode uint32 = 42
+	called := false
+
+	customHandler := func(req *abci.RequestInsertTx) (*abci.ResponseInsertTx, error) {
+		called = true
+		return &abci.ResponseInsertTx{Code: customCode}, nil
+	}
+
+	deliverKey := []byte("deliver-key")
+	pool := mempool.NewSenderNonceMempool(mempool.SenderNonceMaxTxOpt(5000))
+	setupOpt := func(bapp *baseapp.BaseApp) {
+		bapp.SetAnteHandler(anteHandlerTxTest(t, capKey1, []byte("ante-key")))
+		bapp.SetInsertTxHandler(customHandler)
+	}
+	suite := NewBaseAppSuite(t, setupOpt, baseapp.SetMempool(pool))
+	baseapptestutil.RegisterCounterServer(suite.baseApp.MsgServiceRouter(), CounterServerImpl{t, capKey1, deliverKey})
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	tx := newTxCounter(t, suite.txConfig, 0, 0)
+	txBytes, err := suite.txConfig.TxEncoder()(tx)
+	require.NoError(t, err)
+
+	r, err := suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: txBytes})
+	require.NoError(t, err)
+	require.True(t, called, "custom InsertTxHandler must be invoked when set")
+	require.Equal(t, customCode, r.Code)
+}

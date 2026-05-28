@@ -396,10 +396,36 @@ func (app *BaseApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, er
 }
 
 // InsertTx inserts a tx into the applications mempool.
+//
+// When no custom InsertTxHandler is set, the default behavior runs the
+// configured AnteHandler chain via RunTx(execModeCheck, ...). RunTx admits
+// the tx into the mempool only when the AnteHandler succeeds, mirroring the
+// CheckTx ABCI path. This prevents peer-relayed admission of unverified txs
+// (bad signatures, replay/wrong-chainID, future-nonce flooding) under
+// mempool.type=app.
+//
+// Note on duplicates: the SDK's default mempools dedup by (sender, nonce)
+// via overwrite rather than tx-hash error. A tx that arrives via both the
+// RPC CheckTx path and a peer's InsertTx will run AnteHandler twice against
+// checkState. This is the same property CheckTx already has and is the
+// trade-off for validating before admission. If the AnteHandler is nil, the
+// default skips validation and admits the tx unchanged — register an
+// AnteHandler chain (or a custom InsertTxHandler) for production use.
 func (app *BaseApp) InsertTx(req *abci.RequestInsertTx) (*abci.ResponseInsertTx, error) {
+	_, span := tracer.Start(context.Background(), "InsertTx", trace.WithAttributes(otelattr.String("ExecMode", "check")))
+	defer span.End()
+
 	if app.abciHandlers.InsertTxHandler == nil {
-		return nil, errors.New("InsertTx handler not set")
+		// ResponseInsertTx only carries Code, so gas/result/events from RunTx
+		// are intentionally discarded.
+		_, _, _, err := app.RunTx(execModeCheck, req.Tx, nil, -1, nil, nil)
+		if err != nil {
+			_, code, _ := errorsmod.ABCIInfo(err, app.trace)
+			return &abci.ResponseInsertTx{Code: code}, nil
+		}
+		return &abci.ResponseInsertTx{Code: abci.CodeTypeOK}, nil
 	}
+
 	return app.abciHandlers.InsertTxHandler(req)
 }
 

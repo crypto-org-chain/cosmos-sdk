@@ -361,6 +361,11 @@ func (app *BaseApp) SetCheckTxHandler(handler sdk.CheckTxHandler) {
 }
 
 // SetInsertTxHandler sets the InsertTx function for the BaseApp.
+//
+// When no handler is set, BaseApp's default InsertTx runs the configured
+// AnteHandler chain via RunTx(execModeCheck, ...). Apps that need full
+// control over admission (custom code mapping, priority stamping, etc.) can
+// override the default by registering a handler here.
 func (app *BaseApp) SetInsertTxHandler(handler sdk.InsertTxHandler) {
 	if app.sealed {
 		panic("SetInsertTxHandler() on sealed BaseApp")
