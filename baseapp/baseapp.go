@@ -180,18 +180,18 @@ func NewBaseApp(
 	name string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, options ...func(*BaseApp),
 ) *BaseApp {
 	app := &BaseApp{
-		logger:               logger.With(log.ModuleKey, "baseapp"),
-		name:                 name,
-		db:                   db,
-		cms:                  store.NewCommitMultiStore(db, logger),
-		storeLoader:          DefaultStoreLoader,
-		grpcQueryRouter:      NewGRPCQueryRouter(),
-		msgServiceRouter:     NewMsgServiceRouter(),
-		txDecoder:            txDecoder,
-		fauxMerkleMode:       false,
-		sigverifyTx:          true,
-		gasConfig:            config.GasConfig{QueryGasLimit: math.MaxUint64},
-		disableBlockGasMeter: true,
+		logger:                logger.With(log.ModuleKey, "baseapp"),
+		name:                  name,
+		db:                    db,
+		cms:                   store.NewCommitMultiStore(db, logger),
+		storeLoader:           DefaultStoreLoader,
+		grpcQueryRouter:       NewGRPCQueryRouter(),
+		msgServiceRouter:      NewMsgServiceRouter(),
+		txDecoder:             txDecoder,
+		fauxMerkleMode:        false,
+		sigverifyTx:           true,
+		gasConfig:             config.GasConfig{QueryGasLimit: math.MaxUint64},
+		disableBlockGasMeter:  true,
 		insertTxCacheSizeHint: -1, // -1 = use default; 0 = disabled; >0 = explicit size
 	}
 
