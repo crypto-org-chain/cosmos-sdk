@@ -44,7 +44,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
-* (baseapp) [#1815](https://github.com/crypto-org-chain/cosmos-sdk/pull/1815) Run `AnteHandler` in the default `InsertTx` ABCI handler. When no custom `InsertTxHandler` is registered, `BaseApp.InsertTx` now calls `RunTx(execModeCheck, ...)` so peer-relayed txs under `mempool.type=app` are validated (sigs, chain-id, nonce, fees) before admission instead of erroring with `"InsertTx handler not set"`. Apps with a custom `InsertTxHandler` keep their override.
+* (baseapp) [#1815](https://github.com/crypto-org-chain/cosmos-sdk/pull/1815) feat(baseapp): run AnteHandler in default InsertTx handler.
+
 
 ### Bug Fixes
 
