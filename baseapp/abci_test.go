@@ -2765,8 +2765,10 @@ func TestABCI_InsertTx_DefaultDuplicateTx(t *testing.T) {
 	// counter-equality check.
 	deliverKey := []byte("deliver-key")
 	pool := mempool.NewSenderNonceMempool(mempool.SenderNonceMaxTxOpt(5000))
+	callCount := 0
 	anteOpt := func(bapp *baseapp.BaseApp) {
 		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
+			callCount++
 			return ctx, nil
 		})
 	}
@@ -2786,14 +2788,51 @@ func TestABCI_InsertTx_DefaultDuplicateTx(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, abci.CodeTypeOK, r1.Code)
 	require.Equal(t, 1, pool.CountTx())
+	require.Equal(t, 1, callCount, "AnteHandler must run on first insert")
 
-	// Same tx bytes again: same (sender, nonce). SenderNonceMempool overwrites
-	// rather than erroring, so InsertTx returns OK and the count stays at 1.
+	// Same tx bytes again: seen-cache must short-circuit, AnteHandler must NOT run.
 	r2, err := suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: txBytes})
 	require.NoError(t, err)
 	require.Equal(t, abci.CodeTypeOK, r2.Code)
 	require.Equal(t, 1, pool.CountTx(),
 		"duplicate (sender,nonce) must not grow the mempool")
+	require.Equal(t, 1, callCount, "seen-cache must skip AnteHandler on duplicate")
+}
+
+func TestABCI_InsertTx_DefaultMempoolFullRetry(t *testing.T) {
+	// Pool capacity = 1. First tx fills it; second must return CodeTypeRetry.
+	pool := mempool.NewSenderNonceMempool(mempool.SenderNonceMaxTxOpt(1))
+	anteOpt := func(bapp *baseapp.BaseApp) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
+			return ctx, nil
+		})
+	}
+	suite := NewBaseAppSuite(t, anteOpt, baseapp.SetMempool(pool))
+	deliverKey := []byte("deliver-key")
+	baseapptestutil.RegisterCounterServer(suite.baseApp.MsgServiceRouter(), CounterServerImpl{t, capKey1, deliverKey})
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	// Fill the pool with seq=0.
+	tx0 := newTxCounter(t, suite.txConfig, 0, 0)
+	tx0Bytes, err := suite.txConfig.TxEncoder()(tx0)
+	require.NoError(t, err)
+	r0, err := suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: tx0Bytes})
+	require.NoError(t, err)
+	require.Equal(t, abci.CodeTypeOK, r0.Code)
+	require.Equal(t, 1, pool.CountTx())
+
+	// Different tx (seq=1) hits full pool → must get CodeTypeRetry.
+	tx1 := newTxCounter(t, suite.txConfig, 1, 0)
+	tx1Bytes, err := suite.txConfig.TxEncoder()(tx1)
+	require.NoError(t, err)
+	r1, err := suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: tx1Bytes})
+	require.NoError(t, err)
+	require.Equal(t, abci.CodeTypeRetry, r1.Code,
+		"full mempool must surface CodeTypeRetry so the peer backs off")
 }
 
 func TestABCI_InsertTx_CustomHandlerOverridesDefault(t *testing.T) {
@@ -2827,4 +2866,38 @@ func TestABCI_InsertTx_CustomHandlerOverridesDefault(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, called, "custom InsertTxHandler must be invoked when set")
 	require.Equal(t, customCode, r.Code)
+}
+
+func TestABCI_InsertTx_DefaultCacheDisabled(t *testing.T) {
+	// SetInsertTxSeenCacheSize(0) disables the seen-cache. Every InsertTx must
+	// run RunTx regardless of whether the same tx was admitted before.
+	callCount := 0
+	pool := mempool.NewSenderNonceMempool(mempool.SenderNonceMaxTxOpt(5000))
+	setupOpt := func(bapp *baseapp.BaseApp) {
+		bapp.SetInsertTxSeenCacheSize(0) // disable cache
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
+			callCount++
+			return ctx, nil
+		})
+	}
+	suite := NewBaseAppSuite(t, setupOpt, baseapp.SetMempool(pool))
+	deliverKey := []byte("deliver-key")
+	baseapptestutil.RegisterCounterServer(suite.baseApp.MsgServiceRouter(), CounterServerImpl{t, capKey1, deliverKey})
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	tx := newTxCounter(t, suite.txConfig, 0, 0)
+	txBytes, err := suite.txConfig.TxEncoder()(tx)
+	require.NoError(t, err)
+
+	_, err = suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: txBytes})
+	require.NoError(t, err)
+	require.Equal(t, 1, callCount)
+
+	_, err = suite.baseApp.InsertTx(&abci.RequestInsertTx{Tx: txBytes})
+	require.NoError(t, err)
+	require.Equal(t, 2, callCount, "disabled cache must run AnteHandler on every call")
 }

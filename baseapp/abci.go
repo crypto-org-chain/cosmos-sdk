@@ -30,6 +30,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
 )
 
 // Supported ABCI Query prefixes and paths
@@ -396,7 +397,7 @@ func (app *BaseApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, er
 	return app.abciHandlers.CheckTxHandler(runTx, req)
 }
 
-// InsertTx inserts a tx into the applications mempool.
+// InsertTx inserts a tx into the application's mempool.
 //
 // When no custom InsertTxHandler is set, the default behavior runs the
 // configured AnteHandler chain via RunTx(execModeCheck, ...). RunTx admits
@@ -413,46 +414,52 @@ func (app *BaseApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, er
 // default skips validation and admits the tx unchanged — register an
 // AnteHandler chain (or a custom InsertTxHandler) for production use.
 func (app *BaseApp) InsertTx(req *abci.RequestInsertTx) (*abci.ResponseInsertTx, error) {
+	if app.abciHandlers.InsertTxHandler != nil {
+		return app.abciHandlers.InsertTxHandler(req)
+	}
+	return app.defaultInsertTx(req)
+}
+
+// defaultInsertTx is the built-in InsertTx implementation used when no custom
+// InsertTxHandler is registered. It deduplicates via a tx-hash seen-cache,
+// then runs RunTx(execModeCheck) to validate and admit the tx.
+//
+// CometBFT v0.39 AppReactor delivers gossiped txs via InsertTx with no
+// built-in dedup (the network-side cache lives in the flood mempool, which is
+// inactive under mempool.type=app). N peers gossiping the same tx would
+// otherwise trigger N full ECDSA-recover + state reads. The seen-cache
+// reproduces flood-mempool's tx-hash dedup at the app layer.
+func (app *BaseApp) defaultInsertTx(req *abci.RequestInsertTx) (*abci.ResponseInsertTx, error) {
+	var hash [32]byte
+	if app.insertTxSeenCache != nil {
+		hash = sha256.Sum256(req.Tx)
+		if app.insertTxSeenCache.Has(hash) {
+			return &abci.ResponseInsertTx{Code: abci.CodeTypeOK}, nil
+		}
+	}
+
+	// Span covers RunTx only; cache hits above are too cheap to trace.
+	// defer fires at function return — not block exit — intentional.
 	_, span := tracer.Start(context.Background(), "InsertTx", trace.WithAttributes(otelattr.String("ExecMode", "check")))
 	defer span.End()
 
-	if app.abciHandlers.InsertTxHandler == nil {
-		// Skip AnteHandler if we admitted this tx-hash recently. CometBFT v0.39
-		// AppReactor delivers gossiped txs via InsertTx, with no built-in
-		// dedup (the network-side cache lives in the flood mempool, which is
-		// inactive under mempool.type=app). N peers gossiping the same tx
-		// would otherwise trigger N full ECDSA-recover + state reads. The
-		// seen-cache reproduces flood-mempool's tx-hash dedup at the app
-		// layer; cache hits return CodeTypeOK without running RunTx because
-		// the original admission already inserted the tx into the mempool.
-		var hash [32]byte
-		if app.insertTxSeenCache != nil {
-			hash = sha256.Sum256(req.Tx)
-			if app.insertTxSeenCache.Has(hash) {
-				return &abci.ResponseInsertTx{Code: abci.CodeTypeOK}, nil
-			}
+	// ResponseInsertTx only carries Code, so gas/result/events from RunTx
+	// are intentionally discarded.
+	_, _, _, err := app.RunTx(execModeCheck, req.Tx, nil, -1, nil, nil)
+	if err != nil {
+		// ErrMempoolTxMaxCapacity is transient — translate to CometBFT's
+		// CodeTypeRetry so the peer backs off and resubmits instead of
+		// dropping the tx as a permanent reject.
+		if errors.Is(err, mempool.ErrMempoolTxMaxCapacity) {
+			return &abci.ResponseInsertTx{Code: abci.CodeTypeRetry}, nil
 		}
-
-		// ResponseInsertTx only carries Code, so gas/result/events from RunTx
-		// are intentionally discarded.
-		_, _, _, err := app.RunTx(execModeCheck, req.Tx, nil, -1, nil, nil)
-		if err != nil {
-			// ErrMempoolIsFull is transient — translate to CometBFT's
-			// CodeTypeRetry so the peer backs off and resubmits instead of
-			// dropping the tx as a permanent reject.
-			if errors.Is(err, sdkerrors.ErrMempoolIsFull) {
-				return &abci.ResponseInsertTx{Code: abci.CodeTypeRetry}, nil
-			}
-			_, code, _ := errorsmod.ABCIInfo(err, app.trace)
-			return &abci.ResponseInsertTx{Code: code}, nil
-		}
-		if app.insertTxSeenCache != nil {
-			app.insertTxSeenCache.Add(hash)
-		}
-		return &abci.ResponseInsertTx{Code: abci.CodeTypeOK}, nil
+		_, code, _ := errorsmod.ABCIInfo(err, app.trace)
+		return &abci.ResponseInsertTx{Code: code}, nil
 	}
-
-	return app.abciHandlers.InsertTxHandler(req)
+	if app.insertTxSeenCache != nil {
+		app.insertTxSeenCache.Add(hash)
+	}
+	return &abci.ResponseInsertTx{Code: abci.CodeTypeOK}, nil
 }
 
 // ReapTxs returns new valid txs from the applications mempool.

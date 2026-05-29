@@ -192,6 +192,7 @@ func NewBaseApp(
 		sigverifyTx:          true,
 		gasConfig:            config.GasConfig{QueryGasLimit: math.MaxUint64},
 		disableBlockGasMeter: true,
+		insertTxCacheSizeHint: -1, // -1 = use default; 0 = disabled; >0 = explicit size
 	}
 
 	for _, option := range options {
@@ -240,9 +241,10 @@ func NewBaseApp(
 
 	app.stateManager = state.NewManager(app.gasConfig)
 
-	// Default cache size matches CometBFT's mempool cache_size default
-	// (10K) with headroom for high-fanout gossip windows.
-	if app.insertTxCacheSizeHint == 0 {
+	// 16384 ≈ 1.6× CometBFT's default mempool cache_size (10K), sized to
+	// absorb a gossip fan-out burst without evicting recently-admitted txs.
+	// hint=-1 means "not configured, use default"; 0 means "disabled".
+	if app.insertTxCacheSizeHint < 0 {
 		app.insertTxCacheSizeHint = 16384
 	}
 	if app.insertTxCacheSizeHint > 0 {
@@ -252,41 +254,53 @@ func NewBaseApp(
 	return app
 }
 
-// insertTxCache is a fixed-size FIFO of tx-hashes used by the default
-// InsertTx handler to skip AnteHandler runs on gossip fan-out duplicates.
-// Lookups go through sync.Map (lock-free reads); the eviction queue is
-// guarded by a small mutex so writers don't race the FIFO.
+// insertTxCache is a fixed-size FIFO ring buffer of tx-hashes used by the
+// default InsertTx handler to skip AnteHandler runs on gossip fan-out
+// duplicates. A plain map+RWMutex is used instead of sync.Map because
+// sync.Map performs poorly under high-churn workloads (every key is
+// eventually evicted). The ring buffer avoids the slice-growth churn of a
+// naive FIFO append+reslice.
 type insertTxCache struct {
-	max int
-	m   sync.Map // map[[32]byte]struct{}
-	mu  sync.Mutex
-	q   [][32]byte // FIFO of recent hashes
+	mu   sync.RWMutex
+	m    map[[32]byte]struct{}
+	q    [][32]byte // ring buffer, pre-allocated to len==max
+	head int        // next write index
+	full bool       // true once ring has wrapped
 }
 
 func newInsertTxCache(max int) *insertTxCache {
-	return &insertTxCache{max: max, q: make([][32]byte, 0, max)}
+	return &insertTxCache{
+		m: make(map[[32]byte]struct{}, max),
+		q: make([][32]byte, max),
+	}
 }
 
 // Has reports whether the tx-hash was admitted recently.
 func (c *insertTxCache) Has(h [32]byte) bool {
-	_, ok := c.m.Load(h)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.m[h]
 	return ok
 }
 
 // Add records a tx-hash, evicting the oldest entry if at capacity.
-// Safe for concurrent use; duplicates are no-ops.
+// Safe for concurrent use; duplicate adds are no-ops.
 func (c *insertTxCache) Add(h [32]byte) {
-	if _, loaded := c.m.LoadOrStore(h, struct{}{}); loaded {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.m[h]; ok {
 		return
 	}
-	c.mu.Lock()
-	c.q = append(c.q, h)
-	if len(c.q) > c.max {
-		evict := c.q[0]
-		c.q = c.q[1:]
-		c.m.Delete(evict)
+	if c.full {
+		delete(c.m, c.q[c.head])
 	}
-	c.mu.Unlock()
+	c.m[h] = struct{}{}
+	c.q[c.head] = h
+	c.head++
+	if c.head == len(c.q) {
+		c.head = 0
+		c.full = true
+	}
 }
 
 // Name returns the name of the BaseApp.
