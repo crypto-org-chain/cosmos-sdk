@@ -46,8 +46,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
-* (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport #1808).
-
 ### Deprecated
 
 ## [v0.54.3](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.54.3) - 2026-05-05
@@ -63,6 +61,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport #1760).
+* (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport #1808).
 * (x/gov) [#26353](https://github.com/cosmos/cosmos-sdk/pull/26353) Fix leading comma in `proposal_messages` event attribute emitted by `SubmitProposal`.
 
 ## [v0.54.2](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.54.2) - 2026-04-15
