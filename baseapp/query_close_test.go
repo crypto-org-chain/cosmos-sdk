@@ -7,7 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log/v2"
+	log "cosmossdk.io/log/v2"
+
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 )
 
