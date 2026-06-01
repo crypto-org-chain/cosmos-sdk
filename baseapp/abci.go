@@ -19,6 +19,7 @@ import (
 
 	coreheader "cosmossdk.io/core/header"
 	errorsmod "cosmossdk.io/errors"
+	log "cosmossdk.io/log/v2"
 
 	"github.com/cosmos/cosmos-sdk/baseapp/state"
 	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
@@ -30,6 +31,22 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 )
+
+// closableMultiStore is optionally implemented by MultiStore backends that need
+// explicit resource cleanup after historical queries (e.g. releasing open DB handles).
+type closableMultiStore interface {
+	Close() error
+}
+
+// closeQueryMultiStore releases resources held by the multistore if it implements
+// closableMultiStore. Any close error is logged rather than silently dropped.
+func closeQueryMultiStore(logger log.Logger, ms storetypes.MultiStore) {
+	if c, ok := ms.(closableMultiStore); ok {
+		if err := c.Close(); err != nil {
+			logger.Error("failed to close query multistore", "err", err)
+		}
+	}
+}
 
 // Supported ABCI Query prefixes and paths
 const (
@@ -1283,6 +1300,10 @@ func (app *BaseApp) handleQueryGRPC(goCtx context.Context, handler GRPCQueryHand
 	if err != nil {
 		return sdkerrors.QueryResult(err, app.trace)
 	}
+
+	defer func() {
+		closeQueryMultiStore(app.logger, ctx.MultiStore())
+	}()
 
 	// add base context for tracing
 	ctx = ctx.WithContext(goCtx)
