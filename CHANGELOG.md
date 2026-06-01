@@ -46,7 +46,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
-* (baseapp) [#1808](https://github.com/crypto-org-chain/cosmos-sdk/pull/1808) Close multistore opened by `CacheMultiStoreWithVersion` after historical gRPC queries to prevent DB handle leaks.
+* (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport #1808).
 
 ### Deprecated
 
