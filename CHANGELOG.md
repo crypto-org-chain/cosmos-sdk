@@ -42,6 +42,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### BUG FIXES
 
+* (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) close multistore opened for historical queries (backport #1808)
+
 ### IMPROVEMENTS
 
 * (staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) staking end-block queue optimization (backport #26023)

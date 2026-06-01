@@ -85,6 +85,10 @@ func (app *BaseApp) grpcQueryInterceptor(skipCheckHeader bool) grpc.UnaryServerI
 
 		resp, err = handler(sdkCtx, req)
 
+		defer func() {
+			closeQueryMultiStore(app.logger, sdkCtx.MultiStore())
+		}()
+
 		// If headers were already sent, attach block height as a trailer.
 		if setHeaderErr != nil {
 			if trailerErr := grpc.SetTrailer(grpcCtx, blockHeightMD); trailerErr != nil {
