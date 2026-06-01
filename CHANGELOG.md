@@ -46,6 +46,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport of [#1808](https://github.com/crypto-org-chain/cosmos-sdk/pull/1808) from `release/v0.53.x`).
 * (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport of [#1760](https://github.com/crypto-org-chain/cosmos-sdk/pull/1760) from `release/v0.53.x`).
 
 ### Deprecated
