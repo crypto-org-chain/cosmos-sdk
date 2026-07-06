@@ -46,6 +46,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
+* (x/auth) [#26567](https://github.com/cosmos/cosmos-sdk/pull/26567) Add a human-readable error.
+
 ### Bug Fixes
 
 * (telemetry) [#26390](https://github.com/cosmos/cosmos-sdk/pull/26390) Fix env var for otel telemetry initialization.
