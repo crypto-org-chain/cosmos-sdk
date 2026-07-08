@@ -1,6 +1,7 @@
 package staking_test
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -12,8 +13,11 @@ import (
 	"cosmossdk.io/log/v2"
 	"cosmossdk.io/math"
 
+	"github.com/cosmos/cosmos-sdk/baseapp"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
@@ -36,6 +40,30 @@ var (
 	valKey2         = ed25519.GenPrivKey()
 	commissionRates = types.NewCommissionRates(math.LegacyZeroDec(), math.LegacyZeroDec(), math.LegacyZeroDec())
 )
+
+// deliverAt finalizes a block containing msgs at the given height and block time.
+// Unlike simtestutil.SignCheckDeliver, it forwards blockTime to FinalizeBlock, which
+// matters for staking maturity logic keyed off the block header time.
+func deliverAt(
+	t *testing.T, txCfg client.TxConfig, app *baseapp.BaseApp, height int64, blockTime time.Time,
+	msgs []sdk.Msg, accNums, accSeqs []uint64, priv ...cryptotypes.PrivKey,
+) {
+	t.Helper()
+
+	tx, err := simtestutil.GenSignedMockTx(
+		rand.New(rand.NewSource(blockTime.UnixNano())),
+		txCfg, msgs, sdk.Coins{sdk.NewInt64Coin(sdk.DefaultBondDenom, 0)}, simtestutil.DefaultGenTxGas,
+		"", accNums, accSeqs, priv...,
+	)
+	require.NoError(t, err)
+	bz, err := txCfg.TxEncoder()(tx)
+	require.NoError(t, err)
+
+	res, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: blockTime, Txs: [][]byte{bz}})
+	require.NoError(t, err)
+	require.Len(t, res.TxResults, 1)
+	require.Equal(t, uint32(0), res.TxResults[0].Code, res.TxResults[0].Log)
+}
 
 func TestStakingMsgs(t *testing.T) {
 	genTokens := sdk.TokensFromConsensusPower(42, sdk.DefaultPowerReduction)
@@ -169,7 +197,11 @@ func TestBeginRedelegateAllSharesFromUnbondedSource(t *testing.T) {
 	require.NoError(t, err)
 
 	txConfig := moduletestutil.MakeTestTxConfig()
-	nextHeight := func() int64 { return app.LastBlockHeight() + 1 }
+	blockTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	nextBlock := func(d time.Duration) (int64, time.Time) {
+		blockTime = blockTime.Add(d)
+		return app.LastBlockHeight() + 1, blockTime
+	}
 
 	// Create destination validator (addr1).
 	createDstMsg, err := types.NewMsgCreateValidator(
@@ -177,12 +209,10 @@ func TestBeginRedelegateAllSharesFromUnbondedSource(t *testing.T) {
 		types.NewDescription("dst", "", "", "", ""), commissionRates, math.OneInt(),
 	)
 	require.NoError(t, err)
-	_, _, err = simtestutil.SignCheckDeliver(
-		t, txConfig, app.BaseApp, cmtproto.Header{Height: nextHeight()}, []sdk.Msg{createDstMsg},
-		"", []uint64{0}, []uint64{0}, true, true, priv1,
-	)
-	require.NoError(t, err)
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: nextHeight()})
+	height, ts := nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{createDstMsg}, []uint64{0}, []uint64{0}, priv1)
+	height, ts = nextBlock(time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
 	require.NoError(t, err)
 
 	// Create source validator (addr2).
@@ -191,42 +221,38 @@ func TestBeginRedelegateAllSharesFromUnbondedSource(t *testing.T) {
 		types.NewDescription("src", "", "", "", ""), commissionRates, math.OneInt(),
 	)
 	require.NoError(t, err)
-	_, _, err = simtestutil.SignCheckDeliver(
-		t, txConfig, app.BaseApp, cmtproto.Header{Height: nextHeight()}, []sdk.Msg{createSrcMsg},
-		"", []uint64{1}, []uint64{0}, true, true, priv2,
-	)
-	require.NoError(t, err)
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: nextHeight()})
+	height, ts = nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{createSrcMsg}, []uint64{1}, []uint64{0}, priv2)
+	height, ts = nextBlock(time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
 	require.NoError(t, err)
 
 	// Bob delegates to source validator.
 	delegateMsg := types.NewMsgDelegate(addr3.String(), sdk.ValAddress(addr2).String(), sdk.NewCoin(sdk.DefaultBondDenom, bobTokens))
-	_, _, err = simtestutil.SignCheckDeliver(
-		t, txConfig, app.BaseApp, cmtproto.Header{Height: nextHeight()}, []sdk.Msg{delegateMsg},
-		"", []uint64{2}, []uint64{0}, true, true, priv3,
-	)
-	require.NoError(t, err)
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: nextHeight()})
+	height, ts = nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{delegateMsg}, []uint64{2}, []uint64{0}, priv3)
+	height, ts = nextBlock(time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
 	require.NoError(t, err)
 
-	// Source operator undelegates all self-delegation so Bob becomes sole delegator.
+	// Source operator undelegates all self-delegation so Bob becomes sole delegator;
+	// this drops the operator's self-bond below MinSelfDelegation and jails the validator.
 	undelegateSelfMsg := types.NewMsgUndelegate(addr2.String(), sdk.ValAddress(addr2).String(), sdk.NewCoin(sdk.DefaultBondDenom, valTokens))
-	_, _, err = simtestutil.SignCheckDeliver(
-		t, txConfig, app.BaseApp, cmtproto.Header{Height: nextHeight()}, []sdk.Msg{undelegateSelfMsg},
-		"", []uint64{1}, []uint64{1}, true, true, priv2,
-	)
+	height, ts = nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{undelegateSelfMsg}, []uint64{1}, []uint64{1}, priv2)
+	height, ts = nextBlock(time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
 	require.NoError(t, err)
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: nextHeight()})
+	_, err = app.Commit()
 	require.NoError(t, err)
 
-	// Advance block time past unbonding period to trigger unbonding->unbonded via normal block flow.
+	// Advance block time past the unbonding period to mature the source validator
+	// from Unbonding to Unbonded via the normal end-block flow.
 	ctx := app.NewContext(true)
 	unbondingTime, err := stakingKeeper.UnbondingTime(ctx)
 	require.NoError(t, err)
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
-		Height: nextHeight(),
-		Time:   ctx.BlockTime().Add(unbondingTime).Add(time.Second),
-	})
+	height, ts = nextBlock(unbondingTime + time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
 	require.NoError(t, err)
 	_, err = app.Commit()
 	require.NoError(t, err)
@@ -235,11 +261,8 @@ func TestBeginRedelegateAllSharesFromUnbondedSource(t *testing.T) {
 	beginRedelegateMsg := types.NewMsgBeginRedelegate(
 		addr3.String(), sdk.ValAddress(addr2).String(), sdk.ValAddress(addr1).String(), sdk.NewCoin(sdk.DefaultBondDenom, bobTokens),
 	)
-	_, _, err = simtestutil.SignCheckDeliver(
-		t, txConfig, app.BaseApp, cmtproto.Header{Height: nextHeight()}, []sdk.Msg{beginRedelegateMsg},
-		"", []uint64{2}, []uint64{1}, true, true, priv3,
-	)
-	require.NoError(t, err)
+	height, ts = nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{beginRedelegateMsg}, []uint64{2}, []uint64{1}, priv3)
 
 	// This path should be complete-now: no redelegation entry, source validator removed.
 	ctx = app.NewContext(true)
