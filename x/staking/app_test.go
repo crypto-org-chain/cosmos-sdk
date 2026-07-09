@@ -1,7 +1,9 @@
 package staking_test
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -11,8 +13,11 @@ import (
 	"cosmossdk.io/log/v2"
 	"cosmossdk.io/math"
 
+	"github.com/cosmos/cosmos-sdk/baseapp"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
@@ -28,10 +33,37 @@ var (
 	addr1 = sdk.AccAddress(priv1.PubKey().Address())
 	priv2 = secp256k1.GenPrivKey()
 	addr2 = sdk.AccAddress(priv2.PubKey().Address())
+	priv3 = secp256k1.GenPrivKey()
+	addr3 = sdk.AccAddress(priv3.PubKey().Address())
 
 	valKey          = ed25519.GenPrivKey()
+	valKey2         = ed25519.GenPrivKey()
 	commissionRates = types.NewCommissionRates(math.LegacyZeroDec(), math.LegacyZeroDec(), math.LegacyZeroDec())
 )
+
+// deliverAt finalizes a block containing msgs at the given height and block time.
+// Unlike simtestutil.SignCheckDeliver, it forwards blockTime to FinalizeBlock, which
+// matters for staking maturity logic keyed off the block header time.
+func deliverAt(
+	t *testing.T, txCfg client.TxConfig, app *baseapp.BaseApp, height int64, blockTime time.Time,
+	msgs []sdk.Msg, accNums, accSeqs []uint64, priv ...cryptotypes.PrivKey,
+) {
+	t.Helper()
+
+	tx, err := simtestutil.GenSignedMockTx(
+		rand.New(rand.NewSource(blockTime.UnixNano())),
+		txCfg, msgs, sdk.Coins{sdk.NewInt64Coin(sdk.DefaultBondDenom, 0)}, simtestutil.DefaultGenTxGas,
+		"", accNums, accSeqs, priv...,
+	)
+	require.NoError(t, err)
+	bz, err := txCfg.TxEncoder()(tx)
+	require.NoError(t, err)
+
+	res, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: blockTime, Txs: [][]byte{bz}})
+	require.NoError(t, err)
+	require.Len(t, res.TxResults, 1)
+	require.Equal(t, uint32(0), res.TxResults[0].Code, res.TxResults[0].Log)
+}
 
 func TestStakingMsgs(t *testing.T) {
 	genTokens := sdk.TokensFromConsensusPower(42, sdk.DefaultPowerReduction)
@@ -131,4 +163,116 @@ func TestStakingMsgs(t *testing.T) {
 
 	// balance should be the same because bonding not yet complete
 	require.True(t, sdk.Coins{genCoin.Sub(bondCoin)}.Equal(bankKeeper.GetAllBalances(ctxCheck, addr2)))
+}
+
+func TestBeginRedelegateAllSharesFromUnbondedSource(t *testing.T) {
+	genTokens := sdk.TokensFromConsensusPower(100, sdk.DefaultPowerReduction)
+	valTokens := sdk.TokensFromConsensusPower(10, sdk.DefaultPowerReduction)
+	bobTokens := sdk.TokensFromConsensusPower(5, sdk.DefaultPowerReduction)
+	genCoin := sdk.NewCoin(sdk.DefaultBondDenom, genTokens)
+
+	acc1 := &authtypes.BaseAccount{Address: addr1.String()}
+	acc2 := &authtypes.BaseAccount{Address: addr2.String()}
+	acc3 := &authtypes.BaseAccount{Address: addr3.String()}
+	accs := []simtestutil.GenesisAccount{
+		{GenesisAccount: acc1, Coins: sdk.Coins{genCoin}},
+		{GenesisAccount: acc2, Coins: sdk.Coins{genCoin}},
+		{GenesisAccount: acc3, Coins: sdk.Coins{genCoin}},
+	}
+
+	var (
+		bankKeeper    bankKeeper.Keeper
+		stakingKeeper *stakingKeeper.Keeper
+	)
+
+	startupCfg := simtestutil.DefaultStartUpConfig()
+	startupCfg.GenesisAccounts = accs
+
+	app, err := simtestutil.SetupWithConfiguration(
+		depinject.Configs(
+			testutil.AppConfig,
+			depinject.Supply(log.NewNopLogger()),
+		),
+		startupCfg, &bankKeeper, &stakingKeeper)
+	require.NoError(t, err)
+
+	txConfig := moduletestutil.MakeTestTxConfig()
+	blockTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	nextBlock := func(d time.Duration) (int64, time.Time) {
+		blockTime = blockTime.Add(d)
+		return app.LastBlockHeight() + 1, blockTime
+	}
+
+	// Create destination validator (addr1).
+	createDstMsg, err := types.NewMsgCreateValidator(
+		sdk.ValAddress(addr1).String(), valKey.PubKey(), sdk.NewCoin(sdk.DefaultBondDenom, valTokens),
+		types.NewDescription("dst", "", "", "", ""), commissionRates, math.OneInt(),
+	)
+	require.NoError(t, err)
+	height, ts := nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{createDstMsg}, []uint64{0}, []uint64{0}, priv1)
+	height, ts = nextBlock(time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
+	require.NoError(t, err)
+
+	// Create source validator (addr2).
+	createSrcMsg, err := types.NewMsgCreateValidator(
+		sdk.ValAddress(addr2).String(), valKey2.PubKey(), sdk.NewCoin(sdk.DefaultBondDenom, valTokens),
+		types.NewDescription("src", "", "", "", ""), commissionRates, math.OneInt(),
+	)
+	require.NoError(t, err)
+	height, ts = nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{createSrcMsg}, []uint64{1}, []uint64{0}, priv2)
+	height, ts = nextBlock(time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
+	require.NoError(t, err)
+
+	// Bob delegates to source validator.
+	delegateMsg := types.NewMsgDelegate(addr3.String(), sdk.ValAddress(addr2).String(), sdk.NewCoin(sdk.DefaultBondDenom, bobTokens))
+	height, ts = nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{delegateMsg}, []uint64{2}, []uint64{0}, priv3)
+	height, ts = nextBlock(time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
+	require.NoError(t, err)
+
+	// Source operator undelegates all self-delegation so Bob becomes sole delegator;
+	// this drops the operator's self-bond below MinSelfDelegation and jails the validator.
+	undelegateSelfMsg := types.NewMsgUndelegate(addr2.String(), sdk.ValAddress(addr2).String(), sdk.NewCoin(sdk.DefaultBondDenom, valTokens))
+	height, ts = nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{undelegateSelfMsg}, []uint64{1}, []uint64{1}, priv2)
+	height, ts = nextBlock(time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
+	require.NoError(t, err)
+	_, err = app.Commit()
+	require.NoError(t, err)
+
+	// Advance block time past the unbonding period to mature the source validator
+	// from Unbonding to Unbonded via the normal end-block flow.
+	ctx := app.NewContext(true)
+	unbondingTime, err := stakingKeeper.UnbondingTime(ctx)
+	require.NoError(t, err)
+	height, ts = nextBlock(unbondingTime + time.Second)
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: ts})
+	require.NoError(t, err)
+	_, err = app.Commit()
+	require.NoError(t, err)
+
+	// Bob redelegates 100% of remaining shares from source to destination.
+	beginRedelegateMsg := types.NewMsgBeginRedelegate(
+		addr3.String(), sdk.ValAddress(addr2).String(), sdk.ValAddress(addr1).String(), sdk.NewCoin(sdk.DefaultBondDenom, bobTokens),
+	)
+	height, ts = nextBlock(time.Second)
+	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{beginRedelegateMsg}, []uint64{2}, []uint64{1}, priv3)
+
+	// This path should be complete-now: no redelegation entry, source validator removed.
+	ctx = app.NewContext(true)
+	_, err = stakingKeeper.GetValidator(ctx, sdk.ValAddress(addr2))
+	require.ErrorIs(t, err, types.ErrNoValidatorFound)
+	_, err = stakingKeeper.GetDelegation(ctx, addr3, sdk.ValAddress(addr2))
+	require.ErrorIs(t, err, types.ErrNoDelegation)
+	dstDel, err := stakingKeeper.GetDelegation(ctx, addr3, sdk.ValAddress(addr1))
+	require.NoError(t, err)
+	require.Equal(t, bobTokens, dstDel.Shares.RoundInt())
+	_, err = stakingKeeper.GetRedelegation(ctx, addr3, sdk.ValAddress(addr2), sdk.ValAddress(addr1))
+	require.ErrorIs(t, err, types.ErrNoRedelegation)
 }
