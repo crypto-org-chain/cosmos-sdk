@@ -17,6 +17,7 @@ The headline changes in this release are the removal of three legacy surfaces (`
     * [Staking: Key Rotation Wiring and Interface Changes](#staking-key-rotation-wiring-and-interface-changes)
     * [genutil: ExportGenesisFileWithTime Signature](#genutil-exportgenesisfilewithtime-signature)
     * [Upgrade Handler and Store Migrations](#upgrade-handler-and-store-migrations)
+    * [crypto-org-chain Fork Changes](#crypto-org-chain-fork-changes)
 * [Upgrading from v0.53.x](#upgrading-from-v053x)
 * [New Features and Non-Breaking Changes](#new-features-and-non-breaking-changes)
     * [Validator Consensus Key Rotation](#validator-consensus-key-rotation)
@@ -184,6 +185,12 @@ func (app SimApp) RegisterUpgradeHandlers() {
 ```
 
 Add `"params"` to `Deleted` as well if your app still had the `x/params` store mounted.
+
+### crypto-org-chain Fork Changes
+
+Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
+
+* `baseapp`: `CheckTx` inserts into the mempool before writing the AnteHandler state, so a custom `Mempool.Insert` or `TxPriority` that reads state from `ctx` sees pre-ante state. The SDK mempools take the nonce from the tx signature and are unaffected.
 
 ## Upgrading from v0.53.x
 
