@@ -52,6 +52,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (store) [#1829](https://github.com/crypto-org-chain/cosmos-sdk/pull/1829) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (backport of [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586)).
 * (server) [#1830](https://github.com/crypto-org-chain/cosmos-sdk/pull/1830) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (backport of [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585)).
 * (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport #1808).
 * (baseapp) [#1849](https://github.com/crypto-org-chain/cosmos-sdk/pull/1849) Close the query multistore when a gRPC query handler panics out of gas.
