@@ -19,6 +19,8 @@ func TestDefaultConfig(t *testing.T) {
 	require.Equal(t, DefaultBlockExecutor, cfg.BlockExecutor)
 	require.Equal(t, DefaultBlockSTMWorkers, cfg.BlockSTMWorkers)
 	require.Equal(t, DefaultBlockSTMPreEstimate, cfg.BlockSTMPreEstimate)
+	require.Equal(t, 10*1024*1024, cfg.GRPC.MaxSendMsgSize)
+	require.Equal(t, cfg.GRPC.MaxRecvMsgSize, cfg.GRPC.MaxSendMsgSize)
 }
 
 func TestValidateBasicBlockSTMConfig(t *testing.T) {
