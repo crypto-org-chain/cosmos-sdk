@@ -42,6 +42,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### BUG FIXES
 
+* (baseapp) [#1818](https://github.com/crypto-org-chain/cosmos-sdk/pull/1818) insert into mempool before committing the ante state in `CheckTx`
 * (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) disable `SimWriteState` for ethermint compatibility (backport #1760)
 * (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) close multistore opened for historical queries (backport #1808)
 
