@@ -46,6 +46,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (x/staking) [#26589](https://github.com/cosmos/cosmos-sdk/pull/26589) propagate AfterUnbondingInitiated hook error instead of swallowing it
+
 ### Deprecated
 
 ## [v0.54.3](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.54.3) - 2026-05-05
