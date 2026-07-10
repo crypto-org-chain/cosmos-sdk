@@ -54,6 +54,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (store) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (port of upstream [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586), closed unmerged).
+
 ### Deprecated
 
 ## [v0.55.1](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.55.1) - 2026-11-13
