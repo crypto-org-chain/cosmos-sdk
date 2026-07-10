@@ -46,6 +46,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (codec,x/tx) [#26587](https://github.com/cosmos/cosmos-sdk/pull/26587) lower nested Any depth cap from 10000 to 64 to reduce DoS amplification
+
 ### Deprecated
 
 ## [v0.54.3](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.54.3) - 2026-05-05
