@@ -46,6 +46,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (x/authz) [#26588](https://github.com/cosmos/cosmos-sdk/pull/26588) cap expired grant pruning per BeginBlocker to 200, matching feegrant
+
 ### Deprecated
 
 ## [v0.54.3](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.54.3) - 2026-05-05
