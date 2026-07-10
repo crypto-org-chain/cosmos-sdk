@@ -52,6 +52,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (server) [#1830](https://github.com/crypto-org-chain/cosmos-sdk/pull/1830) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (backport of [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585)).
 * (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport #1808).
 * (baseapp) [#1849](https://github.com/crypto-org-chain/cosmos-sdk/pull/1849) Close the query multistore when a gRPC query handler panics out of gas.
 * (baseapp) [#1818](https://github.com/crypto-org-chain/cosmos-sdk/pull/1818) Insert into the mempool before committing the AnteHandler state in `CheckTx`, so a failed `mempool.Insert` (e.g. pool at capacity) no longer advances the sender's nonce in `checkState` for a tx that never entered the pool ([#26521](https://github.com/cosmos/cosmos-sdk/issues/26521)).
