@@ -57,6 +57,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (x/distribution) [#26518](https://github.com/cosmos/cosmos-sdk/pull/26518) Return an error from internal historical rewards reads when the record is absent, preventing recovered reference-count panics during BlockSTM speculative execution.
 * (crypto) [#26509](https://github.com/cosmos/cosmos-sdk/pull/26509) Bound `CompactBitArray` `GetIndex`/`SetIndex` by the `Elems` length to avoid out-of-range reads when decoding malformed multisig bit arrays.
 * (x/auth/ante) [#26573](https://github.com/cosmos/cosmos-sdk/pull/26573) Reject tx with extra `SignerInfos` in `SetPubKeyDecorator`.
+* (blockstm) [#26591](https://github.com/cosmos/cosmos-sdk/pull/26591) normalize non-positive worker count in `STMRunner.Run`.
 
 ### Deprecated
 
