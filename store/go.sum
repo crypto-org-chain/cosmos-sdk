@@ -52,8 +52,8 @@ github.com/cosmos/iavl v1.2.8/go.mod h1:FRHN4tO+6crf0p2zsqye+nAbsMgiwdkxpWm18DyP
 github.com/cosmos/ics23/go v0.11.0 h1:jk5skjT0TqX5e5QJbEnwXIS2yI2vnmLOgpQPeM5RtnU=
 github.com/cosmos/ics23/go v0.11.0/go.mod h1:A8OjxPE67hHST4Icw94hOxxFEJMBG031xIGF/JHNIY0=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
-github.com/crypto-org-chain/cometbft v0.0.0-20260728200755-c7ac7f578196 h1:4C9kED6cNL4tGtjpBIp8Cmr6lgsjz9ePTTvz3w1rdjA=
-github.com/crypto-org-chain/cometbft v0.0.0-20260728200755-c7ac7f578196/go.mod h1:KcZvZTqdLgOisktAoWwwcS2fgO4E110r44KxEGyq8SI=
+github.com/crypto-org-chain/cometbft v0.0.0-20260728221132-a47576df47cc h1:pRP+Ab4CZ4vNnHO3/mTvaDgoMogHZ472JPmfSQ/7S54=
+github.com/crypto-org-chain/cometbft v0.0.0-20260728221132-a47576df47cc/go.mod h1:KcZvZTqdLgOisktAoWwwcS2fgO4E110r44KxEGyq8SI=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=

@@ -291,4 +291,4 @@ replace (
 )
 
 // use crypto-org-chain fork of cometbft
-replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20260728200755-c7ac7f578196
+replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20260728221132-a47576df47cc

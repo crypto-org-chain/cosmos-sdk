@@ -179,8 +179,8 @@ github.com/creachadair/tomledit v0.0.29 h1:dB5CbdwJMpn/fmfAPTAAleXF/KJwY0Ggc1eL/
 github.com/creachadair/tomledit v0.0.29/go.mod h1:4SoTXxzHgvzHRMIJPw+o6zK/yXii4VjLrb6/3gCQnyA=
 github.com/creack/pty v1.1.7/go.mod h1:lj5s0c3V2DBrqTV7llrYr5NG6My20zk30Fl46Y7DoTY=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
-github.com/crypto-org-chain/cometbft v0.0.0-20260728200755-c7ac7f578196 h1:4C9kED6cNL4tGtjpBIp8Cmr6lgsjz9ePTTvz3w1rdjA=
-github.com/crypto-org-chain/cometbft v0.0.0-20260728200755-c7ac7f578196/go.mod h1:KcZvZTqdLgOisktAoWwwcS2fgO4E110r44KxEGyq8SI=
+github.com/crypto-org-chain/cometbft v0.0.0-20260728221132-a47576df47cc h1:pRP+Ab4CZ4vNnHO3/mTvaDgoMogHZ472JPmfSQ/7S54=
+github.com/crypto-org-chain/cometbft v0.0.0-20260728221132-a47576df47cc/go.mod h1:KcZvZTqdLgOisktAoWwwcS2fgO4E110r44KxEGyq8SI=
 github.com/danieljoos/wincred v1.2.3 h1:v7dZC2x32Ut3nEfRH+vhoZGvN72+dQ/snVXo/vMFLdQ=
 github.com/danieljoos/wincred v1.2.3/go.mod h1:6qqX0WNrS4RzPZ1tnroDzq9kY3fu1KwE7MRLQK4X0bs=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
