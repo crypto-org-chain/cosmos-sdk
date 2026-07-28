@@ -6,10 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	cmtconfig "github.com/cometbft/cometbft/config"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
-
-	cmtconfig "github.com/cometbft/cometbft/config"
 
 	"cosmossdk.io/log/v2"
 
