@@ -47,6 +47,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Improvements
 
 * (x/auth) [#26567](https://github.com/cosmos/cosmos-sdk/pull/26567) Add a human-readable error.
+* (deps) [cometbft#64](https://github.com/crypto-org-chain/cometbft/pull/64) Point CometBFT at the `crypto-org-chain/cometbft` fork revision carrying the missing upstream v0.39.4 fixes.
 
 ### Bug Fixes
 
