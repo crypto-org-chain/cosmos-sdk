@@ -38,12 +38,14 @@ var (
 
 	MaxGas = 10_000_000
 	// DefaultApiPort is the port for the node to interact with
-	DefaultApiPort       = 1317
-	DefaultRpcPort       = 26657
-	DefaultTelemetryPort = 7180
-	DefaultRestPort      = 8080
-	DefaultGrpcPort      = 9090
-	DefaultP2PPort       = 16656
+	DefaultApiPort        = 1317
+	DefaultRpcPort        = 26657
+	DefaultTelemetryPort  = 7180
+	DefaultRestPort       = 8080
+	DefaultGrpcPort       = 9090
+	DefaultP2PPort        = 16656
+	DefaultPprofPort      = 6060
+	DefaultPrometheusPort = 27780
 )
 
 type TestnetInitializer interface {
@@ -1019,6 +1021,7 @@ func (s *SystemUnderTest) AddFullnode(t *testing.T, beforeStart ...func(nodeNumb
 		fmt.Sprintf("--p2p.laddr=tcp://localhost:%d", node.P2PPort),
 		fmt.Sprintf("--rpc.laddr=tcp://localhost:%d", node.RPCPort),
 		fmt.Sprintf("--grpc.address=localhost:%d", DefaultGrpcPort+nodeNumber),
+		fmt.Sprintf("--rpc.pprof_laddr=localhost:%d", DefaultPprofPort+nodeNumber),
 		"--p2p.pex=false",
 		"--moniker=" + moniker,
 		"--log_level=info",
