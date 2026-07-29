@@ -42,9 +42,26 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (blockstm) [#26208](https://github.com/cosmos/cosmos-sdk/pull/26208) Add Block-STM configuration support: `block-executor`, `block-stm-workers` and `block-stm-pre-estimate`.
+
 ### Improvements
 
+* (x/auth) [#26567](https://github.com/cosmos/cosmos-sdk/pull/26567) Add a human-readable error.
+* (deps) [cometbft#64](https://github.com/crypto-org-chain/cometbft/pull/64) Point CometBFT at the `crypto-org-chain/cometbft` fork revision carrying the missing upstream v0.39.4 fixes.
+
 ### Bug Fixes
+
+* (telemetry) [#26390](https://github.com/cosmos/cosmos-sdk/pull/26390) Fix env var for otel telemetry initialization.
+* (blockstm) [#26627](https://github.com/cosmos/cosmos-sdk/pull/26627) Guard against block-stm estimate panic.
+* (x/auth) [#26515](https://github.com/cosmos/cosmos-sdk/pull/26515) Bound the pubkey and signature indices in `ConsumeMultisignatureVerificationGas` and `VerifyMultisignature` so a multisig signature with a bit array larger than the key set, or with more set bits than supplied signatures, returns an error instead of panicking with index out of range.
+* (x/auth/tx) [#26517](https://github.com/cosmos/cosmos-sdk/pull/26517) Return a decode error instead of panicking when a transaction's `SignerInfos` and `Signatures` counts disagree in `GetSignaturesV2`, or a multisig's `ModeInfos` and sub-signature counts disagree in `ModeInfoAndSigToSignatureData`.
+* (x/distribution) [#26518](https://github.com/cosmos/cosmos-sdk/pull/26518) Return an error from internal historical rewards reads when the record is absent, preventing recovered reference-count panics during BlockSTM speculative execution.
+* (crypto) [#26509](https://github.com/cosmos/cosmos-sdk/pull/26509) Bound `CompactBitArray` `GetIndex`/`SetIndex` by the `Elems` length to avoid out-of-range reads when decoding malformed multisig bit arrays.
+* (x/auth/ante) [#26573](https://github.com/cosmos/cosmos-sdk/pull/26573) Reject tx with extra `SignerInfos` in `SetPubKeyDecorator`.
+* (blockstm) [#26591](https://github.com/cosmos/cosmos-sdk/pull/26591) normalize non-positive worker count in `STMRunner.Run`.
+* (x/auth/tx) [#26527](https://github.com/cosmos/cosmos-sdk/pull/26527) Fix nil pointer panic in `GetSigningTxData` when a `SignerInfo` has a nil `PublicKey`.
+* (crypto) [#26529](https://github.com/cosmos/cosmos-sdk/pull/26529) Validate the SEC1 tag byte (`0x02`/`0x03`) when unmarshaling a `secp256k1.PubKey`, rejecting malformed compressed keys that previously passed the length-only check.
+* (simapp) [#1843](https://github.com/crypto-org-chain/cosmos-sdk/pull/1843) Fix `testnet init-files --single-host` writing every node's `pprof_laddr`/`prometheus_listen_addr` from the last node instead of its own, caused by a shared `*cmtconfig.Config` pointer left stale across `collectGenFiles`'s config-write loop.
 
 ### Deprecated
 

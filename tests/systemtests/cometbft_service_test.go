@@ -192,7 +192,10 @@ func TestCometBFTGetSyncingWithBlockRetention(t *testing.T) {
 }
 
 // configureBlockPruning edits the app.toml for all nodes to enable block pruning
-// This requires setting min-retain-blocks, state pruning, and disabling state sync snapshots
+// This requires setting min-retain-blocks, state pruning, and disabling state sync snapshots.
+// It registers a t.Cleanup to restore the original values, since ResetChain only wipes
+// CometBFT data and never reverts config/app.toml, letting these settings leak into
+// tests that run later in the same package.
 func configureBlockPruning(t *testing.T, sut *systemtests.SystemUnderTest, minRetainBlocks int) {
 	t.Helper()
 
@@ -200,7 +203,14 @@ func configureBlockPruning(t *testing.T, sut *systemtests.SystemUnderTest, minRe
 	for i := 0; i < sut.NodesCount(); i++ {
 		// NodeDir already includes WorkDir, so just append config/app.toml
 		appTomlPath := filepath.Join(sut.NodeDir(i), "config", "app.toml")
+
+		var origMinRetainBlocks, origSnapshotInterval int
+		var origPruning string
 		systemtests.EditToml(appTomlPath, func(doc *tomledit.Document) {
+			origMinRetainBlocks = getInt(doc, "min-retain-blocks")
+			origPruning = getString(doc, "pruning")
+			origSnapshotInterval = getInt(doc, "state-sync", "snapshot-interval")
+
 			// Set min-retain-blocks for CometBFT block pruning
 			setInt(doc, minRetainBlocks, "min-retain-blocks")
 			// Use "everything" pruning which is the most aggressive and doesn't require
@@ -210,7 +220,41 @@ func configureBlockPruning(t *testing.T, sut *systemtests.SystemUnderTest, minRe
 			setInt(doc, 0, "state-sync", "snapshot-interval")
 		})
 		t.Logf("Configured block pruning (min-retain-blocks=%d, pruning=everything) in %s", minRetainBlocks, appTomlPath)
+
+		t.Cleanup(func() {
+			systemtests.EditToml(appTomlPath, func(doc *tomledit.Document) {
+				setInt(doc, origMinRetainBlocks, "min-retain-blocks")
+				setString(doc, origPruning, "pruning")
+				setInt(doc, origSnapshotInterval, "state-sync", "snapshot-interval")
+			})
+		})
 	}
+}
+
+// getInt reads an integer value from a toml document
+func getInt(doc *tomledit.Document, xpath ...string) int {
+	e := doc.First(xpath...)
+	if e == nil {
+		panic(fmt.Sprintf("not found: %v", xpath))
+	}
+	v, err := strconv.Atoi(e.Value.X.String())
+	if err != nil {
+		panic(fmt.Sprintf("not an int: %v: %v", xpath, err))
+	}
+	return v
+}
+
+// getString reads a quoted string value from a toml document
+func getString(doc *tomledit.Document, xpath ...string) string {
+	e := doc.First(xpath...)
+	if e == nil {
+		panic(fmt.Sprintf("not found: %v", xpath))
+	}
+	v, err := strconv.Unquote(e.Value.X.String())
+	if err != nil {
+		panic(fmt.Sprintf("not a quoted string: %v: %v", xpath, err))
+	}
+	return v
 }
 
 // setInt sets an integer value in a toml document

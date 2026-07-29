@@ -128,6 +128,18 @@ func (s SingleHostTestnetCmdInitializer) Initialize(xargs ...string) {
 		panic(err)
 	}
 	s.log(out)
+
+	// Force unique pprof/prometheus ports per node ourselves: the binary under
+	// test may be an older pre-built release whose own --single-host port
+	// assignment is buggy or absent.
+	for i := 0; i < s.initialNodesCount; i++ {
+		nodeNumber := i
+		nodeDir := filepath.Join(s.workDir, NodePath(nodeNumber, s.outputDir, filepath.Base(s.execBinary)), "config")
+		EditToml(filepath.Join(nodeDir, "config.toml"), func(doc *tomledit.Document) {
+			UpdatePort(doc, DefaultPprofPort+nodeNumber, "rpc", "pprof_laddr")
+			UpdatePort(doc, DefaultPrometheusPort+nodeNumber, "instrumentation", "prometheus_listen_addr")
+		})
+	}
 }
 
 // ModifyConfigYamlInitializer testnet cmd prior to --single-host param. Modifies the toml files.

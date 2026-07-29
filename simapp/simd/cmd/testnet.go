@@ -400,7 +400,7 @@ func initTestnetFiles(
 	err := collectGenFiles(
 		clientCtx, nodeConfig, args.chainID, nodeIDs, valPubKeys, args.numValidators,
 		args.outputDir, args.nodeDirPrefix, args.nodeDaemonHome, genBalIterator,
-		rpcPort, p2pPortStart, args.singleMachine,
+		rpcPort, p2pPortStart, pprofListen, prometheusListen, args.singleMachine,
 	)
 	if err != nil {
 		return err
@@ -464,7 +464,7 @@ func collectGenFiles(
 	numValidators int,
 	outputDir, nodeDirPrefix, nodeDaemonHome string,
 	genBalIterator banktypes.GenesisBalancesIterator,
-	rpcPortStart, p2pPortStart int,
+	rpcPortStart, p2pPortStart, pprofListenStart, prometheusListenStart int,
 	singleMachine bool,
 ) error {
 	var appState json.RawMessage
@@ -475,6 +475,8 @@ func collectGenFiles(
 			portOffset := i
 			nodeConfig.RPC.ListenAddress = fmt.Sprintf("tcp://0.0.0.0:%d", rpcPortStart+portOffset)
 			nodeConfig.P2P.ListenAddress = fmt.Sprintf("tcp://0.0.0.0:%d", p2pPortStart+portOffset)
+			nodeConfig.RPC.PprofListenAddress = fmt.Sprintf("localhost:%d", pprofListenStart+portOffset)
+			nodeConfig.Instrumentation.PrometheusListenAddr = fmt.Sprintf(":%d", prometheusListenStart+portOffset)
 		}
 
 		nodeDirName := fmt.Sprintf("%s%d", nodeDirPrefix, i)
