@@ -38,6 +38,15 @@ type ExtMempool interface {
 	RemoveWithReason(context.Context, sdk.Tx, RemoveReason) error
 }
 
+// UnorderedMempool is implemented by mempools that can list pooled txs
+// without paying for priority ordering.
+type UnorderedMempool interface {
+	Mempool
+
+	// UnorderedTxs returns all pooled txs in unspecified order.
+	UnorderedTxs(ctx context.Context) []sdk.Tx
+}
+
 // RemovalCaller is the origin of the removal
 type RemovalCaller string
 
@@ -96,4 +105,20 @@ func RemoveWithReason(ctx context.Context, mempool Mempool, tx sdk.Tx, reason Re
 	}
 
 	return mempool.Remove(tx)
+}
+
+// UnorderedTxs returns all txs in mempool in unspecified order, without
+// paying for priority ordering. Falls back to SelectBy on mempools that
+// don't implement UnorderedMempool.
+func UnorderedTxs(ctx context.Context, mempool Mempool) []sdk.Tx {
+	if u, ok := mempool.(UnorderedMempool); ok {
+		return u.UnorderedTxs(ctx)
+	}
+
+	var txs []sdk.Tx
+	SelectBy(ctx, mempool, nil, func(tx sdk.Tx) bool {
+		txs = append(txs, tx)
+		return true
+	})
+	return txs
 }
