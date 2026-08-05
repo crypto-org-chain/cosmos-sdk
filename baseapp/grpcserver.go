@@ -52,6 +52,10 @@ func (app *BaseApp) grpcQueryInterceptor(skipCheckHeader bool) grpc.UnaryServerI
 			return nil, err
 		}
 
+		defer func() {
+			closeQueryMultiStore(app.logger, sdkCtx.MultiStore())
+		}()
+
 		// Add relevant gRPC headers
 		if height == 0 {
 			height = sdkCtx.BlockHeight() // If height was not set in the request, set it to the latest
@@ -84,10 +88,6 @@ func (app *BaseApp) grpcQueryInterceptor(skipCheckHeader bool) grpc.UnaryServerI
 		}
 
 		resp, err = handler(sdkCtx, req)
-
-		defer func() {
-			closeQueryMultiStore(app.logger, sdkCtx.MultiStore())
-		}()
 
 		// If headers were already sent, attach block height as a trailer.
 		if setHeaderErr != nil {
