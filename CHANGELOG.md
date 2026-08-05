@@ -62,6 +62,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (x/auth/tx) [#26527](https://github.com/cosmos/cosmos-sdk/pull/26527) Fix nil pointer panic in `GetSigningTxData` when a `SignerInfo` has a nil `PublicKey`.
 * (crypto) [#26529](https://github.com/cosmos/cosmos-sdk/pull/26529) Validate the SEC1 tag byte (`0x02`/`0x03`) when unmarshaling a `secp256k1.PubKey`, rejecting malformed compressed keys that previously passed the length-only check.
 * (simapp) [#1843](https://github.com/crypto-org-chain/cosmos-sdk/pull/1843) Fix `testnet init-files --single-host` writing every node's `pprof_laddr`/`prometheus_listen_addr` from the last node instead of its own, caused by a shared `*cmtconfig.Config` pointer left stale across `collectGenFiles`'s config-write loop.
+* (baseapp) [#1849](https://github.com/crypto-org-chain/cosmos-sdk/pull/1849) Close the query multistore when a gRPC query handler panics out of gas.
 
 ### Deprecated
 
