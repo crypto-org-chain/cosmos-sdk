@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	_ ExtMempool = (*PriorityNonceMempool[int64])(nil)
-	_ Iterator   = (*PriorityNonceIterator[int64])(nil)
+	_ ExtMempool       = (*PriorityNonceMempool[int64])(nil)
+	_ UnorderedMempool = (*PriorityNonceMempool[int64])(nil)
+	_ Iterator         = (*PriorityNonceIterator[int64])(nil)
 )
 
 type (
@@ -448,6 +449,19 @@ func (mp *PriorityNonceMempool[C]) CountTx() int {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 	return mp.priorityIndex.Len()
+}
+
+// UnorderedTxs returns all pooled txs without the priority-tie reordering
+// Select/SelectBy pay for. Order is unspecified.
+func (mp *PriorityNonceMempool[C]) UnorderedTxs(_ context.Context) []sdk.Tx {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+
+	txs := make([]sdk.Tx, 0, mp.priorityIndex.Len())
+	for node := mp.priorityIndex.Front(); node != nil; node = node.Next() {
+		txs = append(txs, node.Value.(sdk.Tx))
+	}
+	return txs
 }
 
 // Remove removes a transaction from the mempool in O(log n) time, returning an

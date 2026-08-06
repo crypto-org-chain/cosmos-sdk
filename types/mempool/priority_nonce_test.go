@@ -840,6 +840,29 @@ func TestPriorityNonceMempool_NextSenderTx(t *testing.T) {
 	require.Equal(t, txs[0], tx)
 }
 
+func TestPriorityNonceMempool_UnorderedTxsSnapshot(t *testing.T) {
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), 3)
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+
+	mp := mempool.DefaultPriorityMempool()
+
+	txs := []testTx{
+		{priority: 20, nonce: 1, address: accounts[0].Address},
+		{priority: 20, nonce: 2, address: accounts[0].Address},
+		{priority: 15, nonce: 1, address: accounts[1].Address},
+		{priority: 66, nonce: 1, address: accounts[2].Address},
+	}
+	for _, tx := range txs {
+		require.NoError(t, mp.Insert(ctx.WithPriority(tx.priority), tx))
+	}
+
+	unordered := mp.UnorderedTxs(ctx)
+	require.Equal(t, mp.CountTx(), len(unordered))
+
+	ordered := fetchTxs(mp.Select(ctx, nil), math.MaxInt64)
+	require.ElementsMatch(t, ordered, unordered)
+}
+
 func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
 	account := simtypes.RandomAccounts(rand.New(rand.NewSource(2)), 1)[0].Address
