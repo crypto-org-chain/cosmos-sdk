@@ -52,8 +52,9 @@ func (s *TxServiceTestSuite) SetupTest() {
 
 func (s *TxServiceTestSuite) TestRequestContextReachesNode() {
 	testCases := []struct {
-		name string
-		call func(ctx context.Context) error
+		name   string
+		call   func(ctx context.Context) error
+		expErr string
 	}{
 		{
 			name: "GetTxsEvent",
@@ -68,6 +69,7 @@ func (s *TxServiceTestSuite) TestRequestContextReachesNode() {
 				_, err := s.server.GetTx(ctx, &txtypes.GetTxRequest{Hash: "AB"})
 				return err
 			},
+			expErr: "tx not found",
 		},
 	}
 
@@ -76,8 +78,12 @@ func (s *TxServiceTestSuite) TestRequestContextReachesNode() {
 			s.SetupTest()
 			ctx := context.WithValue(context.Background(), ctxKey{}, tc.name)
 
-			_ = tc.call(ctx)
-
+			err := tc.call(ctx)
+			if tc.expErr != "" {
+				s.Require().ErrorContains(err, tc.expErr)
+			} else {
+				s.Require().NoError(err)
+			}
 			s.Require().NotNil(s.node.ctx)
 			s.Require().Equal(tc.name, s.node.ctx.Value(ctxKey{}))
 		})
