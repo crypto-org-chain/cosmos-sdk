@@ -43,14 +43,14 @@ func NewTxServer(clientCtx client.Context, simulate baseAppSimulateFn, interface
 var _ txtypes.ServiceServer = txServer{}
 
 // GetTxsEvent implements the ServiceServer.TxsByEvents RPC method.
-func (s txServer) GetTxsEvent(_ context.Context, req *txtypes.GetTxsEventRequest) (*txtypes.GetTxsEventResponse, error) {
+func (s txServer) GetTxsEvent(ctx context.Context, req *txtypes.GetTxsEventRequest) (*txtypes.GetTxsEventResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request cannot be nil")
 	}
 
 	orderBy := parseOrderBy(req.OrderBy)
 
-	result, err := QueryTxsByEvents(s.clientCtx, int(req.Page), int(req.Limit), req.Query, orderBy)
+	result, err := QueryTxsByEvents(s.clientCtx.WithCmdContext(ctx), int(req.Page), int(req.Limit), req.Query, orderBy)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -107,7 +107,7 @@ func (s txServer) Simulate(_ context.Context, req *txtypes.SimulateRequest) (*tx
 }
 
 // GetTx implements the ServiceServer.GetTx RPC method.
-func (s txServer) GetTx(_ context.Context, req *txtypes.GetTxRequest) (*txtypes.GetTxResponse, error) {
+func (s txServer) GetTx(ctx context.Context, req *txtypes.GetTxRequest) (*txtypes.GetTxResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request cannot be nil")
 	}
@@ -118,7 +118,7 @@ func (s txServer) GetTx(_ context.Context, req *txtypes.GetTxRequest) (*txtypes.
 
 	// TODO We should also check the proof flag in gRPC header.
 	// https://github.com/cosmos/cosmos-sdk/issues/7036.
-	result, err := QueryTx(s.clientCtx, req.Hash)
+	result, err := QueryTx(s.clientCtx.WithCmdContext(ctx), req.Hash)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return nil, status.Errorf(codes.NotFound, "tx not found: %s", req.Hash)

@@ -54,6 +54,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (x/auth) [#1878](https://github.com/crypto-org-chain/cosmos-sdk/pull/1878) pass request context to CometBFT tx queries
+
 ### Deprecated
 
 ## [v0.55.1](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.55.1) - 2026-11-13
