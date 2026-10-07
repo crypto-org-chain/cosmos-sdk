@@ -50,7 +50,7 @@ func (s txServer) GetTxsEvent(ctx context.Context, req *txtypes.GetTxsEventReque
 
 	orderBy := parseOrderBy(req.OrderBy)
 
-	result, err := QueryTxsByEvents(s.clientCtx, int(req.Page), int(req.Limit), req.Query, orderBy)
+	result, err := QueryTxsByEvents(s.clientCtx.WithCmdContext(ctx), int(req.Page), int(req.Limit), req.Query, orderBy)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -118,7 +118,7 @@ func (s txServer) GetTx(ctx context.Context, req *txtypes.GetTxRequest) (*txtype
 
 	// TODO We should also check the proof flag in gRPC header.
 	// https://github.com/cosmos/cosmos-sdk/issues/7036.
-	result, err := QueryTx(s.clientCtx, req.Hash)
+	result, err := QueryTx(s.clientCtx.WithCmdContext(ctx), req.Hash)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return nil, status.Errorf(codes.NotFound, "tx not found: %s", req.Hash)
