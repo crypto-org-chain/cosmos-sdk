@@ -2,35 +2,42 @@ package tx_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/cometbft/cometbft/rpc/client/mock"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/client"
-	"github.com/cosmos/cosmos-sdk/codec/types"
+	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 )
 
 type ctxKey struct{}
 
-// ctxRecordingClient records the context each CometBFT call receives.
+// ctxRecordingClient returns one tx and records the context each CometBFT
+// call receives, keyed by method name.
 type ctxRecordingClient struct {
 	mock.Client
-	ctx context.Context
+	txBytes []byte
+	ctxs    map[string]context.Context
 }
 
 func (c *ctxRecordingClient) TxSearch(ctx context.Context, _ string, _ bool, _, _ *int, _ string) (*coretypes.ResultTxSearch, error) {
-	c.ctx = ctx
-	return &coretypes.ResultTxSearch{}, nil
+	c.ctxs["TxSearch"] = ctx
+	return &coretypes.ResultTxSearch{Txs: []*coretypes.ResultTx{{Tx: c.txBytes, Height: 1}}, TotalCount: 1}, nil
 }
 
 func (c *ctxRecordingClient) Tx(ctx context.Context, _ []byte, _ bool) (*coretypes.ResultTx, error) {
-	c.ctx = ctx
-	return nil, errors.New("tx not found")
+	c.ctxs["Tx"] = ctx
+	return &coretypes.ResultTx{Tx: c.txBytes, Height: 1}, nil
+}
+
+func (c *ctxRecordingClient) Block(ctx context.Context, _ *int64) (*coretypes.ResultBlock, error) {
+	c.ctxs["Block"] = ctx
+	return &coretypes.ResultBlock{Block: &cmttypes.Block{}}, nil
 }
 
 type TxServiceTestSuite struct {
@@ -45,16 +52,20 @@ func TestTxServiceTestSuite(t *testing.T) {
 }
 
 func (s *TxServiceTestSuite) SetupTest() {
-	s.node = &ctxRecordingClient{}
-	clientCtx := client.Context{}.WithClient(s.node)
-	s.server = authtx.NewTxServer(clientCtx, nil, types.NewInterfaceRegistry())
+	encCfg := moduletestutil.MakeTestEncodingConfig()
+	txBytes, err := encCfg.TxConfig.TxEncoder()(encCfg.TxConfig.NewTxBuilder().GetTx())
+	s.Require().NoError(err)
+
+	s.node = &ctxRecordingClient{txBytes: txBytes, ctxs: map[string]context.Context{}}
+	clientCtx := client.Context{}.WithClient(s.node).WithTxConfig(encCfg.TxConfig)
+	s.server = authtx.NewTxServer(clientCtx, nil, encCfg.InterfaceRegistry)
 }
 
 func (s *TxServiceTestSuite) TestRequestContextReachesNode() {
 	testCases := []struct {
-		name   string
-		call   func(ctx context.Context) error
-		expErr string
+		name     string
+		call     func(ctx context.Context) error
+		expCalls []string
 	}{
 		{
 			name: "GetTxsEvent",
@@ -62,6 +73,7 @@ func (s *TxServiceTestSuite) TestRequestContextReachesNode() {
 				_, err := s.server.GetTxsEvent(ctx, &txtypes.GetTxsEventRequest{Query: "message.sender='cosmos1'", Page: 1, Limit: 1})
 				return err
 			},
+			expCalls: []string{"TxSearch", "Block"},
 		},
 		{
 			name: "GetTx",
@@ -69,7 +81,7 @@ func (s *TxServiceTestSuite) TestRequestContextReachesNode() {
 				_, err := s.server.GetTx(ctx, &txtypes.GetTxRequest{Hash: "AB"})
 				return err
 			},
-			expErr: "tx not found",
+			expCalls: []string{"Tx", "Block"},
 		},
 	}
 
@@ -78,14 +90,12 @@ func (s *TxServiceTestSuite) TestRequestContextReachesNode() {
 			s.SetupTest()
 			ctx := context.WithValue(context.Background(), ctxKey{}, tc.name)
 
-			err := tc.call(ctx)
-			if tc.expErr != "" {
-				s.Require().ErrorContains(err, tc.expErr)
-			} else {
-				s.Require().NoError(err)
+			s.Require().NoError(tc.call(ctx))
+			s.Require().Len(s.node.ctxs, len(tc.expCalls))
+			for _, method := range tc.expCalls {
+				s.Require().Contains(s.node.ctxs, method)
+				s.Require().Equal(tc.name, s.node.ctxs[method].Value(ctxKey{}), method)
 			}
-			s.Require().NotNil(s.node.ctx)
-			s.Require().Equal(tc.name, s.node.ctx.Value(ctxKey{}))
 		})
 	}
 }
