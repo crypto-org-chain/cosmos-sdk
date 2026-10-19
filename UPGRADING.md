@@ -31,7 +31,7 @@ The headline changes in this release are the removal of three legacy surfaces (`
 
 ### CometBFT Upgrade
 
-Cosmos SDK v0.55 requires CometBFT `v0.40.0` (the v0.54.x line shipped with `v0.39.x`, ending at `v0.39.3` in v0.54.3). Bump your app's `go.mod` to match the SDK's pin. Relevant changes in CometBFT v0.40.0:
+Cosmos SDK v0.55 requires CometBFT `v0.40.0` (the v0.54.x line shipped with `v0.39.x`, ending at `v0.39.3` in v0.54.3). Bump your app's `go.mod` to match the SDK's pin. On the crypto-org-chain fork, also copy the CometBFT `replace` directive; see [crypto-org-chain Fork Changes](#crypto-org-chain-fork-changes). Relevant changes in CometBFT v0.40.0:
 
 * Expanded `MaxSignatureSize` and per-validator `MaxCommitSigBytes` to accommodate post-quantum (ML-DSA-65) signatures.
 * A fix for the application-side mempool (`mempool.type = "app"`, supported since CometBFT v0.39.2 / SDK v0.54.3): the default socket transport was missing the `InsertTx` / `ReapTxs` cases, causing node self-kill ([cometbft#5958](https://github.com/cometbft/cometbft/pull/5958)). Chains using an app-side mempool over the socket transport need v0.40.0.
@@ -204,6 +204,14 @@ if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
 
 Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
 
+* `deps`: the SDK swaps CometBFT for the `crypto-org-chain/cometbft` fork through a `replace` directive, currently pinned to [cometbft#71](https://github.com/crypto-org-chain/cometbft/pull/71) (v0.40.0 plus the fork's app-side mempool fix and a libp2p queue cap). Go ignores `replace` directives in dependencies, so add the same line to your app's `go.mod`; without it your app builds against upstream v0.40.0 with no error:
+
+    ```go
+    replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20261019005131-5e839872ea38
+    ```
+
+* `p2p`: libp2p now buffers at most `max_queue_size` messages per reactor (`[p2p.libp2p.scaler]` in `config.toml`, default `200000`, `0` means unlimited) and drops the rest, counted by the `messages_reactor_dropped` metric. The cap counts messages, not bytes. Existing `config.toml` files without the key get the default.
+* `mempool`: with `mempool.type = "app"`, a `CheckTx` whose app client call errors or returns no response now answers with code `1` (`CodeTypeInternal`). Upstream v0.40.0 never answers, so the broadcast waits until it times out.
 * `x/staking`: an error from the `AfterUnbondingInitiated` hook now fails `MsgUndelegate` and `MsgBeginRedelegate` instead of being logged and ignored. Apps whose staking hooks can return an error must expect those txs to fail.
 * `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)).
 * `baseapp`: `CheckTx` inserts into the mempool before writing the AnteHandler state, so a custom `Mempool.Insert` or `TxPriority` that reads state from `ctx` sees pre-ante state. The SDK mempools take the nonce from the tx signature and are unaffected.
