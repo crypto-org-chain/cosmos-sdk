@@ -40,7 +40,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Breaking Changes
 
-* (server) [#1830](https://github.com/crypto-org-chain/cosmos-sdk/pull/1830) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (backport of [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585)). gRPC responses larger than 10MB now fail unless `app.toml` sets `grpc.max-send-msg-size`.
+* (server) [#1830](https://github.com/crypto-org-chain/cosmos-sdk/pull/1830) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (backport of [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585)). Newly generated `app.toml` files get 10MB, so larger gRPC responses fail there; existing files keep the old value they pinned.
 * (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) Remove `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator`; end-block reads the pending-slot index instead. `DequeueAllMatureRedelegationQueue` now honors its `currTime` argument instead of reading `HeaderInfo().Time`.
 
 ### State Machine Breaking
