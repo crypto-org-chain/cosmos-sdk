@@ -275,3 +275,6 @@ require (
 )
 
 replace github.com/cosmos/cosmos-sdk => ../..
+
+// use crypto-org-chain fork of cometbft
+replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20260727205348-0880b4d378f3

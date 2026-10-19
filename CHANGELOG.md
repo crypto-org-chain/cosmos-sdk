@@ -51,6 +51,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
+* (deps) [cometbft@0880b4d](https://github.com/crypto-org-chain/cometbft/commit/0880b4d378f347ab16e54ec677ff50d803f37d62) Point CometBFT at the `crypto-org-chain/cometbft` fork's `v0.40.x` branch in every module that requires it (currently identical to upstream v0.40.0).
+
 ### Bug Fixes
 
 * (store) [#1829](https://github.com/crypto-org-chain/cosmos-sdk/pull/1829) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (backport of [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586)).

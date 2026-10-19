@@ -367,3 +367,6 @@ retract (
 	// do not use
 	v0.43.0
 )
+
+// use crypto-org-chain fork of cometbft
+replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20260727205348-0880b4d378f3
