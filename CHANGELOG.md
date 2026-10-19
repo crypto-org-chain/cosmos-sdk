@@ -40,13 +40,13 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Breaking Changes
 
-* (server) [#1830](https://github.com/crypto-org-chain/cosmos-sdk/pull/1830) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (backport of [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585)). Newly generated `app.toml` files get 10MB, so larger gRPC responses fail there; existing files keep the old value they pinned.
+* (server) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (port of upstream [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585), closed unmerged). Newly generated `app.toml` files get 10MB, so larger gRPC responses fail there; existing files keep the old value they pinned.
 * (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) Remove `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator`; end-block reads the pending-slot index instead. `DequeueAllMatureRedelegationQueue` now honors its `currTime` argument instead of reading `HeaderInfo().Time`.
 
 ### State Machine Breaking
 
-* (x/staking) [#1831](https://github.com/crypto-org-chain/cosmos-sdk/pull/1831) Propagate `AfterUnbondingInitiated` hook errors from unbonding delegation and redelegation entries instead of logging and swallowing them, matching the validator unbonding path (backport of [#26589](https://github.com/cosmos/cosmos-sdk/pull/26589)).
-* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Index pending validator, unbonding and redelegation queue slots so end-block skips queue iteration (backport of [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023)). Chains populate the index by calling `Keeper.PopulateQueuePendingSlots` from their upgrade handler; no consensus version migration is registered. The index's error codes move from 46/47 (fork v0.54.x) to 49/50, since v0.55 key rotation took 46-48.
+* (x/staking) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Propagate `AfterUnbondingInitiated` hook errors from unbonding delegation and redelegation entries instead of logging and swallowing them, matching the validator unbonding path (port of upstream [#26589](https://github.com/cosmos/cosmos-sdk/pull/26589), closed unmerged).
+* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Index pending validator, unbonding and redelegation queue slots so end-block skips queue iteration (port of upstream [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023), closed unmerged). Chains populate the index by calling `Keeper.PopulateQueuePendingSlots` from their upgrade handler; no consensus version migration is registered. The index's error codes move from 46/47 (fork v0.54.x) to 49/50, since v0.55 key rotation took 46-48.
 
 ### Features
 
@@ -58,11 +58,11 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
-* (store) [#1829](https://github.com/crypto-org-chain/cosmos-sdk/pull/1829) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (backport of [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586)).
-* (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport #1808).
+* (store) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (port of upstream [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586), closed unmerged).
+* (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport of [#1808](https://github.com/crypto-org-chain/cosmos-sdk/pull/1808) from `release/v0.53.x`).
 * (baseapp) [#1849](https://github.com/crypto-org-chain/cosmos-sdk/pull/1849) Close the query multistore when a gRPC query handler panics out of gas.
 * (baseapp) [#1818](https://github.com/crypto-org-chain/cosmos-sdk/pull/1818) Insert into the mempool before committing the AnteHandler state in `CheckTx`, so a failed `mempool.Insert` (e.g. pool at capacity) no longer advances the sender's nonce in `checkState` for a tx that never entered the pool ([#26521](https://github.com/cosmos/cosmos-sdk/issues/26521)).
-* (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport #1760).
+* (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport of [#1760](https://github.com/crypto-org-chain/cosmos-sdk/pull/1760) from `release/v0.53.x`).
 
 ### Deprecated
 
