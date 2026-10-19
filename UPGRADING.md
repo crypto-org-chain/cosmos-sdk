@@ -192,6 +192,10 @@ The validator, unbonding and redelegation queues each keep their earliest entry 
 
 No upgrade handler change is needed. The first end-block after the upgrade finds no stored time, or the pending-slot list that fork `release/v0.54.x` kept under the same keys, scans each queue once and records the time. Existing handlers that call `Keeper.PopulateQueuePendingSlots` keep working; it now does that recomputation eagerly.
 
+* Write queue entries only through `SetUBDQueueTimeSlice`, `SetRedelegationQueueTimeSlice` and `SetUnbondingValidatorsQueue` (or the `Insert*` helpers that call them). An entry written straight to the store can be earlier than the stored time and wait until that time; call `PopulateQueuePendingSlots` after such a write.
+* Compared with upstream v0.55.0, each queue insert costs one more read (about 1.1k gas), plus about 2.9k gas when it lowers the stored time, as the first insert into an empty queue does. Txs that set an exact gas limit for `MsgUndelegate` or `MsgBeginRedelegate` should allow for that.
+* The fork v0.54.x pending-slot API is removed (see the CHANGELOG), and `ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator` are back.
+
 ### crypto-org-chain Fork Changes
 
 Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
