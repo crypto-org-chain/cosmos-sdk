@@ -53,9 +53,10 @@ func timeQueueKeyTime(prefix []byte) func([]byte) (time.Time, error) {
 }
 
 // PopulateQueuePendingSlots recomputes the earliest entry time of the validator, unbonding and
-// redelegation queues. End-block does this by itself the first time it finds a time missing,
-// so upgrade handlers don't need to call it. It also replaces the pending-slot lists that fork
-// v0.54.x stored under the same keys.
+// redelegation queues. It also replaces the pending-slot lists that fork v0.54.x stored under
+// the same keys.
+// End-block recomputes a missing or legacy time by itself, so upgrade handlers don't need to call
+// this; it is kept for handlers written against fork v0.54.x.
 func (k Keeper) PopulateQueuePendingSlots(ctx context.Context) error {
 	for _, g := range []queueGate{validatorQueueGate, ubdQueueGate, redelegationQueueGate} {
 		if err := k.refreshQueueEarliest(ctx, g); err != nil {
@@ -100,7 +101,7 @@ func (k Keeper) queueDue(ctx context.Context, g queueGate, now time.Time) (bool,
 }
 
 // lowerQueueEarliest records t as the earliest entry time if it is earlier than the stored one.
-// It runs on every queue insert, so it reads and writes a single fixed-size value.
+// It runs on every queue insert, so it reads one fixed-size value and writes it only when lowering.
 func (k Keeper) lowerQueueEarliest(ctx context.Context, g queueGate, t time.Time) error {
 	e, err := k.getQueueEarliest(ctx, g)
 	if err != nil {

@@ -257,6 +257,24 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
 		{
+			name: "earlier insert lowers the earliest and a later one keeps it",
+			malleate: func(ctx sdk.Context, _ storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				for _, t := range []time.Time{queueNow.Add(2 * hour), queueNow.Add(hour), queueNow.Add(3 * hour)} {
+					s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, t, 1, []string{unknownValAddress}))
+				}
+			},
+			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
+		},
+		{
+			name: "entry due by time but not by height stays queued and due",
+			malleate: func(ctx sdk.Context, _ storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(-hour), 20, []string{unknownValAddress}))
+			},
+			expEarliest: sdk.FormatTimeBytes(queueNow.Add(-hour)),
+		},
+		{
 			name:        "empty queue records the empty marker",
 			malleate:    func(sdk.Context, storetypes.KVStore) {},
 			expEarliest: queueEmptyMarker,
@@ -279,6 +297,22 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			s.Require().Equal(tc.expEarliest, store.Get(stakingtypes.ValidatorQueueEarliestKey))
 		})
 	}
+}
+
+func (s *KeeperTestSuite) TestRedelegationQueueGateUsesHeaderTime() {
+	q := timeQueues[1]
+	// The redelegation scan is bounded by HeaderInfo().Time, not its currTime argument, so the
+	// gate must be too: a gate on the later block time would scan and dequeue the bypassed entry.
+	ctx := s.ctx.WithBlockTime(queueNow).WithHeaderInfo(header.Info{Time: queueNow.Add(-2 * time.Hour)})
+	store := ctx.KVStore(s.storeKey)
+	s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+	s.Require().NoError(q.insert(s, ctx, queueNow.Add(-time.Hour)))
+	store.Set(q.timeKey(queueNow.Add(-3*time.Hour)), q.slice())
+
+	matured, err := q.dequeue(s, ctx)
+	s.Require().NoError(err)
+	s.Require().Zero(matured)
+	s.Require().Equal(sdk.FormatTimeBytes(queueNow.Add(-time.Hour)), store.Get(q.earliestKey))
 }
 
 func (s *KeeperTestSuite) setRawValidatorQueue(store storetypes.KVStore, t time.Time) {
