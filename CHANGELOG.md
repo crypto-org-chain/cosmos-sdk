@@ -41,12 +41,11 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Breaking Changes
 
 * (server) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (port of upstream [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585), closed unmerged). An `app.toml` that omits `max-send-msg-size` now gets 10MB, so larger gRPC responses fail; generated files set the key and keep their value.
-* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) Remove `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator`, and make `DequeueAllMatureRedelegationQueue` honor its `currTime` argument instead of `HeaderInfo().Time`.
 
 ### State Machine Breaking
 
 * (x/staking) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Propagate `AfterUnbondingInitiated` hook errors from unbonding delegation and redelegation entries instead of logging and swallowing them, matching the validator unbonding path (port of upstream [#26589](https://github.com/cosmos/cosmos-sdk/pull/26589), closed unmerged).
-* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Index pending validator, unbonding and redelegation queue slots so end-block skips queue iteration (port of upstream [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023), closed unmerged). Chains populate the index by calling `Keeper.PopulateQueuePendingSlots` from their upgrade handler; no consensus version migration is registered. The index's error codes move from 46/47 (fork v0.54.x) to 49/50, since v0.55 key rotation took 46-48.
+* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Keep each maturity queue's earliest entry time so end-block scans the validator, unbonding and redelegation queues only once that time is due (reworks the port of upstream [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023), closed unmerged). The fork v0.54.x pending-slot list made every undelegate and redelegate read and rewrite all pending slots, about 264 gas per slot, and rewrote it every block; inserts now touch one fixed-size value. The first end-block after the upgrade rebuilds the times, so no upgrade handler call is needed. The pending-slot error codes are gone.
 
 ### Features
 
