@@ -88,3 +88,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260511170946-3700d4141b60 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+// use crypto-org-chain fork of cometbft
+replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20260727205348-0880b4d378f3

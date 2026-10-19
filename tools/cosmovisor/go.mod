@@ -327,3 +327,6 @@ require (
 	pgregory.net/rapid v1.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+// use crypto-org-chain fork of cometbft
+replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20260727205348-0880b4d378f3

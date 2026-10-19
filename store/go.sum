@@ -41,8 +41,6 @@ github.com/cockroachdb/redact v1.1.8 h1:8eVLLj6juKxiKrAEw2b8cJvNqWq++U8WOfQFuL7K
 github.com/cockroachdb/redact v1.1.8/go.mod h1:GceHHpJ0rMDpYARL5In88Alq/xMBUtVlz7Qxix6ZVkw=
 github.com/cockroachdb/tokenbucket v0.0.0-20250429170803-42689b6311bb h1:3bCgBvB8PbJVMX1ouCcSIxvsqKPYM7gs72o0zC76n9g=
 github.com/cockroachdb/tokenbucket v0.0.0-20250429170803-42689b6311bb/go.mod h1:7nc4anLGjupUW/PeY5qiNYsdNXj7zopG+eqsS7To5IQ=
-github.com/cometbft/cometbft v0.40.0 h1:0+zc7FlcnonFfMwzhyDCd5vK/fHZqz0RfRyTCxZsFPU=
-github.com/cometbft/cometbft v0.40.0/go.mod h1:3z+Aq3BSkwNKw+Z40yPUTxtSRIpQa0w2PyCwyaxxHeU=
 github.com/cosmos/btree v1.0.0 h1:V3OdIzTQw2yE7f6pD6FfA9j2/YLj1UpB9MdY0zU3v3k=
 github.com/cosmos/btree v1.0.0/go.mod h1:BZML+flLn4d3MOa4POmzDWf5HQ7EGh0y1OLlfhh7A0k=
 github.com/cosmos/cosmos-db v1.1.3 h1:7QNT77+vkefostcKkhrzDK9uoIEryzFrU9eoMeaQOPY=
@@ -56,6 +54,8 @@ github.com/cosmos/iavl v1.2.8/go.mod h1:FRHN4tO+6crf0p2zsqye+nAbsMgiwdkxpWm18DyP
 github.com/cosmos/ics23/go v0.11.0 h1:jk5skjT0TqX5e5QJbEnwXIS2yI2vnmLOgpQPeM5RtnU=
 github.com/cosmos/ics23/go v0.11.0/go.mod h1:A8OjxPE67hHST4Icw94hOxxFEJMBG031xIGF/JHNIY0=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
+github.com/crypto-org-chain/cometbft v0.0.0-20260727205348-0880b4d378f3 h1:dsRC16wON9eZgzmbOSmLPuRnTEz7+F4kxbkSpuY5lOw=
+github.com/crypto-org-chain/cometbft v0.0.0-20260727205348-0880b4d378f3/go.mod h1:3z+Aq3BSkwNKw+Z40yPUTxtSRIpQa0w2PyCwyaxxHeU=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
