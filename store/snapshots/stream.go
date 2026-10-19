@@ -122,12 +122,16 @@ func (c *chunkBoundedReader) Read(p []byte) (int, error) {
 
 // NewStreamReader set up a restore stream pipeline.
 func NewStreamReader(chunks <-chan io.ReadCloser) (*StreamReader, error) {
+	return newStreamReader(chunks, int64(snapshotMaxDecompressedChunkSize))
+}
+
+func newStreamReader(chunks <-chan io.ReadCloser, maxDecompressedChunkSize int64) (*StreamReader, error) {
 	chunkReader := NewChunkReader(chunks)
 	zReader, err := zlib.NewReader(chunkReader)
 	if err != nil {
 		return nil, errors.Wrap(err, "zlib failure")
 	}
-	boundedReader := newChunkBoundedReader(zReader, chunkReader, int64(snapshotMaxDecompressedChunkSize))
+	boundedReader := newChunkBoundedReader(zReader, chunkReader, maxDecompressedChunkSize)
 	protoReader := protoio.NewDelimitedReader(boundedReader, snapshotMaxItemSize)
 	return &StreamReader{
 		chunkReader: chunkReader,

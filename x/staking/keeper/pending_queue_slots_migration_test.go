@@ -149,8 +149,10 @@ func (s *PendingQueueSlotsMigrationTestSuite) TestPopulate_AllQueues() {
 		s.Require().NoError(err)
 	}
 
-	err := s.populate()
-	s.Require().NoError(err)
+	// Upgrade handlers may run it on a chain that already populated the index; a rerun must not duplicate slots.
+	for range 2 {
+		s.Require().NoError(s.populate())
+	}
 
 	valSlots, err := s.stakingKeeper.GetValidatorQueuePendingSlots(s.ctx)
 	s.Require().NoError(err)
