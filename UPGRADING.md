@@ -210,7 +210,7 @@ Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
     replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20261019005131-5e839872ea38
     ```
 
-* `p2p`: libp2p now buffers at most `max_queue_size` messages per reactor (`[p2p.libp2p.scaler]` in `config.toml`, default `200000`, `0` means unlimited) and drops the rest, counted by the `messages_reactor_dropped` metric. The cap counts messages, not bytes. Existing `config.toml` files without the key get the default.
+* `p2p`: when the experimental libp2p transport is on (`p2p.libp2p.enabled = true`, off by default), each reactor queues at most `max_queue_size` messages (`[p2p.libp2p.scaler]` in `config.toml`, default `200000`, `0` means unlimited). A full queue evicts its oldest lower-priority message, or rejects the new one if none is lower; both count in the `messages_reactor_dropped` metric. The cap counts messages, not bytes. Existing `config.toml` files without the key get the default.
 * `mempool`: with `mempool.type = "app"`, a `CheckTx` whose app client call errors or returns no response now answers with code `1` (`CodeTypeInternal`). Upstream v0.40.0 never answers, so the broadcast waits until it times out.
 * `x/staking`: an error from the `AfterUnbondingInitiated` hook now fails `MsgUndelegate` and `MsgBeginRedelegate` instead of being logged and ignored. Apps whose staking hooks can return an error must expect those txs to fail.
 * `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)).
