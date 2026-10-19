@@ -187,7 +187,7 @@ Add `"params"` to `Deleted` as well if your app still had the `x/params` store m
 
 #### Staking Queue Pending-Slot Index (crypto-org-chain fork)
 
-End-block maturity of unbonding validators, unbonding delegations and redelegations reads a pending-slot index instead of iterating the queues. Queue entries written before the index existed are invisible to end-block and never mature. If the chain did not already run it on the fork's `release/v0.54.x`, call it from the upgrade handler; it rebuilds the index from a full queue scan, so running it again is safe:
+End-block maturity of unbonding validators, unbonding delegations and redelegations reads a pending-slot index instead of iterating the queues. Queue entries written before the index existed are invisible to end-block and never mature. If the chain did not already run it on the fork's `release/v0.54.x`, call it from the upgrade handler, as the reference handler in `simapp/upgrades.go` does; it rebuilds the index from a full queue scan, so running it again is safe:
 
 ```go
 if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
