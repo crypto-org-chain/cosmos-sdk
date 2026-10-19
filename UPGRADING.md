@@ -17,6 +17,7 @@ The headline changes in this release are the removal of three legacy surfaces (`
     * [Staking: Key Rotation Wiring and Interface Changes](#staking-key-rotation-wiring-and-interface-changes)
     * [genutil: ExportGenesisFileWithTime Signature](#genutil-exportgenesisfilewithtime-signature)
     * [Upgrade Handler and Store Migrations](#upgrade-handler-and-store-migrations)
+    * [crypto-org-chain Fork Changes](#crypto-org-chain-fork-changes)
 * [Upgrading from v0.53.x](#upgrading-from-v053x)
 * [New Features and Non-Breaking Changes](#new-features-and-non-breaking-changes)
     * [Validator Consensus Key Rotation](#validator-consensus-key-rotation)
@@ -194,6 +195,15 @@ if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
     return nil, err
 }
 ```
+
+### crypto-org-chain Fork Changes
+
+Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
+
+* `x/staking`: an error from the `AfterUnbondingInitiated` hook now fails `MsgUndelegate` and `MsgBeginRedelegate` instead of being logged and ignored. Apps whose staking hooks can return an error must expect those txs to fail.
+* `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)).
+* `baseapp`: `CheckTx` inserts into the mempool before writing the AnteHandler state, so a custom `Mempool.Insert` or `TxPriority` that reads state from `ctx` sees pre-ante state. The SDK mempools take the nonce from the tx signature and are unaffected.
+* `server`: the default gRPC `max-send-msg-size` drops from ~2GB to 10MB. Set `grpc.max-send-msg-size` in `app.toml` if queries return larger responses.
 
 ## Upgrading from v0.53.x
 

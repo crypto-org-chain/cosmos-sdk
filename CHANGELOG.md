@@ -40,13 +40,13 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Breaking Changes
 
-* (server) [#1830](https://github.com/crypto-org-chain/cosmos-sdk/pull/1830) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (backport of [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585)). gRPC responses larger than 10MB now fail on newly generated configs; existing `app.toml` files keep their configured `max-send-msg-size`.
+* (server) [#1830](https://github.com/crypto-org-chain/cosmos-sdk/pull/1830) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (backport of [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585)). gRPC responses larger than 10MB now fail unless `app.toml` sets `grpc.max-send-msg-size`.
 * (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) Remove `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator`; end-block reads the pending-slot index instead. `DequeueAllMatureRedelegationQueue` now honors its `currTime` argument instead of reading `HeaderInfo().Time`.
 
 ### State Machine Breaking
 
 * (x/staking) [#1831](https://github.com/crypto-org-chain/cosmos-sdk/pull/1831) Propagate `AfterUnbondingInitiated` hook errors from unbonding delegation and redelegation entries instead of logging and swallowing them, matching the validator unbonding path (backport of [#26589](https://github.com/cosmos/cosmos-sdk/pull/26589)).
-* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Index pending validator, unbonding and redelegation queue slots so end-block skips queue iteration (backport of [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023)). Chains populate the index by calling `Keeper.PopulateQueuePendingSlots` from their upgrade handler; no consensus version migration is registered.
+* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Index pending validator, unbonding and redelegation queue slots so end-block skips queue iteration (backport of [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023)). Chains populate the index by calling `Keeper.PopulateQueuePendingSlots` from their upgrade handler; no consensus version migration is registered. The index's error codes move from 46/47 (fork v0.54.x) to 49/50, since v0.55 key rotation took 46-48.
 
 ### Features
 
