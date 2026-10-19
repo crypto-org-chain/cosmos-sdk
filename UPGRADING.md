@@ -165,10 +165,6 @@ func (app SimApp) RegisterUpgradeHandlers() {
     app.UpgradeKeeper.SetUpgradeHandler(
         UpgradeName,
         func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-            // crypto-org-chain fork: see Staking Queue Pending-Slot Index below.
-            if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
-                return nil, err
-            }
             return app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
         },
     )
@@ -190,15 +186,11 @@ func (app SimApp) RegisterUpgradeHandlers() {
 
 Add `"params"` to `Deleted` as well if your app still had the `x/params` store mounted.
 
-#### Staking Queue Pending-Slot Index (crypto-org-chain fork)
+#### Staking Queue Earliest-Time Gate (crypto-org-chain fork)
 
-End-block maturity of unbonding validators, unbonding delegations and redelegations reads a pending-slot index instead of iterating the queues. Queue entries written before the index existed are invisible to end-block and never mature. If the chain did not already run it on the fork's `release/v0.54.x`, call it from the upgrade handler, as the reference handler in `simapp/upgrades.go` does; it rebuilds the index from a full queue scan, so running it again is safe:
+The validator, unbonding and redelegation queues each keep their earliest entry time under keys `0x44`-`0x46`. End-block reads that time and scans a queue only once it is due, so blocks before then open no iterator. Each queue insert reads and may lower that one value, so its gas no longer grows with the number of pending entries.
 
-```go
-if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
-    return nil, err
-}
-```
+No upgrade handler change is needed. The first end-block after the upgrade finds no stored time, or the pending-slot list that fork `release/v0.54.x` kept under the same keys, scans each queue once and records the time. Existing handlers that call `Keeper.PopulateQueuePendingSlots` keep working; it now does that recomputation eagerly.
 
 ### crypto-org-chain Fork Changes
 
@@ -213,7 +205,7 @@ Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
 * `p2p`: when the experimental libp2p transport is on (`p2p.libp2p.enabled = true`, off by default), each reactor queues at most `max_queue_size` messages (`[p2p.libp2p.scaler]` in `config.toml`, default `200000`, `0` means unlimited). A full queue evicts the oldest message from the lowest occupied priority level below the new message's, or rejects the new message if no lower level holds any; both count in the `messages_reactor_dropped` metric. The cap counts messages, not bytes. Existing `config.toml` files without the key get the default.
 * `mempool`: with `mempool.type = "app"`, a `CheckTx` whose app client call errors now answers with code `1` (`CodeTypeInternal`); upstream v0.40.0 never answers, so the broadcast waits until it times out. A nil response is handled the same way.
 * `x/staking`: an error from the `AfterUnbondingInitiated` hook now fails `MsgUndelegate` and `MsgBeginRedelegate` instead of being logged and ignored. Apps whose staking hooks can return an error must expect those txs to fail.
-* `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)).
+* `x/staking`: end-block scans a maturity queue only once its stored earliest time is due (see [Staking Queue Earliest-Time Gate](#staking-queue-earliest-time-gate-crypto-org-chain-fork)).
 * `baseapp`: `CheckTx` inserts into the mempool before writing the AnteHandler state, so a custom `Mempool.Insert` or `TxPriority` that reads state from `ctx` sees pre-ante state. The SDK mempools take the nonce from the tx signature and are unaffected.
 * `server`: the default gRPC `max-send-msg-size` drops from ~2GB to 10MB. An `app.toml` that sets `max-send-msg-size` keeps its value (generated files do); one that omits the key gets 10MB. Raise `grpc.max-send-msg-size` if queries return larger responses. **RPC and archive operators of ethermint-based chains such as Cronos:** JSON-RPC `debug_traceTransaction`, `debug_traceBlock*` and large paginated queries go through the app's gRPC server and can exceed 10MB. They fail with `ResourceExhausted` on nodes initialised with `init` and on any `app.toml` that omits the key, so set `max-send-msg-size` explicitly on those nodes.
 
