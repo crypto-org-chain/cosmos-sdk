@@ -320,6 +320,17 @@ which the validator object can be accessed. Typically it is expected that only
 a single validator record will be associated with a given timestamp however it is possible
 that multiple validators exist in the queue at the same location.
 
+#### Queue Earliest Times
+
+Each queue above also keeps the time of its earliest entry, so `EndBlock` skips
+scanning a queue until that time is due. The value is `format(time)`, or `0x00`
+when the queue is empty; an absent key makes the next `EndBlock` scan the queue
+and record it.
+
+* ValidatorQueueEarliest: `0x44 -> format(time)`
+* UnbondingDelegationQueueEarliest: `0x45 -> format(time)`
+* RedelegationQueueEarliest: `0x46 -> format(time)`
+
 ### HistoricalInfo
 
 HistoricalInfo objects are stored and pruned at each block such that the staking keeper persists

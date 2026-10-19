@@ -22,10 +22,6 @@ func (app SimApp) RegisterUpgradeHandlers() {
 		UpgradeName,
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			sdk.UnwrapSDKContext(ctx).Logger().Debug("this is a debug level message to test that verbose logging mode has properly been enabled during a chain upgrade")
-			// Queue entries written before the pending-slot index existed never mature without this.
-			if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
-				return nil, err
-			}
 			return app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
 		},
 	)
