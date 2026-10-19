@@ -210,12 +210,12 @@ Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
     replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20261019005131-5e839872ea38
     ```
 
-* `p2p`: when the experimental libp2p transport is on (`p2p.libp2p.enabled = true`, off by default), each reactor queues at most `max_queue_size` messages (`[p2p.libp2p.scaler]` in `config.toml`, default `200000`, `0` means unlimited). A full queue evicts its oldest lower-priority message, or rejects the new one if none is lower; both count in the `messages_reactor_dropped` metric. The cap counts messages, not bytes. Existing `config.toml` files without the key get the default.
-* `mempool`: with `mempool.type = "app"`, a `CheckTx` whose app client call errors or returns no response now answers with code `1` (`CodeTypeInternal`). Upstream v0.40.0 never answers, so the broadcast waits until it times out.
+* `p2p`: when the experimental libp2p transport is on (`p2p.libp2p.enabled = true`, off by default), each reactor queues at most `max_queue_size` messages (`[p2p.libp2p.scaler]` in `config.toml`, default `200000`, `0` means unlimited). A full queue evicts the oldest message from the lowest occupied priority level below the new message's, or rejects the new message if no lower level holds any; both count in the `messages_reactor_dropped` metric. The cap counts messages, not bytes. Existing `config.toml` files without the key get the default.
+* `mempool`: with `mempool.type = "app"`, a `CheckTx` whose app client call errors now answers with code `1` (`CodeTypeInternal`); upstream v0.40.0 never answers, so the broadcast waits until it times out. A nil response is handled the same way.
 * `x/staking`: an error from the `AfterUnbondingInitiated` hook now fails `MsgUndelegate` and `MsgBeginRedelegate` instead of being logged and ignored. Apps whose staking hooks can return an error must expect those txs to fail.
 * `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)).
 * `baseapp`: `CheckTx` inserts into the mempool before writing the AnteHandler state, so a custom `Mempool.Insert` or `TxPriority` that reads state from `ctx` sees pre-ante state. The SDK mempools take the nonce from the tx signature and are unaffected.
-* `server`: the default gRPC `max-send-msg-size` drops from ~2GB to 10MB. Existing `app.toml` files already pin the old value; newly generated configs get 10MB, so raise `grpc.max-send-msg-size` there if queries return larger responses.
+* `server`: the default gRPC `max-send-msg-size` drops from ~2GB to 10MB. An `app.toml` that sets `max-send-msg-size` keeps its value (generated files do); one that omits the key gets 10MB. Raise `grpc.max-send-msg-size` if queries return larger responses.
 
 ## Upgrading from v0.53.x
 
