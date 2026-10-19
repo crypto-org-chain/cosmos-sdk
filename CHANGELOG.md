@@ -54,7 +54,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
-* (deps) [cometbft@0880b4d](https://github.com/crypto-org-chain/cometbft/commit/0880b4d378f347ab16e54ec677ff50d803f37d62) Point CometBFT at the `crypto-org-chain/cometbft` fork's `v0.40.x` branch in every module that requires it (currently identical to upstream v0.40.0).
+* (deps) [cometbft#71](https://github.com/crypto-org-chain/cometbft/pull/71) Point CometBFT at the `crypto-org-chain/cometbft` fork in every module that requires it, pinned to the head of cometbft#71 (`5e839872ea38`): v0.40.0 plus the fork's AppMempool ABCI handling fix and the lp2p per-reactor queue cap.
 
 ### Bug Fixes
 
