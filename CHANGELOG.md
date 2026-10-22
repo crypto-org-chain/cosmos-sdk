@@ -44,7 +44,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Remove the fork v0.54.x pending-slot API: the `Keeper` methods `Get`/`Set`/`Add{Validator,UBD,Redelegation}QueuePendingSlot(s)` and `RemoveValidatorQueuePendingSlot`, `types.TimeHeightQueueSlot`, and `ErrPendingQueueSlotMissingCount`/`ErrPendingQueueSlotInsufficientCapacity`. Those errors had codes 46/47, which v0.55 gives to key rotation's `ErrConsensusPubKeyAlreadyUsedForValidator`/`ErrConsensusPubKeyInRotationHistory`.
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Rename `types.{Validator,UBD,Redelegation}QueuePendingSlotsKey` to `*QueueEarliestKey`: same bytes, new value format.
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Restore `Keeper.ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator`. `DequeueAllMatureRedelegationQueue` again matures by `HeaderInfo().Time` and ignores `currTime`, as in upstream.
-* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `types.ParseValidatorQueueKey` returns an error for any malformed key, including one whose length doesn't match its time length field, instead of panicking or misreading the height.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `types.ParseValidatorQueueKey` returns an error instead of panicking on a key too short for its prefix, time or height; keys it read before parse the same.
 
 ### State Machine Breaking
 
