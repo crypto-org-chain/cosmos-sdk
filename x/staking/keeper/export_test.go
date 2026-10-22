@@ -13,7 +13,8 @@ import (
 
 // The ungated end-block scans of upstream v0.55.0, copied verbatim apart from their names: the
 // reference the gated scans are checked against. The validator copy is kept even though production
-// keeps the same loop, so a change to that loop shows up as a difference from upstream.
+// keeps the same loop, so a change to that loop shows up as a difference from upstream; re-sync it
+// when merging an upstream change to the loop.
 
 func (k Keeper) UpstreamDequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
 	store := k.storeService.OpenKVStore(ctx)

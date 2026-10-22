@@ -405,6 +405,17 @@ func TestParseRotationLockedConsAddrIndexValue_Errors(t *testing.T) {
 	}
 }
 
+func TestValidatorQueueTimePrefix(t *testing.T) {
+	at := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	timeBz := sdk.FormatTimeBytes(at)
+	prefix := types.ValidatorQueueTimePrefix(timeBz)
+
+	require.True(t, bytes.HasPrefix(types.GetValidatorQueueKey(at, 0), prefix))
+	require.Negative(t, bytes.Compare(prefix, types.GetValidatorQueueKey(at, 0)))
+	require.Positive(t, bytes.Compare(prefix, types.GetValidatorQueueKey(at.Add(-time.Nanosecond), math2.MaxInt64)))
+	require.Equal(t, timeBz, types.ValidatorQueueKeyTimeBytes(prefix))
+}
+
 func TestValidatorQueueKeyTimeBytes(t *testing.T) {
 	at := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	key := types.GetValidatorQueueKey(at, 7)

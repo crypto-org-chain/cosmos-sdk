@@ -29,7 +29,8 @@ type queueGate struct {
 	queuePrefix []byte
 	// keyTimeBytes returns the formatted time inside a queue key.
 	keyTimeBytes func(key []byte) []byte
-	// firstKeyAt returns the lowest queue key with the given formatted time.
+	// firstKeyAt returns a key that sorts at or before every queue key with the given formatted
+	// time, and after every key with an earlier one.
 	firstKeyAt func(timeBz []byte) []byte
 }
 
@@ -58,23 +59,13 @@ var (
 		earliestKey:  types.ValidatorQueueEarliestKey,
 		queuePrefix:  types.ValidatorQueueKey,
 		keyTimeBytes: types.ValidatorQueueKeyTimeBytes,
-		firstKeyAt:   validatorQueueFirstKeyAt,
+		firstKeyAt:   types.ValidatorQueueTimePrefix,
 	}
 	ubdQueueGate          = newTimeQueueGate(types.UBDQueueEarliestKey, types.UnbondingQueueKey)
 	redelegationQueueGate = newTimeQueueGate(types.RedelegationQueueEarliestKey, types.RedelegationQueueKey)
 
 	queueGates = []queueGate{validatorQueueGate, ubdQueueGate, redelegationQueueGate}
 )
-
-// validatorQueueFirstKeyAt uses height 0, the lowest a key can hold; a zero-height genesis export
-// writes entries at height 0. Bytes that don't parse as a time fall back to the queue start.
-func validatorQueueFirstKeyAt(timeBz []byte) []byte {
-	t, err := sdk.ParseTimeBytes(timeBz)
-	if err != nil {
-		return types.ValidatorQueueKey
-	}
-	return types.GetValidatorQueueKey(t, 0)
-}
 
 type queueEarliest struct {
 	raw   []byte

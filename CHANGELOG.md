@@ -53,7 +53,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
-* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Add `Keeper.RecomputeQueueEarliest` and `types.ValidatorQueueKeyTimeBytes`.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Add `Keeper.RecomputeQueueEarliest`, `types.ValidatorQueueTimePrefix` and `types.ValidatorQueueKeyTimeBytes`.
 * (mempool) [#1850](https://github.com/crypto-org-chain/cosmos-sdk/pull/1850) Add `UnorderedTxs` to `PriorityNonceMempool`.
 
 ### Improvements

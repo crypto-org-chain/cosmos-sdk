@@ -568,7 +568,7 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			expErr: stakingtypes.ErrNoValidatorFound,
 		},
 		{
-			// A zero-height genesis export queues validators at height 0.
+			// A chain started from a zero-height export queues unbonding validators at height 0.
 			name: "due scan reaches a height-0 entry at the stored time",
 			malleate: func(ctx sdk.Context, _ storetypes.KVStore) {
 				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
