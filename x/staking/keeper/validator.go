@@ -563,7 +563,7 @@ func (k Keeper) validatorQueueIterator(ctx context.Context, start []byte, endTim
 // earliest entry is due.
 func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	blockTime := sdk.UnwrapSDKContext(ctx).BlockTime()
-	return k.runGatedScan(ctx, validatorQueueGate, blockTime, func(earliest queueEarliest) (stored, next []byte, err error) {
+	return k.runGatedScan(ctx, validatorQueueGate, sdk.FormatTimeBytes(blockTime), func(earliest queueEarliest) (stored, next []byte, err error) {
 		start := earliest.scanStart(validatorQueueGate)
 		if err = k.unbondAllMatureValidators(ctx, start, blockTime); err != nil {
 			return nil, nil, err
@@ -575,6 +575,7 @@ func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 		if err != nil {
 			return nil, nil, err
 		}
+		// An unchanged value has the same start, without parsing the time again.
 		if !bytes.Equal(cur.raw, earliest.raw) {
 			start = cur.scanStart(validatorQueueGate)
 		}

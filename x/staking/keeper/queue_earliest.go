@@ -16,7 +16,7 @@ const queueEmptyMarker = "\x00"
 
 // sortableTimeLen is the width of sdk.FormatTimeBytes for years 0000-9999, the only times stored:
 // at this width byte order is time order and queue-key order. Other years leave the time unknown.
-var sortableTimeLen = len(sdk.FormatTimeBytes(time.Time{}))
+const sortableTimeLen = len(sdk.SortableTimeFormat)
 
 // queueGate pairs a maturity queue with the key holding its earliest entry time.
 //
@@ -95,11 +95,12 @@ func (k Keeper) PopulateQueuePendingSlots(ctx context.Context) error {
 	return k.RecomputeQueueEarliest(ctx)
 }
 
-// runGatedScan runs scan once g's earliest time is due at now. scan returns the value stored when
-// it finishes and the earliest time to store, which is written if it differs.
-func (k Keeper) runGatedScan(ctx context.Context, g queueGate, now time.Time, scan func(earliest queueEarliest) (stored, next []byte, err error)) error {
+// runGatedScan runs scan once g's earliest time is due at nowBz, the formatted block time. scan
+// returns the value stored when it finishes and the earliest time to store, which is written if it
+// differs.
+func (k Keeper) runGatedScan(ctx context.Context, g queueGate, nowBz []byte, scan func(earliest queueEarliest) (stored, next []byte, err error)) error {
 	earliest, err := k.getQueueEarliest(ctx, g)
-	if err != nil || !earliest.due(now) {
+	if err != nil || !earliest.due(nowBz) {
 		return err
 	}
 	stored, next, err := scan(earliest)
@@ -115,8 +116,9 @@ func (k Keeper) runGatedScan(ctx context.Context, g queueGate, now time.Time, sc
 // disagree with what the scan removed.
 func dequeueTimeQueue[E any](ctx context.Context, k Keeper, g queueGate, now time.Time, unmarshal func([]byte) ([]E, error)) ([]E, error) {
 	var mature []E
-	err := k.runGatedScan(ctx, g, now, func(earliest queueEarliest) (stored, next []byte, err error) {
-		mature, next, err = dequeueTimeSlices(ctx, k, g, earliest.scanStart(g), now, unmarshal)
+	nowBz := sdk.FormatTimeBytes(now)
+	err := k.runGatedScan(ctx, g, nowBz, func(earliest queueEarliest) (stored, next []byte, err error) {
+		mature, next, err = dequeueTimeSlices(ctx, k, g, earliest.scanStart(g), nowBz, unmarshal)
 		return earliest.raw, next, err
 	})
 	if err != nil {
@@ -125,9 +127,9 @@ func dequeueTimeQueue[E any](ctx context.Context, k Keeper, g queueGate, now tim
 	return mature, nil
 }
 
-func dequeueTimeSlices[E any](ctx context.Context, k Keeper, g queueGate, start []byte, now time.Time, unmarshal func([]byte) ([]E, error)) (mature []E, next []byte, err error) {
+func dequeueTimeSlices[E any](ctx context.Context, k Keeper, g queueGate, start, nowBz []byte, unmarshal func([]byte) ([]E, error)) (mature []E, next []byte, err error) {
 	store := k.storeService.OpenKVStore(ctx)
-	bound := g.firstKeyAt(sdk.FormatTimeBytes(now))
+	bound := g.firstKeyAt(nowBz)
 	iter, err := store.Iterator(start, storetypes.PrefixEndBytes(g.queuePrefix))
 	if err != nil {
 		return nil, nil, err
@@ -157,15 +159,15 @@ type queueEarliest struct {
 	empty bool
 }
 
-// due reports whether end-block has to scan the queue at now.
-func (e queueEarliest) due(now time.Time) bool {
-	return !e.known || (!e.empty && bytes.Compare(e.raw, sdk.FormatTimeBytes(now)) <= 0)
+// due reports whether end-block has to scan the queue at nowBz, the formatted block time.
+func (e queueEarliest) due(nowBz []byte) bool {
+	return !e.known || (!e.empty && bytes.Compare(e.raw, nowBz) <= 0)
 }
 
 // scanStart returns the first key at the stored time, which sorts at or before every queue key, or
 // the queue start when that time is unknown.
 func (e queueEarliest) scanStart(g queueGate) []byte {
-	if !e.known || e.empty {
+	if !e.known {
 		return g.queuePrefix
 	}
 	return g.firstKeyAt(e.raw)
@@ -199,8 +201,8 @@ func (g queueGate) earliestValue(key []byte) []byte {
 
 // lowerQueueEarliest records t as the earliest entry time if it is earlier than the stored one, or
 // clears a known time when t isn't sortableTimeLen wide. It runs on every queue insert: it reads
-// the stored value, a fixed 1 or 29 bytes once any fork v0.54.x list is replaced, and writes only
-// on a change.
+// the stored value, 0, 1 or 29 bytes once any fork v0.54.x list is replaced, and writes only on a
+// change.
 func (k Keeper) lowerQueueEarliest(ctx context.Context, g queueGate, t time.Time) error {
 	e, err := k.getQueueEarliest(ctx, g)
 	// An unknown time stays unknown: the queue may hold earlier entries that only a scan finds.

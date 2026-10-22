@@ -327,9 +327,9 @@ entry, so `EndBlock` skips scanning a queue until that time is due and then
 starts the scan there; each scan resets it to the first remaining entry. `0x00`
 marks an empty queue. An absent key makes the next `EndBlock` scan the queue
 from its start and record its first entry's time, or `0x00` if it is empty. A time outside
-years 0000-9999, which only a direct call to the queue setters can write,
-leaves the key absent when it is inserted, or while it is the queue's first
-entry.
+years 0000-9999 leaves the key absent when it is inserted, or while it is the
+queue's first entry. Such a time needs a direct call to the queue setters, or
+an unbonding period that pushes completion past year 9999.
 
 * ValidatorQueueEarliest: `0x44 -> format(time) | 0x00`
 * UnbondingDelegationQueueEarliest: `0x45 -> format(time) | 0x00`
