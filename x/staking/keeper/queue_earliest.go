@@ -56,7 +56,8 @@ var (
 	queueGates = []queueGate{validatorQueueGate, ubdQueueGate, redelegationQueueGate}
 )
 
-// validatorQueueFirstKeyAt falls back to the queue start for bytes that don't parse as a time.
+// validatorQueueFirstKeyAt uses height 0, the lowest a key can hold; a zero-height genesis export
+// writes entries at height 0. Bytes that don't parse as a time fall back to the queue start.
 func validatorQueueFirstKeyAt(timeBz []byte) []byte {
 	t, err := sdk.ParseTimeBytes(timeBz)
 	if err != nil {
@@ -66,16 +67,21 @@ func validatorQueueFirstKeyAt(timeBz []byte) []byte {
 }
 
 // RecomputeQueueEarliest recomputes the earliest entry time of the validator, unbonding and
-// redelegation queues from a full scan, replacing any pending-slot list that fork v0.54.x stored
-// under the same keys. Staking's 5 to 6 migration runs it; run it again after writing queue
-// entries without the keeper's queue setters.
+// redelegation queues from each queue's first entry, replacing any pending-slot list that fork
+// v0.54.x stored under the same keys. Staking's 5 to 6 migration runs it; run it again after
+// writing queue entries without the keeper's queue setters.
 func (k Keeper) RecomputeQueueEarliest(ctx context.Context) error {
+	store := k.storeService.OpenKVStore(ctx)
 	for _, g := range queueGates {
+		prev, err := store.Get(g.earliestKey)
+		if err != nil {
+			return err
+		}
 		next, err := k.earliestFrom(ctx, g, g.queuePrefix)
 		if err != nil {
 			return err
 		}
-		if err := k.storeQueueEarliest(ctx, g, next); err != nil {
+		if err := k.storeQueueEarliest(ctx, g, prev, next); err != nil {
 			return err
 		}
 	}
@@ -89,19 +95,18 @@ func (k Keeper) PopulateQueuePendingSlots(ctx context.Context) error {
 	return k.RecomputeQueueEarliest(ctx)
 }
 
-// runGatedScan runs scan once g's earliest time is due at now, and stores the earliest time scan
-// returns. scan gets the key to start from: the first key at the stored time, or the queue start
-// when that time is unknown.
-func (k Keeper) runGatedScan(ctx context.Context, g queueGate, now time.Time, scan func(start []byte) (next []byte, err error)) error {
+// runGatedScan runs scan once g's earliest time is due at now. scan returns the value stored when
+// it finishes and the earliest time to store, which is written if it differs.
+func (k Keeper) runGatedScan(ctx context.Context, g queueGate, now time.Time, scan func(earliest queueEarliest) (stored, next []byte, err error)) error {
 	earliest, err := k.getQueueEarliest(ctx, g)
 	if err != nil || !earliest.due(now) {
 		return err
 	}
-	next, err := scan(earliest.scanStart(g))
+	stored, next, err := scan(earliest)
 	if err != nil {
 		return err
 	}
-	return k.storeQueueEarliest(ctx, g, next)
+	return k.storeQueueEarliest(ctx, g, stored, next)
 }
 
 // dequeueTimeQueue removes every timeslice keyed at or before now and returns their entries, once
@@ -110,9 +115,9 @@ func (k Keeper) runGatedScan(ctx context.Context, g queueGate, now time.Time, sc
 // disagree with what the scan removed.
 func dequeueTimeQueue[E any](ctx context.Context, k Keeper, g queueGate, now time.Time, unmarshal func([]byte) ([]E, error)) ([]E, error) {
 	var mature []E
-	err := k.runGatedScan(ctx, g, now, func(start []byte) (next []byte, err error) {
-		mature, next, err = dequeueTimeSlices(ctx, k, g, start, now, unmarshal)
-		return next, err
+	err := k.runGatedScan(ctx, g, now, func(earliest queueEarliest) (stored, next []byte, err error) {
+		mature, next, err = dequeueTimeSlices(ctx, k, g, earliest.scanStart(g), now, unmarshal)
+		return earliest.raw, next, err
 	})
 	if err != nil {
 		return nil, err
@@ -227,19 +232,15 @@ func (k Keeper) earliestFrom(ctx context.Context, g queueGate, start []byte) ([]
 	return g.earliestValue(iter.Key()), nil
 }
 
-// storeQueueEarliest writes value, or clears the key when value is nil, unless it is already
-// stored, so a queue that stays due is not rewritten every block.
-func (k Keeper) storeQueueEarliest(ctx context.Context, g queueGate, value []byte) error {
-	store := k.storeService.OpenKVStore(ctx)
-	prev, err := store.Get(g.earliestKey)
-	switch {
-	case err != nil:
-		return err
-	case bytes.Equal(prev, value):
+// storeQueueEarliest writes value, or clears the key when value is nil, unless it equals prev, the
+// value currently stored, so a queue that stays due is not rewritten every block.
+func (k Keeper) storeQueueEarliest(ctx context.Context, g queueGate, prev, value []byte) error {
+	if bytes.Equal(prev, value) {
 		return nil
-	case value == nil:
-		return store.Delete(g.earliestKey)
-	default:
-		return store.Set(g.earliestKey, value)
 	}
+	store := k.storeService.OpenKVStore(ctx)
+	if value == nil {
+		return store.Delete(g.earliestKey)
+	}
+	return store.Set(g.earliestKey, value)
 }

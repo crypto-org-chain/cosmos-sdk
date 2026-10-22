@@ -552,6 +552,15 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			expErr: stakingtypes.ErrNoValidatorFound,
 		},
 		{
+			// A zero-height genesis export queues validators at height 0.
+			name: "due scan reaches a height-0 entry at the stored time",
+			malleate: func(ctx sdk.Context, _ storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(-hour), 0, []string{unknownValAddress}))
+			},
+			expErr: stakingtypes.ErrNoValidatorFound,
+		},
+		{
 			name: "due scan starts at the stored time",
 			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
 				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
@@ -664,8 +673,12 @@ func (s *KeeperTestSuite) TestValidatorScanSeesEntriesQueuedDuringIt() {
 		})
 	s.stakingKeeper.SetHooks(hooks)
 
-	s.Require().NoError(s.stakingKeeper.UnbondAllMatureValidators(ctx))
+	writes := s.earliestWrites(ctx, stakingtypes.ValidatorQueueEarliestKey, func() {
+		s.Require().NoError(s.stakingKeeper.UnbondAllMatureValidators(ctx))
+	})
 	s.Require().Equal(sdk.FormatTimeBytes(queueNow.Add(-2*hour)), ctx.KVStore(s.storeKey).Get(stakingtypes.ValidatorQueueEarliestKey))
+	// Only the hook's insert writes it: the scan then finds that time already stored.
+	s.Require().Equal(1, writes)
 }
 
 func (s *KeeperTestSuite) setRawValidatorQueue(store storetypes.KVStore, t time.Time) {

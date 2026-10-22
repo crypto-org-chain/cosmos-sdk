@@ -550,8 +550,12 @@ func (k Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) e
 // ValidatorQueueIterator returns an iterator ranging over validators that are
 // unbonding whose unbonding completion occurs at the given height and time.
 func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, endHeight int64) (corestore.Iterator, error) {
+	return k.validatorQueueIterator(ctx, types.ValidatorQueueKey, endTime, endHeight)
+}
+
+func (k Keeper) validatorQueueIterator(ctx context.Context, start []byte, endTime time.Time, endHeight int64) (corestore.Iterator, error) {
 	store := k.storeService.OpenKVStore(ctx)
-	return store.Iterator(types.ValidatorQueueKey, storetypes.InclusiveEndBytes(types.GetValidatorQueueKey(endTime, endHeight)))
+	return store.Iterator(start, storetypes.InclusiveEndBytes(types.GetValidatorQueueKey(endTime, endHeight)))
 }
 
 // UnbondAllMatureValidators unbonds all the mature unbonding validators that
@@ -559,18 +563,23 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 // earliest entry is due.
 func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	blockTime := sdk.UnwrapSDKContext(ctx).BlockTime()
-	return k.runGatedScan(ctx, validatorQueueGate, blockTime, func(start []byte) ([]byte, error) {
-		if err := k.unbondAllMatureValidators(ctx, start, blockTime); err != nil {
-			return nil, err
+	return k.runGatedScan(ctx, validatorQueueGate, blockTime, func(earliest queueEarliest) (stored, next []byte, err error) {
+		start := earliest.scanStart(validatorQueueGate)
+		if err = k.unbondAllMatureValidators(ctx, start, blockTime); err != nil {
+			return nil, nil, err
 		}
 		// The scan can leave due entries queued (height not reached, or on hold), so the next
 		// earliest time is looked up again. It starts at the stored time as it is now, which
 		// accounts for any entry inserted during the scan.
 		cur, err := k.getQueueEarliest(ctx, validatorQueueGate)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return k.earliestFrom(ctx, validatorQueueGate, cur.scanStart(validatorQueueGate))
+		if !bytes.Equal(cur.raw, earliest.raw) {
+			start = cur.scanStart(validatorQueueGate)
+		}
+		next, err = k.earliestFrom(ctx, validatorQueueGate, start)
+		return cur.raw, next, err
 	})
 }
 
@@ -585,8 +594,7 @@ func (k Keeper) unbondAllMatureValidators(ctx context.Context, start []byte, blo
 	// ValidatorQueueKey | timeBzLen (8-byte big endian) | timeBz | heightBz (8-byte big endian),
 	// so it may be possible that certain validator addresses that are iterated
 	// over are not ready to unbond, so an explicit check is required.
-	store := k.storeService.OpenKVStore(ctx)
-	unbondingValIterator, err := store.Iterator(start, storetypes.InclusiveEndBytes(types.GetValidatorQueueKey(blockTime, blockHeight)))
+	unbondingValIterator, err := k.validatorQueueIterator(ctx, start, blockTime, blockHeight)
 	if err != nil {
 		return err
 	}
