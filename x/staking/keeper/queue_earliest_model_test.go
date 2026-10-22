@@ -113,7 +113,7 @@ func inTx(tb testing.TB, blockCtx sdk.Context, fn func(sdk.Context) error) {
 func gatedSkip(tb testing.TB, ctx sdk.Context, key *storetypes.KVStoreKey, earliestKey []byte, now time.Time, endBlock func(sdk.Context) error) bool {
 	tb.Helper()
 	stored := ctx.KVStore(key).Get(earliestKey)
-	notDue := bytes.Equal(stored, queueEmptyMarker) || (len(stored) > 1 && bytes.Compare(stored, sdk.FormatTimeBytes(now)) > 0)
+	notDue := bytes.Equal(stored, queueEmptyMarker) || (len(stored) == len(sdk.SortableTimeFormat) && bytes.Compare(stored, sdk.FormatTimeBytes(now)) > 0)
 	meteredCtx := ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	require.NoError(tb, endBlock(meteredCtx))
 	if !notDue {
