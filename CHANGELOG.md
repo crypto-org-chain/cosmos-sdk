@@ -54,6 +54,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
+* (deps) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bump Go to 1.26.10 (stdlib advisories fixed through Go 1.26.10, e.g. GO-2026-6809 in `crypto/x509`, GO-2026-6617 and GO-2026-5026) and patch the vulnerable dependencies govulncheck reports: `golang.org/x/net` v0.60.0 (GO-2026-6603, -6610, -6611, -6612, -6617), `google.golang.org/grpc` v1.83.2 (GO-2026-6443, -6348), OpenTelemetry v1.45.0 / v0.21.0 (GO-2026-6505, -6508, -6615), `pion/dtls/v3` v3.1.4 (GO-2026-6165) and `pion/stun/v3` v3.1.5 (GO-2026-6163).
 * (deps) [cometbft#71](https://github.com/crypto-org-chain/cometbft/pull/71) Point CometBFT at the `crypto-org-chain/cometbft` fork in every module that requires it, pinned to the head of cometbft#71 (`5e839872ea38`): v0.40.0 plus the fork's AppMempool ABCI handling fix and the lp2p per-reactor queue cap.
 
 ### Bug Fixes
