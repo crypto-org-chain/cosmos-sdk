@@ -12,7 +12,8 @@ import (
 
 var (
 	// queueEmptyMarker records that a queue is known to be empty. An absent key means the earliest
-	// time is not known, so end-block scans the queue and records it as soon as it can.
+	// time is not known, so end-block scans the queue and records it as soon as it can. Stores
+	// keep the slice they are given, so values to store are copies made by emptyQueueValue.
 	queueEmptyMarker = []byte{0}
 
 	// sortableTimeLen is the length of sdk.FormatTimeBytes for years 0000-9999. Stored times are
@@ -135,7 +136,7 @@ func dequeueTimeSlices[E any](ctx context.Context, k Keeper, g timeQueueGate, no
 			return nil, nil, err
 		}
 	}
-	return mature, queueEmptyMarker, nil
+	return mature, emptyQueueValue(), nil
 }
 
 type queueEarliest struct {
@@ -211,9 +212,13 @@ func (k Keeper) firstQueueEntryTime(ctx context.Context, g queueGate) ([]byte, e
 	}
 	defer iter.Close()
 	if !iter.Valid() {
-		return queueEmptyMarker, nil
+		return emptyQueueValue(), nil
 	}
 	return g.earliestValue(iter.Key()), nil
+}
+
+func emptyQueueValue() []byte {
+	return bytes.Clone(queueEmptyMarker)
 }
 
 // storeQueueEarliest writes value (nil clears it) unless it equals prev, the value read before the
@@ -228,6 +233,5 @@ func (k Keeper) storeQueueEarliest(ctx context.Context, g queueGate, prev, value
 	if value == nil {
 		return store.Delete(g.earliestKey)
 	}
-	// The store keeps the slice it is given, and value may be the shared queueEmptyMarker.
-	return store.Set(g.earliestKey, bytes.Clone(value))
+	return store.Set(g.earliestKey, value)
 }

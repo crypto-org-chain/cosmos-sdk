@@ -28,7 +28,10 @@ func (app SimApp) RegisterUpgradeHandlers() {
 			}
 			// Replaces a fork v0.54.x pending-slot list before txs in the upgrade block read it; after
 			// the migrations, so it also covers any queue entries they write.
-			return versionMap, app.StakingKeeper.RecomputeQueueEarliest(ctx)
+			if err := app.StakingKeeper.RecomputeQueueEarliest(ctx); err != nil {
+				return nil, err
+			}
+			return versionMap, nil
 		},
 	)
 

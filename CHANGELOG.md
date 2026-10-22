@@ -41,7 +41,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Breaking Changes
 
 * (server) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (port of upstream [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585), closed unmerged). An `app.toml` that omits `max-send-msg-size` now gets 10MB, so larger gRPC responses fail; generated files set the key and keep their value.
-* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Compared with fork v0.54.x, the pending-slot API is removed: the `Keeper` methods `Get`/`Set`/`Add{Validator,UBD,Redelegation}QueuePendingSlot(s)` and `RemoveValidatorQueuePendingSlot`, `types.TimeHeightQueueSlot`, and `ErrPendingQueueSlotMissingCount`/`ErrPendingQueueSlotInsufficientCapacity` (codes 46/47 on fork v0.54.x; in v0.55 those codes belong to key rotation's `ErrConsensusPubKeyAlreadyUsedForValidator`/`ErrConsensusPubKeyInRotationHistory`, so clients matching staking codes 46/47 now see rotation errors). `types.{Validator,UBD,Redelegation}QueuePendingSlotsKey` are renamed to `*QueueEarliestKey` (same bytes, new value format). `Keeper.ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator` are back, and `DequeueAllMatureRedelegationQueue` again matures by `HeaderInfo().Time` instead of its `currTime` argument, as in upstream. `PopulateQueuePendingSlots` is deprecated in favor of `RecomputeQueueEarliest`. Adds `types.ValidatorQueueKeyTimeBytes`.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Compared with fork v0.54.x, the pending-slot API is removed: the `Keeper` methods `Get`/`Set`/`Add{Validator,UBD,Redelegation}QueuePendingSlot(s)` and `RemoveValidatorQueuePendingSlot`, `types.TimeHeightQueueSlot`, and `ErrPendingQueueSlotMissingCount`/`ErrPendingQueueSlotInsufficientCapacity` (codes 46/47 on fork v0.54.x; in v0.55 those codes belong to key rotation's `ErrConsensusPubKeyAlreadyUsedForValidator`/`ErrConsensusPubKeyInRotationHistory`, so clients matching staking codes 46/47 now see rotation errors). `types.{Validator,UBD,Redelegation}QueuePendingSlotsKey` are renamed to `*QueueEarliestKey` (same bytes, new value format). `Keeper.ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator` are back, and `DequeueAllMatureRedelegationQueue` again matures by `HeaderInfo().Time` instead of its `currTime` argument, as in upstream. Adds `types.ValidatorQueueKeyTimeBytes`.
 
 ### State Machine Breaking
 
@@ -66,6 +66,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport of [#1760](https://github.com/crypto-org-chain/cosmos-sdk/pull/1760) from `release/v0.53.x`).
 
 ### Deprecated
+
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `Keeper.PopulateQueuePendingSlots` is deprecated; use `Keeper.RecomputeQueueEarliest`.
 
 ## [v0.55.0](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.55.0) - 2026-07-27
 
