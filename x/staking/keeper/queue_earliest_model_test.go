@@ -76,10 +76,60 @@ func dumpQueue(ctx sdk.Context, key *storetypes.KVStoreKey, prefix []byte) strin
 	return b.String()
 }
 
+// queueTestChain layers stores the way a node does: each block's writes go into a cache over the
+// committed IAVL store, each tx into a cache nested in it, and the block is written and committed.
+type queueTestChain struct {
+	base sdk.Context
+	k    *stakingkeeper.Keeper
+	key  *storetypes.KVStoreKey
+}
+
+func newQueueTestChain(tb testing.TB) queueTestChain {
+	tb.Helper()
+	ctx, k, key := newQueueTestKeeper(tb)
+	return queueTestChain{base: ctx, k: k, key: key}
+}
+
+// block opens the cache FinalizeBlock runs in; commit writes it and commits the store.
+func (c queueTestChain) block(now time.Time, height int64) (ctx sdk.Context, commit func()) {
+	ctx, write := c.base.WithBlockTime(now).WithBlockHeight(height).WithHeaderInfo(header.Info{Time: now, Height: height}).CacheContext()
+	return ctx, func() {
+		write()
+		c.base.MultiStore().(storetypes.CommitMultiStore).Commit()
+	}
+}
+
+// inTx runs fn in a cache nested in the block's, as DeliverTx does, and keeps its writes.
+func inTx(tb testing.TB, blockCtx sdk.Context, fn func(sdk.Context) error) {
+	tb.Helper()
+	txCtx, write := blockCtx.CacheContext()
+	require.NoError(tb, fn(txCtx))
+	write()
+}
+
+// gatedSkip runs endBlock on a metered context and reports whether it read only the stored time,
+// which is what a skipped scan costs. It fails if the stored time said the scan could be skipped
+// but the gate scanned anyway.
+func gatedSkip(tb testing.TB, ctx sdk.Context, key *storetypes.KVStoreKey, earliestKey []byte, now time.Time, endBlock func(sdk.Context) error) bool {
+	tb.Helper()
+	gasConfig := storetypes.KVGasConfig()
+	stored := ctx.KVStore(key).Get(earliestKey)
+	notDue := bytes.Equal(stored, queueEmptyMarker) || (len(stored) > 1 && bytes.Compare(stored, sdk.FormatTimeBytes(now)) > 0)
+	meteredCtx := ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+	require.NoError(tb, endBlock(meteredCtx))
+	if !notDue {
+		return false
+	}
+	oneRead := gasConfig.ReadCostFlat + gasConfig.ReadCostPerByte*uint64(len(earliestKey)+len(stored))
+	require.Equal(tb, oneRead, meteredCtx.GasMeter().GasConsumed(), "scanned although not due")
+	return true
+}
+
 // TestQueueEarliestMatchesUpstreamScan drives the gated keeper and upstream's ungated scans through
 // the same random inserts and end-blocks, and checks they mature the same entries and keep the
 // same queues, while the gated keeper's stored time never sorts after the queue's first key.
 func TestQueueEarliestMatchesUpstreamScan(t *testing.T) {
+	const seeds, steps = 200, 100
 	odd := []time.Time{
 		time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(-1, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -89,15 +139,15 @@ func TestQueueEarliestMatchesUpstreamScan(t *testing.T) {
 		time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 
-	for seed := int64(0); seed < 200; seed++ {
+	skipped := 0
+	for seed := int64(0); seed < seeds; seed++ {
 		r := rand.New(rand.NewSource(seed))
-		gatedCtx, gated, gatedKey := newQueueTestKeeper(t)
-		refCtx, ref, refKey := newQueueTestKeeper(t)
+		gated, ref := newQueueTestChain(t), newQueueTestChain(t)
 		now := queueNow
 		var pending []time.Time
-		for step := 0; step < 100; step++ {
-			gatedCtx = gatedCtx.WithBlockTime(now).WithHeaderInfo(header.Info{Time: now})
-			refCtx = refCtx.WithBlockTime(now).WithHeaderInfo(header.Info{Time: now})
+		for step := 0; step < steps; step++ {
+			gatedCtx, commitGated := gated.block(now, int64(step+1))
+			refCtx, commitRef := ref.block(now, int64(step+1))
 
 			for i := r.Intn(4); i > 0; i-- {
 				at := now.Add(time.Duration(r.Intn(7*3600)-2*3600)*time.Second + time.Duration(r.Intn(3)))
@@ -111,15 +161,16 @@ func TestQueueEarliestMatchesUpstreamScan(t *testing.T) {
 				ubd := stakingtypes.UnbondingDelegation{DelegatorAddress: fmt.Sprint("del", step, i), ValidatorAddress: "val"}
 				red := stakingtypes.Redelegation{DelegatorAddress: fmt.Sprint("del", step, i), ValidatorSrcAddress: "src", ValidatorDstAddress: "dst"}
 				toUBD := r.Intn(2) == 0
-				for _, k := range []struct {
+				for _, c := range []struct {
 					ctx sdk.Context
 					k   *stakingkeeper.Keeper
-				}{{gatedCtx, gated}, {refCtx, ref}} {
-					if toUBD {
-						require.NoError(t, k.k.InsertUBDQueue(k.ctx, ubd, at))
-					} else {
-						require.NoError(t, k.k.InsertRedelegationQueue(k.ctx, red, at))
-					}
+				}{{gatedCtx, gated.k}, {refCtx, ref.k}} {
+					inTx(t, c.ctx, func(txCtx sdk.Context) error {
+						if toUBD {
+							return c.k.InsertUBDQueue(txCtx, ubd, at)
+						}
+						return c.k.InsertRedelegationQueue(txCtx, red, at)
+					})
 				}
 			}
 
@@ -127,32 +178,47 @@ func TestQueueEarliestMatchesUpstreamScan(t *testing.T) {
 			// lost value.
 			switch r.Intn(25) {
 			case 0:
-				require.NoError(t, gated.RecomputeQueueEarliest(gatedCtx))
+				require.NoError(t, gated.k.RecomputeQueueEarliest(gatedCtx))
 			case 1:
-				gatedCtx.KVStore(gatedKey).Set(stakingtypes.UBDQueueEarliestKey, legacyPendingSlots(8))
+				gatedCtx.KVStore(gated.key).Set(stakingtypes.UBDQueueEarliestKey, legacyPendingSlots(8))
 			case 2:
-				gatedCtx.KVStore(gatedKey).Delete(stakingtypes.RedelegationQueueEarliestKey)
+				gatedCtx.KVStore(gated.key).Delete(stakingtypes.RedelegationQueueEarliestKey)
 			}
 
-			matureUBD, err := gated.DequeueAllMatureUBDQueue(gatedCtx, now)
-			require.NoError(t, err)
-			refUBD, err := ref.UpstreamDequeueAllMatureUBDQueue(refCtx, now)
+			var matureUBD []stakingtypes.DVPair
+			if gatedSkip(t, gatedCtx, gated.key, stakingtypes.UBDQueueEarliestKey, now, func(ctx sdk.Context) (err error) {
+				matureUBD, err = gated.k.DequeueAllMatureUBDQueue(ctx, now)
+				return err
+			}) {
+				skipped++
+			}
+			refUBD, err := ref.k.UpstreamDequeueAllMatureUBDQueue(refCtx, now)
 			require.NoError(t, err)
 			require.Equal(t, entryStrings(refUBD), entryStrings(matureUBD), "seed %d step %d", seed, step)
 
-			matureRed, err := gated.DequeueAllMatureRedelegationQueue(gatedCtx, time.Time{})
-			require.NoError(t, err)
-			refRed, err := ref.UpstreamDequeueAllMatureRedelegationQueue(refCtx, time.Time{})
+			var matureRed []stakingtypes.DVVTriplet
+			if gatedSkip(t, gatedCtx, gated.key, stakingtypes.RedelegationQueueEarliestKey, now, func(ctx sdk.Context) (err error) {
+				matureRed, err = gated.k.DequeueAllMatureRedelegationQueue(ctx, time.Time{})
+				return err
+			}) {
+				skipped++
+			}
+			refRed, err := ref.k.UpstreamDequeueAllMatureRedelegationQueue(refCtx, time.Time{})
 			require.NoError(t, err)
 			require.Equal(t, entryStrings(refRed), entryStrings(matureRed), "seed %d step %d", seed, step)
 
+			commitGated()
+			commitRef()
 			for _, q := range timeQueues {
-				require.Equal(t, dumpQueue(refCtx, refKey, q.prefix), dumpQueue(gatedCtx, gatedKey, q.prefix), "seed %d step %d", seed, step)
-				requireEarliestBound(t, gatedCtx, gatedKey, q.prefix, q.earliestKey, q.timeKey)
+				require.Equal(t, dumpQueue(ref.base, ref.key, q.prefix), dumpQueue(gated.base, gated.key, q.prefix), "seed %d step %d", seed, step)
+				requireEarliestBound(t, gated.base, gated.key, q.prefix, q.earliestKey, q.timeKey)
 			}
 			now = nextBlockTime(r, now, pending)
 		}
 	}
+	// The comparison only covers the gate if it really skips scans.
+	t.Logf("gate skipped %d of %d dequeues", skipped, 2*seeds*steps)
+	require.Greater(t, skipped, 2*seeds*steps/4, "gate skipped too few dequeues")
 }
 
 // nextBlockTime advances by up to an hour, or sometimes lands exactly on a pending entry's time.
@@ -172,31 +238,32 @@ func nextBlockTime(r *rand.Rand, now time.Time, pending []time.Time) time.Time {
 // the same validators and keep the same queue.
 func TestValidatorQueueEarliestMatchesUpstreamScan(t *testing.T) {
 	const seeds, steps = 100, 60
-	gasConfig := storetypes.KVGasConfig()
 	skipped, releases := 0, 0
 	for seed := int64(0); seed < seeds; seed++ {
 		r := rand.New(rand.NewSource(seed))
-		gatedCtx, gated, gatedKey := newQueueTestKeeper(t)
-		refCtx, ref, refKey := newQueueTestKeeper(t)
+		gated, ref := newQueueTestChain(t), newQueueTestChain(t)
 		now, height := queueNow, int64(10)
 		var queued []stakingtypes.Validator
 		next := 0
 		for step := 0; step < steps; step++ {
-			gatedCtx = gatedCtx.WithBlockTime(now).WithBlockHeight(height)
-			refCtx = refCtx.WithBlockTime(now).WithBlockHeight(height)
+			gatedCtx, commitGated := gated.block(now, height)
+			refCtx, commitRef := ref.block(now, height)
+			both := func(fn func(ctx sdk.Context, k *stakingkeeper.Keeper) error) {
+				inTx(t, gatedCtx, func(ctx sdk.Context) error { return fn(ctx, gated.k) })
+				inTx(t, refCtx, func(ctx sdk.Context) error { return fn(ctx, ref.k) })
+			}
 
 			// Release a hold, as an UnbondingCanComplete callback would.
 			if r.Intn(2) == 0 {
 				for _, queuedVal := range queued {
 					valAddr, err := sdk.ValAddressFromBech32(queuedVal.GetOperator())
 					require.NoError(t, err)
-					val, err := gated.GetValidator(gatedCtx, valAddr)
+					val, err := gated.k.GetValidator(gatedCtx, valAddr)
 					if err != nil || val.UnbondingOnHoldRefCount == 0 {
 						continue // already removed, or not held
 					}
 					val.UnbondingOnHoldRefCount--
-					require.NoError(t, gated.SetValidator(gatedCtx, val))
-					require.NoError(t, ref.SetValidator(refCtx, val))
+					both(func(ctx sdk.Context, k *stakingkeeper.Keeper) error { return k.SetValidator(ctx, val) })
 					releases++
 					break
 				}
@@ -225,48 +292,43 @@ func TestValidatorQueueEarliestMatchesUpstreamScan(t *testing.T) {
 				if r.Intn(8) == 0 {
 					val.UnbondingOnHoldRefCount = 1
 				}
-				for _, k := range []struct {
-					ctx sdk.Context
-					k   *stakingkeeper.Keeper
-				}{{gatedCtx, gated}, {refCtx, ref}} {
-					require.NoError(t, k.k.SetValidator(k.ctx, val))
-					require.NoError(t, k.k.InsertUnbondingValidatorQueue(k.ctx, val))
-				}
+				both(func(ctx sdk.Context, k *stakingkeeper.Keeper) error {
+					if err := k.SetValidator(ctx, val); err != nil {
+						return err
+					}
+					return k.InsertUnbondingValidatorQueue(ctx, val)
+				})
 				queued = append(queued, val)
 			}
 			// A validator that bonds again leaves the queue.
 			if len(queued) > 0 && r.Intn(8) == 0 {
 				val := queued[r.Intn(len(queued))]
-				require.NoError(t, gated.DeleteValidatorQueue(gatedCtx, val))
-				require.NoError(t, ref.DeleteValidatorQueue(refCtx, val))
+				both(func(ctx sdk.Context, k *stakingkeeper.Keeper) error { return k.DeleteValidatorQueue(ctx, val) })
 			}
 			// Disturb only the gated keeper's stored time: an eager recompute, a fork v0.54.x list, a
 			// lost value.
 			switch r.Intn(25) {
 			case 0:
-				require.NoError(t, gated.RecomputeQueueEarliest(gatedCtx))
+				require.NoError(t, gated.k.RecomputeQueueEarliest(gatedCtx))
 			case 1:
-				gatedCtx.KVStore(gatedKey).Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(16))
+				gatedCtx.KVStore(gated.key).Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(16))
 			case 2:
-				gatedCtx.KVStore(gatedKey).Delete(stakingtypes.ValidatorQueueEarliestKey)
+				gatedCtx.KVStore(gated.key).Delete(stakingtypes.ValidatorQueueEarliestKey)
 			}
 
-			stored := gatedCtx.KVStore(gatedKey).Get(stakingtypes.ValidatorQueueEarliestKey)
-			notDue := bytes.Equal(stored, queueEmptyMarker) || (len(stored) > 1 && bytes.Compare(stored, sdk.FormatTimeBytes(now)) > 0)
-			meteredCtx := gatedCtx.WithGasMeter(storetypes.NewInfiniteGasMeter())
-			require.NoError(t, gated.UnbondAllMatureValidators(meteredCtx))
-			require.NoError(t, ref.UpstreamUnbondAllMatureValidators(refCtx))
-			if notDue {
-				// A skipped end-block reads the stored time and nothing else.
-				oneRead := gasConfig.ReadCostFlat + gasConfig.ReadCostPerByte*uint64(len(stakingtypes.ValidatorQueueEarliestKey)+len(stored))
-				require.Equal(t, oneRead, meteredCtx.GasMeter().GasConsumed(), "seed %d step %d: scanned although not due", seed, step)
+			if gatedSkip(t, gatedCtx, gated.key, stakingtypes.ValidatorQueueEarliestKey, now, func(ctx sdk.Context) error {
+				return gated.k.UnbondAllMatureValidators(ctx)
+			}) {
 				skipped++
 			}
+			require.NoError(t, ref.k.UpstreamUnbondAllMatureValidators(refCtx))
 
+			commitGated()
+			commitRef()
 			for _, prefix := range [][]byte{stakingtypes.ValidatorQueueKey, stakingtypes.ValidatorsKey} {
-				require.Equal(t, dumpQueue(refCtx, refKey, prefix), dumpQueue(gatedCtx, gatedKey, prefix), "seed %d step %d", seed, step)
+				require.Equal(t, dumpQueue(ref.base, ref.key, prefix), dumpQueue(gated.base, gated.key, prefix), "seed %d step %d", seed, step)
 			}
-			requireEarliestBound(t, gatedCtx, gatedKey, stakingtypes.ValidatorQueueKey, stakingtypes.ValidatorQueueEarliestKey, validatorQueueKeyAt)
+			requireEarliestBound(t, gated.base, gated.key, stakingtypes.ValidatorQueueKey, stakingtypes.ValidatorQueueEarliestKey, validatorQueueKeyAt)
 
 			now = now.Add(time.Duration(r.Intn(1800)) * time.Second)
 			height++
@@ -308,21 +370,27 @@ func requireEarliestBound(t *testing.T, ctx sdk.Context, key *storetypes.KVStore
 
 // BenchmarkQueueEndBlock compares the unbonding queue end-block with upstream v0.55.0's scan on
 // goleveldb, whose iterators don't read ahead the way MemDB's do, with 50 and 500 future
-// timeslices. Each op also creates a CacheContext, which costs the same in both columns.
+// timeslices. The idle-after-matured cases first mature and delete 5000 timeslices across
+// committed versions; an iterator over the queue still steps past those deleted keys, which is
+// the cost the gate avoids on long-running nodes. Each op also creates a CacheContext, which
+// costs the same in both columns.
 func BenchmarkQueueEndBlock(b *testing.B) {
 	slice := func(n int) []stakingtypes.DVPair {
 		return []stakingtypes.DVPair{{DelegatorAddress: fmt.Sprint("del", n), ValidatorAddress: "val"}}
 	}
 	for _, future := range []int{50, 500} {
 		for _, bc := range []struct {
-			name  string
-			due   int // timeslices maturing this block
-			gated bool
+			name    string
+			due     int // timeslices maturing this block
+			matured int // timeslices matured and deleted in earlier committed versions
+			gated   bool
 		}{
-			{"idle/upstream", 0, false},
-			{"idle/gated", 0, true},
-			{"due-1/upstream", 1, false},
-			{"due-1/gated", 1, true},
+			{"idle/upstream", 0, 0, false},
+			{"idle/gated", 0, 0, true},
+			{"due-1/upstream", 1, 0, false},
+			{"due-1/gated", 1, 0, true},
+			{"idle-after-5000-matured/upstream", 0, 5000, false},
+			{"idle-after-5000-matured/gated", 0, 5000, true},
 		} {
 			b.Run(fmt.Sprintf("future-%d/%s", future, bc.name), func(b *testing.B) {
 				db, err := dbm.NewGoLevelDB("bench", b.TempDir(), nil)
@@ -333,10 +401,21 @@ func BenchmarkQueueEndBlock(b *testing.B) {
 				for i := range future {
 					require.NoError(b, k.SetUBDQueueTimeSlice(ctx, queueNow.Add(time.Duration(i+1)*time.Minute), slice(i)))
 				}
+				cms := ctx.MultiStore().(storetypes.CommitMultiStore)
+				for batch := 0; batch < bc.matured; batch += 500 {
+					for i := range 500 {
+						require.NoError(b, k.SetUBDQueueTimeSlice(ctx, queueNow.Add(-time.Duration(batch+i+1)*time.Second), slice(i)))
+					}
+					cms.Commit()
+					_, err := k.UpstreamDequeueAllMatureUBDQueue(ctx, queueNow)
+					require.NoError(b, err)
+					cms.Commit()
+				}
+				require.NoError(b, k.RecomputeQueueEarliest(ctx))
 				for i := range bc.due {
 					require.NoError(b, k.SetUBDQueueTimeSlice(ctx, queueNow.Add(-time.Duration(i+1)*time.Second), slice(i)))
 				}
-				ctx.MultiStore().(storetypes.CommitMultiStore).Commit()
+				cms.Commit()
 				dequeue := k.UpstreamDequeueAllMatureUBDQueue
 				if bc.gated {
 					dequeue = k.DequeueAllMatureUBDQueue
