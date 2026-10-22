@@ -558,19 +558,25 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 // have finished their unbonding period. It scans the queue only when its
 // earliest entry is due.
 func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
-	due, err := k.queueDue(ctx, validatorQueueGate, sdk.UnwrapSDKContext(ctx).BlockTime())
-	if err != nil || !due {
+	blockTime := sdk.UnwrapSDKContext(ctx).BlockTime()
+	earliest, err := k.getQueueEarliest(ctx, validatorQueueGate)
+	if err != nil || !earliest.due(blockTime) {
 		return err
 	}
-	if err = k.unbondAllMatureValidators(ctx); err != nil {
+	if err = k.unbondAllMatureValidators(ctx, blockTime); err != nil {
 		return err
 	}
-	return k.refreshQueueEarliest(ctx, validatorQueueGate)
+	// The scan can leave due entries queued (height not reached, or on hold), so the next earliest
+	// time is looked up from the start of the queue rather than past the scan's bound.
+	next, err := k.firstQueueEntryTime(ctx, validatorQueueGate)
+	if err != nil {
+		return err
+	}
+	return k.storeQueueEarliest(ctx, validatorQueueGate, earliest.raw, next)
 }
 
-func (k Keeper) unbondAllMatureValidators(ctx context.Context) error {
+func (k Keeper) unbondAllMatureValidators(ctx context.Context, blockTime time.Time) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	blockTime := sdkCtx.BlockTime()
 	blockHeight := sdkCtx.BlockHeight()
 
 	// unbondingValIterator will contain all validator addresses indexed under

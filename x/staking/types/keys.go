@@ -51,9 +51,9 @@ var (
 	RedelegationQueueKey = []byte{0x42} // prefix for the timestamps in redelegations queue
 	ValidatorQueueKey    = []byte{0x43} // prefix for the timestamps in validator queue
 
-	// ValidatorQueueEarliestKey and the two keys after it hold the earliest entry time of the queues
-	// above; end-block skips a queue scan until it is due. Fork v0.54.x stored a pending-slot list
-	// under the same keys, which is rebuilt on first use.
+	// ValidatorQueueEarliestKey and the two keys after it hold a time whose queue key sorts at or
+	// before every entry of the queues above; end-block skips a queue scan until it is due. Fork
+	// v0.54.x stored a pending-slot list under the same keys, which the next end-block scan replaces.
 	ValidatorQueueEarliestKey    = []byte{0x44}
 	UBDQueueEarliestKey          = []byte{0x45}
 	RedelegationQueueEarliestKey = []byte{0x46}
@@ -296,6 +296,20 @@ func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 	height := sdk.BigEndianToUint64(bz[prefixL+8+int(timeBzL):])
 
 	return ts, int64(height), nil
+}
+
+// ValidatorQueueKeyTimeBytes returns the formatted time inside a key created by
+// GetValidatorQueueKey, or nil if the key is too short for its time length field.
+func ValidatorQueueKeyTimeBytes(bz []byte) []byte {
+	start := len(ValidatorQueueKey) + 8
+	if len(bz) < start {
+		return nil
+	}
+	timeBzL := sdk.BigEndianToUint64(bz[len(ValidatorQueueKey):start])
+	if timeBzL > uint64(len(bz)-start) {
+		return nil
+	}
+	return bz[start : start+int(timeBzL)]
 }
 
 // GetDelegationKey creates the key for delegator bond with validator

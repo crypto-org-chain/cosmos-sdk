@@ -404,3 +404,25 @@ func TestParseRotationLockedConsAddrIndexValue_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatorQueueKeyTimeBytes(t *testing.T) {
+	at := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	key := types.GetValidatorQueueKey(at, 7)
+	prefixLen := len(types.ValidatorQueueKey)
+
+	testCases := []struct {
+		name string
+		key  []byte
+		exp  []byte
+	}{
+		{"well-formed key", key, sdk.FormatTimeBytes(at)},
+		{"shorter than the length field", key[:prefixLen+4], nil},
+		{"length field past the key end", key[:prefixLen+8+25], nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.exp, types.ValidatorQueueKeyTimeBytes(tc.key))
+		})
+	}
+}
