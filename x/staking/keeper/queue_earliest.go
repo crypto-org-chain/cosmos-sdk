@@ -194,7 +194,7 @@ func (k Keeper) getQueueEarliest(ctx context.Context, g queueGate) (queueEarlies
 }
 
 // setQueueEntry writes a queue entry for time t and lowers the stored earliest time to match. Every
-// queue write goes through it, which keeps the gate's invariant.
+// queue insert goes through it, which keeps the gate's invariant; deletes cannot break it.
 func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byte, t time.Time) error {
 	if err := k.storeService.OpenKVStore(ctx).Set(key, value); err != nil {
 		return err
@@ -203,9 +203,9 @@ func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byt
 }
 
 // lowerQueueEarliest records t as the earliest entry time if it is earlier than the stored one, or
-// clears a known time or the empty marker when t isn't sortableTimeLen wide. It runs on every queue insert: it reads
-// the stored value, 0, 1 or 29 bytes once any fork v0.54.x list is replaced, and writes only on a
-// change.
+// clears a known time or the empty marker when t isn't sortableTimeLen wide. It runs on every queue
+// insert: it reads the stored value, 0, 1 or 29 bytes once any fork v0.54.x list is replaced, and
+// writes only on a change.
 func (k Keeper) lowerQueueEarliest(ctx context.Context, g queueGate, t time.Time) error {
 	e, err := k.getQueueEarliest(ctx, g)
 	// An unknown time stays unknown: the queue may hold earlier entries that only a scan finds.
