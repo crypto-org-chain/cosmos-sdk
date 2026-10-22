@@ -43,6 +43,16 @@ func newTimeQueueGate(earliestKey, queuePrefix []byte) queueGate {
 	}
 }
 
+// earliestValue is the stored value for a queue whose first entry has key, or nil (unknown) when
+// that entry's time isn't sortableTimeLen wide.
+func (g queueGate) earliestValue(key []byte) []byte {
+	bz := g.keyTimeBytes(key)
+	if len(bz) != sortableTimeLen {
+		return nil
+	}
+	return bytes.Clone(bz)
+}
+
 var (
 	validatorQueueGate = queueGate{
 		earliestKey:  types.ValidatorQueueEarliestKey,
@@ -64,6 +74,26 @@ func validatorQueueFirstKeyAt(timeBz []byte) []byte {
 		return types.ValidatorQueueKey
 	}
 	return types.GetValidatorQueueKey(t, 0)
+}
+
+type queueEarliest struct {
+	raw   []byte
+	known bool // false when the stored value is neither a time nor the empty marker
+	empty bool
+}
+
+// due reports whether end-block has to scan the queue at nowBz, the formatted block time.
+func (e queueEarliest) due(nowBz []byte) bool {
+	return !e.known || (!e.empty && bytes.Compare(e.raw, nowBz) <= 0)
+}
+
+// scanStart returns the first key at the stored time, which sorts at or before every queue key, or
+// the queue start when that time is unknown.
+func (e queueEarliest) scanStart(g queueGate) []byte {
+	if !e.known || e.empty {
+		return g.queuePrefix
+	}
+	return g.firstKeyAt(e.raw)
 }
 
 // RecomputeQueueEarliest recomputes the earliest entry time of the validator, unbonding and
@@ -141,8 +171,8 @@ func dequeueTimeSlices[E any](ctx context.Context, k Keeper, g queueGate, start,
 		if bytes.Compare(key, bound) > 0 {
 			return mature, g.earliestValue(key), nil
 		}
-		entries, err := unmarshal(iter.Value())
-		if err != nil {
+		var entries []E
+		if entries, err = unmarshal(iter.Value()); err != nil {
 			return nil, nil, err
 		}
 		mature = append(mature, entries...)
@@ -151,26 +181,6 @@ func dequeueTimeSlices[E any](ctx context.Context, k Keeper, g queueGate, start,
 		}
 	}
 	return mature, []byte(queueEmptyMarker), nil
-}
-
-type queueEarliest struct {
-	raw   []byte
-	known bool // false when the stored value is neither a time nor the empty marker
-	empty bool
-}
-
-// due reports whether end-block has to scan the queue at nowBz, the formatted block time.
-func (e queueEarliest) due(nowBz []byte) bool {
-	return !e.known || (!e.empty && bytes.Compare(e.raw, nowBz) <= 0)
-}
-
-// scanStart returns the first key at the stored time, which sorts at or before every queue key, or
-// the queue start when that time is unknown.
-func (e queueEarliest) scanStart(g queueGate) []byte {
-	if !e.known {
-		return g.queuePrefix
-	}
-	return g.firstKeyAt(e.raw)
 }
 
 func (k Keeper) getQueueEarliest(ctx context.Context, g queueGate) (queueEarliest, error) {
@@ -187,16 +197,6 @@ func (k Keeper) getQueueEarliest(ctx context.Context, g queueGate) (queueEarlies
 		// next scan replaces it.
 		return queueEarliest{raw: bz}, nil
 	}
-}
-
-// earliestValue is the stored value for a queue whose first entry has key, or nil (unknown) when
-// that entry's time isn't sortableTimeLen wide.
-func (g queueGate) earliestValue(key []byte) []byte {
-	bz := g.keyTimeBytes(key)
-	if len(bz) != sortableTimeLen {
-		return nil
-	}
-	return bytes.Clone(bz)
 }
 
 // lowerQueueEarliest records t as the earliest entry time if it is earlier than the stored one, or
