@@ -165,7 +165,12 @@ func (app SimApp) RegisterUpgradeHandlers() {
     app.UpgradeKeeper.SetUpgradeHandler(
         UpgradeName,
         func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-            return app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
+            versionMap, err := app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
+            if err != nil {
+                return nil, err
+            }
+            // crypto-org-chain fork: see Staking Queue Earliest-Time Gate below.
+            return versionMap, app.StakingKeeper.RecomputeQueueEarliest(ctx)
         },
     )
 
@@ -188,13 +193,16 @@ Add `"params"` to `Deleted` as well if your app still had the `x/params` store m
 
 #### Staking Queue Earliest-Time Gate (crypto-org-chain fork)
 
-The validator, unbonding and redelegation queues each keep their earliest entry time under keys `0x44`-`0x46`. End-block reads that time and scans a queue only once it is due, so blocks before then open no iterator. Each queue insert reads and may lower that one value, so its gas no longer grows with the number of pending entries.
+The validator, unbonding and redelegation queues each keep, under keys `0x44`-`0x46`, a time whose queue key sorts at or before the queue's first entry. End-block reads that time and scans a queue only once it is due, so blocks before then open no iterator over that queue. Each queue insert reads and may lower that one value, so its gas no longer grows with the number of pending entries.
 
-No upgrade handler change is needed. The first end-block after the upgrade finds no stored time, or the pending-slot list that fork `release/v0.54.x` kept under the same keys, scans each queue once and records the time. Existing handlers that call `Keeper.PopulateQueuePendingSlots` keep working; it now does that recomputation eagerly.
+No upgrade handler change is required. The first end-block after the upgrade finds no stored time, or the pending-slot list that fork `release/v0.54.x` kept under the same keys, scans each queue and records the time. `Keeper.RecomputeQueueEarliest` does that recomputation eagerly; the deprecated `PopulateQueuePendingSlots` still compiles and calls it, so existing handlers keep working. Chains upgrading from fork `release/v0.54.x` should call `RecomputeQueueEarliest` in their upgrade handler, as the reference handler above does: until the list is replaced, every undelegate or redelegate in the upgrade block reads the whole legacy list.
 
-* Write queue entries only through `SetUBDQueueTimeSlice`, `SetRedelegationQueueTimeSlice` and `SetUnbondingValidatorsQueue` (or the `Insert*` helpers that call them). An entry written straight to the store can be earlier than the stored time and wait until that time; call `PopulateQueuePendingSlots` after such a write.
+* Write queue entries only through `SetUBDQueueTimeSlice`, `SetRedelegationQueueTimeSlice` and `SetUnbondingValidatorsQueue` (or the `Insert*` helpers that call them). An entry written straight to the store can be earlier than the stored time and wait until that time, or, if the stored value is the empty marker, until a later insert sets a time that comes due; call `RecomputeQueueEarliest` after such a write.
 * Compared with upstream v0.55.0, each queue insert costs one more read (about 1.1k gas), plus about 2.9k gas when it lowers the stored time, as the first insert into an empty queue does. Txs that set an exact gas limit for `MsgUndelegate` or `MsgBeginRedelegate` should allow for that.
-* The fork v0.54.x pending-slot API is removed (see the CHANGELOG), and `ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator` are back.
+* On a block where the unbonding or redelegation queue is due, end-block uses one iterator, as upstream does: it runs one key past the matured entries to find the next one, plus one read and at most one write of the stored time. The validator queue can keep due entries (height not reached, or on hold), so a due validator scan opens a second iterator to find the first remaining entry; a validator that stays on hold pays that every block. Blocks where no queue is due open no maturity-queue iterator; end-block's other iterators (validator power index, key rotation queues) are unchanged.
+* The fork v0.54.x pending-slot API is removed (see the CHANGELOG). The `*QueuePendingSlotsKey` names are gone rather than aliased, because the value under those keys changed format; `ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator` are back.
+* As in upstream, redelegations mature by `HeaderInfo().Time` and `DequeueAllMatureRedelegationQueue` ignores its `currTime` argument; fork v0.54.x used `currTime`. Both are the block time in `FinalizeBlock`.
+* Queue times outside years 0000-9999 can't come from txs or genesis, whose protobuf timestamps stop at 9999; only a direct call to the `Set*` queue helpers can write one. If one is inserted, or is the queue's first entry, the stored time stays unknown and end-block scans that queue every block as upstream does, plus, for the validator queue, one lookup of its first entry, until a normal entry is first again.
 
 ### crypto-org-chain Fork Changes
 
