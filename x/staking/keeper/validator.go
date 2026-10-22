@@ -488,7 +488,7 @@ func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Ti
 	if err != nil {
 		return err
 	}
-	return k.setQueueEntry(ctx, validatorQueueGate, types.GetValidatorQueueKey(endTime, endHeight), bz, endTime)
+	return k.setQueueEntry(ctx, validatorQueueGate, types.GetValidatorQueueKey(endTime, endHeight), bz)
 }
 
 // InsertUnbondingValidatorQueue inserts a given unbonding validator address into

@@ -198,20 +198,16 @@ func (k Keeper) getQueueEarliest(ctx context.Context, g queueGate) (queueEarlies
 	}
 }
 
-// setQueueEntry writes a queue entry for time t and lowers the stored earliest time to match. Every
-// queue insert goes through it, which keeps the gate's invariant; deletes cannot break it.
-func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byte, t time.Time) error {
-	if err := k.storeService.OpenKVStore(ctx).Set(key, value); err != nil {
+// setQueueEntry writes a queue entry and lowers the stored earliest time to the time in key, or
+// clears a known time or the empty marker when that time isn't sortableTimeLen wide. Every queue
+// insert goes through it, which keeps the gate's invariant; deletes cannot break it. Besides the
+// entry, it reads the stored value, 0, 1 or 29 bytes once any fork pending-slot list is replaced,
+// and writes it only on a change.
+func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byte) error {
+	store := k.storeService.OpenKVStore(ctx)
+	if err := store.Set(key, value); err != nil {
 		return err
 	}
-	return k.lowerQueueEarliest(ctx, g, t)
-}
-
-// lowerQueueEarliest records t as the earliest entry time if it is earlier than the stored one, or
-// clears a known time or the empty marker when t isn't sortableTimeLen wide. It runs on every queue
-// insert: it reads the stored value, 0, 1 or 29 bytes once any fork pending-slot list is replaced,
-// and writes only on a change.
-func (k Keeper) lowerQueueEarliest(ctx context.Context, g queueGate, t time.Time) error {
 	e, err := k.getQueueEarliest(ctx, g)
 	if err != nil {
 		return err
@@ -220,15 +216,14 @@ func (k Keeper) lowerQueueEarliest(ctx context.Context, g queueGate, t time.Time
 	if !e.known {
 		return nil
 	}
-	store := k.storeService.OpenKVStore(ctx)
-	bz := sdk.FormatTimeBytes(t)
-	if len(bz) != sortableTimeLen {
+	timeBz := g.keyTimeBytes(key)
+	if len(timeBz) != sortableTimeLen {
 		return store.Delete(g.earliestKey)
 	}
-	if !e.empty && bytes.Compare(bz, e.raw) >= 0 {
+	if !e.empty && bytes.Compare(timeBz, e.raw) >= 0 {
 		return nil
 	}
-	return store.Set(g.earliestKey, bz)
+	return store.Set(g.earliestKey, bytes.Clone(timeBz))
 }
 
 // earliestFrom returns the value to store for the queue's first entry at or after start: its time,
