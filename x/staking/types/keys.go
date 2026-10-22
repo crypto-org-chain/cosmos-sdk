@@ -305,7 +305,8 @@ func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 }
 
 // ValidatorQueueKeyTimeBytes returns the formatted time inside a key created by
-// GetValidatorQueueKey, or nil if the key is too short for its time length field.
+// GetValidatorQueueKey, or nil if the key is too short for its length field or for the time
+// length that field declares.
 // The result shares bz's memory.
 func ValidatorQueueKeyTimeBytes(bz []byte) []byte {
 	start := len(ValidatorQueueKey) + 8
