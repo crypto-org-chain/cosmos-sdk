@@ -362,9 +362,7 @@ func requireEarliestBound(t *testing.T, ctx sdk.Context, key *storetypes.KVStore
 		require.False(t, iter.Valid(), "empty marker stored for a non-empty queue")
 	case stored != nil:
 		storedTime, err := sdk.ParseTimeBytes(stored)
-		if err != nil {
-			return // a legacy list the test injected; it reads as unknown
-		}
+		require.NoError(t, err, "stored earliest is neither a time, the empty marker nor absent")
 		if iter.Valid() {
 			require.LessOrEqual(t, bytes.Compare(timeKey(storedTime), iter.Key()), 0, "stored time sorts after the first queue key")
 		}

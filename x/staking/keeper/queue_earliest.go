@@ -91,7 +91,7 @@ func (e queueEarliest) scanStart(g queueGate) []byte {
 
 // RecomputeQueueEarliest recomputes the earliest entry time of the validator, unbonding and
 // redelegation queues from each queue's first entry, replacing any pending-slot list that fork
-// v0.54.x stored under the same keys. Run it after writing queue entries without the keeper's
+// v0.53.x or v0.54.x stored under the same keys. Run it after writing queue entries without the keeper's
 // queue setters.
 func (k Keeper) RecomputeQueueEarliest(ctx context.Context) error {
 	store := k.storeService.OpenKVStore(ctx)
@@ -191,8 +191,9 @@ func (k Keeper) getQueueEarliest(ctx context.Context, g queueGate) (queueEarlies
 	case len(bz) == sortableTimeLen:
 		return queueEarliest{raw: bz, known: true}, nil
 	default:
-		// Absent, or a fork v0.54.x pending-slot list (4+8n or 4+16n bytes, never 1 or 29); the
-		// next scan replaces it.
+		// Absent, or a fork v0.53.x or v0.54.x pending-slot list (4+8n or 4+16n bytes, never 1 or
+		// 29). A fork v0.53.x chain is already at staking version 6 and skips the migration that
+		// replaces the list, so its next scan replaces it here.
 		return queueEarliest{raw: bz}, nil
 	}
 }
@@ -208,8 +209,8 @@ func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byt
 
 // lowerQueueEarliest records t as the earliest entry time if it is earlier than the stored one, or
 // clears a known time or the empty marker when t isn't sortableTimeLen wide. It runs on every queue
-// insert: it reads the stored value, 0, 1 or 29 bytes once any fork v0.54.x list is replaced, and
-// writes only on a change.
+// insert: it reads the stored value, 0, 1 or 29 bytes once any fork pending-slot list is replaced,
+// and writes only on a change.
 func (k Keeper) lowerQueueEarliest(ctx context.Context, g queueGate, t time.Time) error {
 	e, err := k.getQueueEarliest(ctx, g)
 	if err != nil {
