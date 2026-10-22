@@ -54,6 +54,8 @@ var (
 	// ValidatorQueueEarliestKey and the two keys after it hold a time whose queue key sorts at or
 	// before every entry of the queues above; end-block skips a queue scan until it is due. Fork
 	// v0.54.x stored a pending-slot list under the same keys, which the next end-block scan replaces.
+	// Write queue entries only through the keeper's queue setters, which lower these times; after a
+	// direct write, call Keeper.RecomputeQueueEarliest or the entry may wait past its time.
 	ValidatorQueueEarliestKey    = []byte{0x44}
 	UBDQueueEarliestKey          = []byte{0x45}
 	RedelegationQueueEarliestKey = []byte{0x46}
@@ -287,19 +289,23 @@ func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 		return time.Time{}, 0, fmt.Errorf("invalid prefix; expected: %X, got: %X", ValidatorQueueKey, prefix)
 	}
 
-	timeBzL := sdk.BigEndianToUint64(bz[prefixL : prefixL+8])
-	ts, err := sdk.ParseTimeBytes(bz[prefixL+8 : prefixL+8+int(timeBzL)])
+	timeBz := ValidatorQueueKeyTimeBytes(bz)
+	if timeBz == nil {
+		return time.Time{}, 0, fmt.Errorf("invalid validator queue key: time length field exceeds key length %d", len(bz))
+	}
+	ts, err := sdk.ParseTimeBytes(timeBz)
 	if err != nil {
 		return time.Time{}, 0, err
 	}
 
-	height := sdk.BigEndianToUint64(bz[prefixL+8+int(timeBzL):])
+	height := sdk.BigEndianToUint64(bz[prefixL+8+len(timeBz):])
 
 	return ts, int64(height), nil
 }
 
 // ValidatorQueueKeyTimeBytes returns the formatted time inside a key created by
 // GetValidatorQueueKey, or nil if the key is too short for its time length field.
+// The result shares bz's memory.
 func ValidatorQueueKeyTimeBytes(bz []byte) []byte {
 	start := len(ValidatorQueueKey) + 8
 	if len(bz) < start {

@@ -806,7 +806,8 @@ block height). At this point any mature validators which do not have any
 delegations remaining are deleted from state. For all other mature unbonding
 validators that still have remaining delegations, the `validator.Status` is
 switched from `types.Unbonding` to
-`types.Unbonded`.
+`types.Unbonded`. The check is skipped while the queue's earliest time is not
+yet due; see [Queue Earliest Times](#queue-earliest-times).
 
 Unbonding operations can be put on hold by external modules via the `PutUnbondingOnHold(unbondingId)` method.
  As a result, an unbonding operation (e.g., an unbonding delegation) that is on hold, cannot complete
