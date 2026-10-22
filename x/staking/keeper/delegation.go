@@ -485,15 +485,11 @@ func (k Keeper) GetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time) (
 
 // SetUBDQueueTimeSlice sets a specific unbonding queue timeslice.
 func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVPair) error {
-	store := k.storeService.OpenKVStore(ctx)
 	bz, err := k.cdc.Marshal(&types.DVPairs{Pairs: keys})
 	if err != nil {
 		return err
 	}
-	if err = store.Set(types.GetUnbondingDelegationTimeKey(timestamp), bz); err != nil {
-		return err
-	}
-	return k.lowerQueueEarliest(ctx, ubdQueueGate, timestamp)
+	return k.setQueueEntry(ctx, ubdQueueGate, types.GetUnbondingDelegationTimeKey(timestamp), bz, timestamp)
 }
 
 // InsertUBDQueue inserts an unbonding delegation to the appropriate timeslice
@@ -780,15 +776,11 @@ func (k Keeper) GetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 
 // SetRedelegationQueueTimeSlice sets a specific redelegation queue timeslice.
 func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp time.Time, keys []types.DVVTriplet) error {
-	store := k.storeService.OpenKVStore(ctx)
 	bz, err := k.cdc.Marshal(&types.DVVTriplets{Triplets: keys})
 	if err != nil {
 		return err
 	}
-	if err = store.Set(types.GetRedelegationTimeKey(timestamp), bz); err != nil {
-		return err
-	}
-	return k.lowerQueueEarliest(ctx, redelegationQueueGate, timestamp)
+	return k.setQueueEntry(ctx, redelegationQueueGate, types.GetRedelegationTimeKey(timestamp), bz, timestamp)
 }
 
 // InsertRedelegationQueue insert an redelegation delegation to the appropriate

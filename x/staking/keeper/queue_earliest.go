@@ -134,7 +134,8 @@ func (k Keeper) runGatedScan(ctx context.Context, g queueGate, nowBz []byte, sca
 // dequeueTimeQueue removes every timeslice keyed at or before now and returns their entries, once
 // the queue's earliest time is due. The scan's iterator runs past now and stops at the first later
 // key, which becomes the new earliest time, so finding it costs no second walk and cannot
-// disagree with what the scan removed.
+// disagree with what the scan removed. unmarshal must not write to the store: the stored time read
+// before the scan is passed on as the current one.
 func dequeueTimeQueue[E any](ctx context.Context, k Keeper, g queueGate, now time.Time, unmarshal func([]byte) ([]E, error)) ([]E, error) {
 	var mature []E
 	nowBz := sdk.FormatTimeBytes(now)
@@ -188,6 +189,15 @@ func (k Keeper) getQueueEarliest(ctx context.Context, g queueGate) (queueEarlies
 		// next scan replaces it.
 		return queueEarliest{raw: bz}, nil
 	}
+}
+
+// setQueueEntry writes a queue entry for time t and lowers the stored earliest time to match. Every
+// queue write goes through it, which keeps the gate's invariant.
+func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byte, t time.Time) error {
+	if err := k.storeService.OpenKVStore(ctx).Set(key, value); err != nil {
+		return err
+	}
+	return k.lowerQueueEarliest(ctx, g, t)
 }
 
 // lowerQueueEarliest records t as the earliest entry time if it is earlier than the stored one, or

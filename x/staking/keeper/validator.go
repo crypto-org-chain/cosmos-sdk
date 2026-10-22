@@ -484,15 +484,11 @@ func (k Keeper) GetUnbondingValidators(ctx context.Context, endTime time.Time, e
 // SetUnbondingValidatorsQueue sets a given slice of validator addresses into
 // the unbonding validator queue by a given height and time.
 func (k Keeper) SetUnbondingValidatorsQueue(ctx context.Context, endTime time.Time, endHeight int64, addrs []string) error {
-	store := k.storeService.OpenKVStore(ctx)
 	bz, err := k.cdc.Marshal(&types.ValAddresses{Addresses: addrs})
 	if err != nil {
 		return err
 	}
-	if err = store.Set(types.GetValidatorQueueKey(endTime, endHeight), bz); err != nil {
-		return err
-	}
-	return k.lowerQueueEarliest(ctx, validatorQueueGate, endTime)
+	return k.setQueueEntry(ctx, validatorQueueGate, types.GetValidatorQueueKey(endTime, endHeight), bz, endTime)
 }
 
 // InsertUnbondingValidatorQueue inserts a given unbonding validator address into

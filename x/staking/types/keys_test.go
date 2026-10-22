@@ -414,6 +414,10 @@ func TestValidatorQueueTimePrefix(t *testing.T) {
 	require.Negative(t, bytes.Compare(prefix, types.GetValidatorQueueKey(at, 0)))
 	require.Positive(t, bytes.Compare(prefix, types.GetValidatorQueueKey(at.Add(-time.Nanosecond), math2.MaxInt64)))
 	require.Equal(t, timeBz, types.ValidatorQueueKeyTimeBytes(prefix))
+	// The layout of keys already in state: prefix | time length | time | height.
+	require.Equal(t,
+		"43"+"000000000000001d"+hex.EncodeToString(timeBz)+"0000000000000007",
+		hex.EncodeToString(types.GetValidatorQueueKey(at, 7)))
 }
 
 func TestValidatorQueueKeyTimeBytes(t *testing.T) {
