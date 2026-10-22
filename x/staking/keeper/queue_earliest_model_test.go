@@ -285,9 +285,14 @@ func TestValidatorQueueEarliestMatchesUpstreamScan(t *testing.T) {
 				default:
 					val.UnbondingTime = now.Add(time.Duration(60+r.Intn(6*3600)) * time.Second)
 				}
-				val.UnbondingHeight = height - int64(r.Intn(5))
-				if r.Intn(10) == 0 {
+				switch r.Intn(10) {
+				case 0:
 					val.UnbondingHeight = height + 1 + int64(r.Intn(3))
+				case 1:
+					// A zero-height genesis export queues validators at height 0.
+					val.UnbondingHeight = 0
+				default:
+					val.UnbondingHeight = height - int64(r.Intn(5))
 				}
 				if r.Intn(8) == 0 {
 					val.UnbondingOnHoldRefCount = 1
