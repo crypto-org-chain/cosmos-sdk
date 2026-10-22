@@ -22,16 +22,7 @@ func (app SimApp) RegisterUpgradeHandlers() {
 		UpgradeName,
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			sdk.UnwrapSDKContext(ctx).Logger().Debug("this is a debug level message to test that verbose logging mode has properly been enabled during a chain upgrade")
-			versionMap, err := app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
-			if err != nil {
-				return nil, err
-			}
-			// Replaces a fork v0.54.x pending-slot list before txs in the upgrade block read it; after
-			// the migrations, so it also covers any queue entries they write.
-			if err := app.StakingKeeper.RecomputeQueueEarliest(ctx); err != nil {
-				return nil, err
-			}
-			return versionMap, nil
+			return app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
 		},
 	)
 

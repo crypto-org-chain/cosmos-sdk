@@ -151,7 +151,7 @@ func ExportGenesisFileWithTime(genFile string, appGenesis *types.AppGenesis, gen
 
 Two module consensus-version bumps ship in this release and run automatically via `RunMigrations` in your upgrade handler:
 
-* `x/staking` 5 → 6: adds the `key_rotation_fee` param, defaulting to `1000000` of the bond denom ([#26485](https://github.com/cosmos/cosmos-sdk/pull/26485)). `Params.Validate` requires the fee denom to equal `bond_denom` ([#26613](https://github.com/cosmos/cosmos-sdk/pull/26613)).
+* `x/staking` 5 → 6: adds the `key_rotation_fee` param, defaulting to `1000000` of the bond denom ([#26485](https://github.com/cosmos/cosmos-sdk/pull/26485)). `Params.Validate` requires the fee denom to equal `bond_denom` ([#26613](https://github.com/cosmos/cosmos-sdk/pull/26613)). On this fork it also records each maturity queue's earliest entry time (see [Staking Queue Earliest-Time Gate](#staking-queue-earliest-time-gate-crypto-org-chain-fork)).
 * `x/auth` 6 → 7: adds the `SigVerifyCostMlDsa65` param with its default value ([#26472](https://github.com/cosmos/cosmos-sdk/pull/26472)).
 
 #### Reference Upgrade Handler
@@ -165,15 +165,7 @@ func (app SimApp) RegisterUpgradeHandlers() {
     app.UpgradeKeeper.SetUpgradeHandler(
         UpgradeName,
         func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-            versionMap, err := app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
-            if err != nil {
-                return nil, err
-            }
-            // crypto-org-chain fork: see Staking Queue Earliest-Time Gate below.
-            if err := app.StakingKeeper.RecomputeQueueEarliest(ctx); err != nil {
-                return nil, err
-            }
-            return versionMap, nil
+            return app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
         },
     )
 
@@ -196,16 +188,16 @@ Add `"params"` to `Deleted` as well if your app still had the `x/params` store m
 
 #### Staking Queue Earliest-Time Gate (crypto-org-chain fork)
 
-The validator, unbonding and redelegation queues each keep, under keys `0x44`-`0x46`, a time whose queue key sorts at or before the queue's first entry. End-block reads that time and scans a queue only once it is due, so blocks before then open no iterator over that queue. Each queue insert reads and may lower that one value, so its gas no longer grows with the number of pending entries.
+The validator, unbonding and redelegation queues each keep, under keys `0x44`-`0x46`, a time whose queue key sorts at or before the queue's first entry. End-block reads that time and scans a queue only once it is due, starting at that time rather than at the queue start, so blocks before then open no iterator over that queue. Each queue insert reads and may lower that one value, so its gas no longer grows with the number of pending entries.
 
-No upgrade handler change is required. The first end-block after the upgrade finds no stored time, or the pending-slot list that fork `release/v0.54.x` kept under the same keys, scans each queue and records the time. `Keeper.RecomputeQueueEarliest` does that recomputation eagerly; the deprecated `PopulateQueuePendingSlots` still compiles and calls it, so existing handlers keep working. Chains upgrading from fork `release/v0.54.x` should call `RecomputeQueueEarliest` in their upgrade handler, as the reference handler above does: until the list is replaced, every undelegate or redelegate in the upgrade block reads the whole legacy list. On a fork chain that never ran `PopulateQueuePendingSlots`, entries the list missed mature in that first scan, so expect a burst of completions at the upgrade height.
+No upgrade handler change is required. Staking's 5 to 6 migration replaces the pending-slot lists that fork `release/v0.54.x` kept under the same keys and records each queue's time. A chain whose staking module is already at version 6 has no stored times, so its first end-block scans each queue and records them. `Keeper.RecomputeQueueEarliest` recomputes the times; the deprecated `PopulateQueuePendingSlots` still compiles and calls it, so existing handlers keep working. On a fork chain that never ran `PopulateQueuePendingSlots`, entries the list missed mature at the first end-block after the upgrade, so expect a burst of completions at the upgrade height.
 
-* Write queue entries only through `SetUBDQueueTimeSlice`, `SetRedelegationQueueTimeSlice` and `SetUnbondingValidatorsQueue` (or the `Insert*` helpers that call them). An entry written straight to the store can be earlier than the stored time and wait until that time, or, if the stored value is the empty marker, until a later insert sets a time that comes due; call `RecomputeQueueEarliest` after such a write.
+* Write queue entries only through `SetUBDQueueTimeSlice`, `SetRedelegationQueueTimeSlice` and `SetUnbondingValidatorsQueue` (or the `Insert*` helpers that call them). Scans start at the stored time, so an entry written straight to the store before that time is not scanned until `RecomputeQueueEarliest` runs; call it after such a write, including in a store migration.
 * Compared with upstream v0.55.0, each queue insert costs one more read (about 1.1k gas), plus about 2.9k gas when it lowers the stored time, as the first insert into an empty queue does. Txs that set an exact gas limit for `MsgUndelegate` or `MsgBeginRedelegate` should allow for that. Simulated gas can miss the lowering write if the queue changes between simulation and delivery, so `--gas auto` users should keep a gas adjustment above 1.0.
-* On a block where the unbonding or redelegation queue is due, end-block uses one iterator, as upstream does: it runs one key past the matured entries to find the next one, plus one read and at most one write of the stored time. The validator queue can keep due entries (height not reached, or on hold), so a due validator scan opens a second iterator to find the first remaining entry; a validator that stays on hold pays that every block. Blocks where no queue is due open no maturity-queue iterator; end-block's other iterators (validator power index, key rotation queues) are unchanged.
+* On a block where the unbonding or redelegation queue is due, end-block uses one iterator, as upstream does, starting at the stored time: it runs one key past the matured entries to find the next one, plus one read and at most one write of the stored time. The validator queue can keep due entries (height not reached, or on hold), so a due validator scan opens a second iterator, also from the stored time, to find the first remaining entry; a validator that stays on hold pays that every block. Blocks where no queue is due open no maturity-queue iterator; end-block's other iterators (validator power index, key rotation queues) are unchanged.
 * The fork v0.54.x pending-slot API is removed (see the CHANGELOG). The `*QueuePendingSlotsKey` names are gone rather than aliased, because the value under those keys changed format; `ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator` are back.
 * As in upstream, redelegations mature by `HeaderInfo().Time` and `DequeueAllMatureRedelegationQueue` ignores its `currTime` argument; fork v0.54.x used `currTime`. Both are the block time in `FinalizeBlock`.
-* Queue times outside years 0000-9999 can't come from txs or genesis, whose protobuf timestamps stop at 9999; only a direct call to the `Set*` queue helpers can write one. If one is inserted, or is the queue's first entry, the stored time stays unknown and end-block scans that queue every block as upstream does, plus, for the validator queue, one lookup of its first entry, until a normal entry is first again.
+* Queue times outside years 0000-9999 can't come from txs or genesis, whose protobuf timestamps stop at 9999; only a direct call to the `Set*` queue helpers can write one. If one is inserted, or is the queue's first entry, the stored time stays unknown and end-block scans that queue from its start every block as upstream does, plus, for the validator queue, one lookup of its first entry, until a normal entry is first again.
 
 ### crypto-org-chain Fork Changes
 

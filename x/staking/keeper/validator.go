@@ -559,23 +559,24 @@ func (k Keeper) ValidatorQueueIterator(ctx context.Context, endTime time.Time, e
 // earliest entry is due.
 func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	blockTime := sdk.UnwrapSDKContext(ctx).BlockTime()
-	earliest, err := k.getQueueEarliest(ctx, validatorQueueGate)
-	if err != nil || !earliest.due(blockTime) {
-		return err
-	}
-	if err = k.unbondAllMatureValidators(ctx, blockTime); err != nil {
-		return err
-	}
-	// The scan can leave due entries queued (height not reached, or on hold), so the next earliest
-	// time is looked up from the start of the queue rather than past the scan's bound.
-	next, err := k.firstQueueEntryTime(ctx, validatorQueueGate)
-	if err != nil {
-		return err
-	}
-	return k.storeQueueEarliest(ctx, validatorQueueGate, earliest.raw, next)
+	return k.runGatedScan(ctx, validatorQueueGate, blockTime, func(start []byte) ([]byte, error) {
+		if err := k.unbondAllMatureValidators(ctx, start, blockTime); err != nil {
+			return nil, err
+		}
+		// The scan can leave due entries queued (height not reached, or on hold), so the next
+		// earliest time is looked up again. It starts at the stored time as it is now, which
+		// accounts for any entry inserted during the scan.
+		cur, err := k.getQueueEarliest(ctx, validatorQueueGate)
+		if err != nil {
+			return nil, err
+		}
+		return k.earliestFrom(ctx, validatorQueueGate, cur.scanStart(validatorQueueGate))
+	})
 }
 
-func (k Keeper) unbondAllMatureValidators(ctx context.Context, blockTime time.Time) error {
+// unbondAllMatureValidators is upstream's validator scan, starting at start instead of the queue
+// start.
+func (k Keeper) unbondAllMatureValidators(ctx context.Context, start []byte, blockTime time.Time) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	blockHeight := sdkCtx.BlockHeight()
 
@@ -584,7 +585,8 @@ func (k Keeper) unbondAllMatureValidators(ctx context.Context, blockTime time.Ti
 	// ValidatorQueueKey | timeBzLen (8-byte big endian) | timeBz | heightBz (8-byte big endian),
 	// so it may be possible that certain validator addresses that are iterated
 	// over are not ready to unbond, so an explicit check is required.
-	unbondingValIterator, err := k.ValidatorQueueIterator(ctx, blockTime, blockHeight)
+	store := k.storeService.OpenKVStore(ctx)
+	unbondingValIterator, err := store.Iterator(start, storetypes.InclusiveEndBytes(types.GetValidatorQueueKey(blockTime, blockHeight)))
 	if err != nil {
 		return err
 	}
