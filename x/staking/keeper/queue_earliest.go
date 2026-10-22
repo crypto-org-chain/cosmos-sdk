@@ -123,8 +123,11 @@ func (k Keeper) PopulateQueuePendingSlots(ctx context.Context) error {
 // differs.
 func (k Keeper) runGatedScan(ctx context.Context, g queueGate, nowBz []byte, scan func(earliest queueEarliest) (stored, next []byte, err error)) error {
 	earliest, err := k.getQueueEarliest(ctx, g)
-	if err != nil || !earliest.due(nowBz) {
+	if err != nil {
 		return err
+	}
+	if !earliest.due(nowBz) {
+		return nil
 	}
 	stored, next, err := scan(earliest)
 	if err != nil {
@@ -209,9 +212,12 @@ func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byt
 // writes only on a change.
 func (k Keeper) lowerQueueEarliest(ctx context.Context, g queueGate, t time.Time) error {
 	e, err := k.getQueueEarliest(ctx, g)
-	// An unknown time stays unknown: the queue may hold earlier entries that only a scan finds.
-	if err != nil || !e.known {
+	if err != nil {
 		return err
+	}
+	// An unknown time stays unknown: the queue may hold earlier entries that only a scan finds.
+	if !e.known {
+		return nil
 	}
 	store := k.storeService.OpenKVStore(ctx)
 	bz := sdk.FormatTimeBytes(t)
