@@ -289,7 +289,7 @@ func TestValidatorQueueEarliestMatchesUpstreamScan(t *testing.T) {
 				case 0:
 					val.UnbondingHeight = height + 1 + int64(r.Intn(3))
 				case 1:
-					// A zero-height genesis export queues validators at height 0.
+					// A chain started from a zero-height export queues unbonding validators at height 0.
 					val.UnbondingHeight = 0
 				default:
 					val.UnbondingHeight = height - int64(r.Intn(5))
