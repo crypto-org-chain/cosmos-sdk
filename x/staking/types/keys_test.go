@@ -411,21 +411,26 @@ func TestValidatorQueueKeyTimeBytes(t *testing.T) {
 	prefixLen := len(types.ValidatorQueueKey)
 
 	testCases := []struct {
-		name string
-		key  []byte
-		exp  []byte
+		name        string
+		key         []byte
+		expTime     []byte
+		expParseErr bool
 	}{
-		{"well-formed key", key, sdk.FormatTimeBytes(at)},
-		{"shorter than the length field", key[:prefixLen+4], nil},
-		{"length field past the key end", key[:prefixLen+8+25], nil},
+		{"well-formed key", key, sdk.FormatTimeBytes(at), false},
+		{"empty key", nil, nil, true},
+		{"wrong prefix", append([]byte{0x41}, key[prefixLen:]...), sdk.FormatTimeBytes(at), true},
+		{"shorter than the length field", key[:prefixLen+4], nil, true},
+		{"length field past the key end", key[:prefixLen+8+25], nil, true},
+		{"truncated height", key[:len(key)-3], sdk.FormatTimeBytes(at), true},
+		{"bytes after the height", append(bytes.Clone(key), 0), sdk.FormatTimeBytes(at), true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.exp, types.ValidatorQueueKeyTimeBytes(tc.key))
+			require.Equal(t, tc.expTime, types.ValidatorQueueKeyTimeBytes(tc.key))
 
 			ts, height, err := types.ParseValidatorQueueKey(tc.key)
-			if tc.exp == nil {
+			if tc.expParseErr {
 				require.Error(t, err)
 				return
 			}

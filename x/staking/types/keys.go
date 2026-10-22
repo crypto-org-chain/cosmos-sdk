@@ -285,20 +285,20 @@ func GetValidatorQueueKey(timestamp time.Time, height int64) []byte {
 // from GetValidatorQueueKey.
 func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 	prefixL := len(ValidatorQueueKey)
-	if prefix := bz[:prefixL]; !bytes.Equal(prefix, ValidatorQueueKey) {
-		return time.Time{}, 0, fmt.Errorf("invalid prefix; expected: %X, got: %X", ValidatorQueueKey, prefix)
+	if !bytes.HasPrefix(bz, ValidatorQueueKey) {
+		return time.Time{}, 0, fmt.Errorf("invalid prefix; expected: %X, got: %X", ValidatorQueueKey, bz[:min(len(bz), prefixL)])
 	}
 
 	timeBz := ValidatorQueueKeyTimeBytes(bz)
-	if timeBz == nil {
-		return time.Time{}, 0, fmt.Errorf("invalid validator queue key: time length field exceeds key length %d", len(bz))
+	if timeBz == nil || len(bz) != prefixL+8+len(timeBz)+8 {
+		return time.Time{}, 0, fmt.Errorf("invalid validator queue key length %d", len(bz))
 	}
 	ts, err := sdk.ParseTimeBytes(timeBz)
 	if err != nil {
 		return time.Time{}, 0, err
 	}
 
-	height := sdk.BigEndianToUint64(bz[prefixL+8+len(timeBz):])
+	height := sdk.BigEndianToUint64(bz[len(bz)-8:])
 
 	return ts, int64(height), nil
 }
