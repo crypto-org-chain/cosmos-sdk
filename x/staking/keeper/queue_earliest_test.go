@@ -608,7 +608,9 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
 		{
-			// Unlike a one-slot list, it doesn't start with 0x00, so it must not be read as a time.
+			// Read as a time, this 36-byte list would put 0x24 in the start key's length field, which
+			// sorts after every real key, so the scan would skip them all. A one-slot list (20 bytes,
+			// 0x14) still sorts first, so it can't show that.
 			name: "fork v0.54.x pending-slot list with two slots scans from the queue start",
 			malleate: func(_ sdk.Context, store storetypes.KVStore) {
 				store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(2, 16))
