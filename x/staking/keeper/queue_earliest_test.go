@@ -739,11 +739,14 @@ func (s *KeeperTestSuite) TestRecomputeQueueEarliest() {
 		string(stakingtypes.UBDQueueEarliestKey):          sdk.FormatTimeBytes(first),
 		string(stakingtypes.RedelegationQueueEarliestKey): queueEmptyMarker,
 	}
-	// Upgrade handlers may call it on a chain whose end-block already recorded the times.
-	for range 2 {
-		s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
-		for key, value := range expected {
-			s.Require().Equal(value, store.Get([]byte(key)))
-		}
+	s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+	for key, value := range expected {
+		s.Require().Equal(value, store.Get([]byte(key)))
+		// Running it again, as an upgrade handler may after end-block recorded the times, rewrites
+		// nothing.
+		s.Require().Zero(s.earliestWrites(ctx, []byte(key), func() {
+			s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+		}))
+		s.Require().Equal(value, store.Get([]byte(key)))
 	}
 }
