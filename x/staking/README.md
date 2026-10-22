@@ -331,9 +331,9 @@ years 0000-9999 leaves the key absent when it is inserted, or while it is the
 queue's first entry. Such a time needs a direct call to the queue setters, or
 a block time so late that completion falls after year 9999.
 
-* ValidatorQueueEarliest: `0x44 -> format(time) | 0x00`
-* UnbondingDelegationQueueEarliest: `0x45 -> format(time) | 0x00`
-* RedelegationQueueEarliest: `0x46 -> format(time) | 0x00`
+* ValidatorQueueEarliest: `0x44 -> format(time)`, or `0x00` when the queue is empty
+* UnbondingDelegationQueueEarliest: `0x45 -> format(time)`, or `0x00` when the queue is empty
+* RedelegationQueueEarliest: `0x46 -> format(time)`, or `0x00` when the queue is empty
 
 ### HistoricalInfo
 
