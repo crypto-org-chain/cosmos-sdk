@@ -802,13 +802,12 @@ delegated to this validator). At this point the validator is said to be an
 "unbonding validator", whereby it will mature to become an "unbonded validator"
 after the unbonding period has passed.
 
-Each block the validator queue is to be checked for mature unbonding validators
-(namely with a completion time <= current time and completion height <= current
-block height). At this point any mature validators which do not have any
-delegations remaining are deleted from state. For all other mature unbonding
-validators that still have remaining delegations, the `validator.Status` is
-switched from `types.Unbonding` to
-`types.Unbonded`.
+Once its earliest time is due, each block checks the validator queue for mature
+unbonding validators (namely with a completion time <= current time and
+completion height <= current block height). At this point any mature validators
+which do not have any delegations remaining are deleted from state. For all
+other mature unbonding validators that still have remaining delegations, the
+`validator.Status` is switched from `types.Unbonding` to `types.Unbonded`.
 
 Unbonding operations can be put on hold by external modules via the `PutUnbondingOnHold(unbondingId)` method.
  As a result, an unbonding operation (e.g., an unbonding delegation) that is on hold, cannot complete

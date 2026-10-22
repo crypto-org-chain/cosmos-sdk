@@ -43,7 +43,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (server) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (port of upstream [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585), closed unmerged). An `app.toml` that omits `max-send-msg-size` now gets 10MB, so larger gRPC responses fail; generated files set the key and keep their value.
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Remove the fork v0.54.x pending-slot API: the `Keeper` methods `Get`/`Set`/`Add{Validator,UBD,Redelegation}QueuePendingSlot(s)` and `RemoveValidatorQueuePendingSlot`, `types.TimeHeightQueueSlot`, and `ErrPendingQueueSlotMissingCount`/`ErrPendingQueueSlotInsufficientCapacity`. Those errors had codes 46/47, which v0.55 gives to key rotation's `ErrConsensusPubKeyAlreadyUsedForValidator`/`ErrConsensusPubKeyInRotationHistory`.
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Rename `types.{Validator,UBD,Redelegation}QueuePendingSlotsKey` to `*QueueEarliestKey`: same bytes, new value format.
-* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Restore `Keeper.ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator`. `DequeueAllMatureRedelegationQueue` again matures by `HeaderInfo().Time` and ignores `currTime`, as in upstream.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `DequeueAllMatureRedelegationQueue` again matures by `HeaderInfo().Time` and ignores `currTime`, as in upstream.
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `types.ParseValidatorQueueKey` returns an error instead of panicking on a key too short for its prefix, time or height; keys it read before parse the same.
 
 ### State Machine Breaking
@@ -54,6 +54,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Add `Keeper.RecomputeQueueEarliest`, `types.ValidatorQueueTimePrefix` and `types.ValidatorQueueKeyTimeBytes`.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Restore `Keeper.ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator`, which fork v0.54.x removed.
 * (mempool) [#1850](https://github.com/crypto-org-chain/cosmos-sdk/pull/1850) Add `UnorderedTxs` to `PriorityNonceMempool`.
 
 ### Improvements

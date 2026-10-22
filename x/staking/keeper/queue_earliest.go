@@ -46,14 +46,20 @@ func newTimeQueueGate(earliestKey, queuePrefix []byte) queueGate {
 	}
 }
 
-// earliestValue is the stored value for a queue whose first entry has key, or nil (unknown) when
-// that entry's time isn't sortableTimeLen wide.
-func (g queueGate) earliestValue(key []byte) []byte {
+// storableTime returns the formatted time inside key, sharing key's memory, or nil when it isn't
+// sortableTimeLen wide and so can't be stored.
+func (g queueGate) storableTime(key []byte) []byte {
 	bz := g.keyTimeBytes(key)
 	if len(bz) != sortableTimeLen {
 		return nil
 	}
-	return bytes.Clone(bz)
+	return bz
+}
+
+// earliestValue is the stored value for a queue whose first entry has key, or nil (unknown) when
+// that entry's time can't be stored.
+func (g queueGate) earliestValue(key []byte) []byte {
+	return bytes.Clone(g.storableTime(key))
 }
 
 var (
@@ -217,8 +223,8 @@ func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byt
 	if !e.known {
 		return nil
 	}
-	timeBz := g.keyTimeBytes(key)
-	if len(timeBz) != sortableTimeLen {
+	timeBz := g.storableTime(key)
+	if timeBz == nil {
 		return store.Delete(g.earliestKey)
 	}
 	if !e.empty && bytes.Compare(timeBz, e.raw) >= 0 {

@@ -286,7 +286,7 @@ func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 
 	timeBz := ValidatorQueueKeyTimeBytes(bz)
 	if timeBz == nil {
-		return time.Time{}, 0, fmt.Errorf("invalid validator queue key length %d", len(bz))
+		return time.Time{}, 0, fmt.Errorf("invalid validator queue key: %d bytes is too short for its time", len(bz))
 	}
 	ts, err := sdk.ParseTimeBytes(timeBz)
 	if err != nil {
@@ -297,7 +297,7 @@ func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 	// height, which used to panic, is rejected.
 	heightBz := bz[prefixL+8+len(timeBz):]
 	if len(heightBz) > 0 && len(heightBz) < 8 {
-		return time.Time{}, 0, fmt.Errorf("invalid validator queue key length %d", len(bz))
+		return time.Time{}, 0, fmt.Errorf("invalid validator queue key: partial height of %d bytes", len(heightBz))
 	}
 	height := sdk.BigEndianToUint64(heightBz)
 
