@@ -259,13 +259,18 @@ func ParseValidatorPowerRankKey(key []byte) (operAddr []byte) {
 // GetValidatorQueueKey returns the prefix key used for getting a set of unbonding
 // validators whose unbonding completion occurs at the given time and height.
 func GetValidatorQueueKey(timestamp time.Time, height int64) []byte {
-	return append(ValidatorQueueTimePrefix(sdk.FormatTimeBytes(timestamp)), sdk.Uint64ToBigEndian(uint64(height))...)
+	timeBz := sdk.FormatTimeBytes(timestamp)
+	bz := appendValidatorQueueTimePrefix(make([]byte, 0, len(ValidatorQueueKey)+8+len(timeBz)+8), timeBz)
+	return append(bz, sdk.Uint64ToBigEndian(uint64(height))...)
 }
 
 // ValidatorQueueTimePrefix returns the start of every key GetValidatorQueueKey creates for the
 // formatted time timeBz, which sorts before all of them.
 func ValidatorQueueTimePrefix(timeBz []byte) []byte {
-	bz := make([]byte, 0, len(ValidatorQueueKey)+8+len(timeBz)+8)
+	return appendValidatorQueueTimePrefix(make([]byte, 0, len(ValidatorQueueKey)+8+len(timeBz)), timeBz)
+}
+
+func appendValidatorQueueTimePrefix(bz, timeBz []byte) []byte {
 	bz = append(bz, ValidatorQueueKey...)
 	bz = append(bz, sdk.Uint64ToBigEndian(uint64(len(timeBz)))...)
 	return append(bz, timeBz...)
@@ -280,7 +285,7 @@ func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 	}
 
 	timeBz := ValidatorQueueKeyTimeBytes(bz)
-	if timeBz == nil || len(bz) != prefixL+8+len(timeBz)+8 {
+	if timeBz == nil {
 		return time.Time{}, 0, fmt.Errorf("invalid validator queue key length %d", len(bz))
 	}
 	ts, err := sdk.ParseTimeBytes(timeBz)
@@ -288,7 +293,13 @@ func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 		return time.Time{}, 0, err
 	}
 
-	height := sdk.BigEndianToUint64(bz[len(bz)-8:])
+	// As before, a missing height reads as 0 and bytes past the first 8 are ignored; only a partial
+	// height, which used to panic, is rejected.
+	heightBz := bz[prefixL+8+len(timeBz):]
+	if len(heightBz) > 0 && len(heightBz) < 8 {
+		return time.Time{}, 0, fmt.Errorf("invalid validator queue key length %d", len(bz))
+	}
+	height := sdk.BigEndianToUint64(heightBz)
 
 	return ts, int64(height), nil
 }

@@ -136,8 +136,9 @@ func (k Keeper) runGatedScan(ctx context.Context, g queueGate, nowBz []byte, sca
 // dequeueTimeQueue removes every timeslice keyed at or before now and returns their entries, once
 // the queue's earliest time is due. The scan's iterator runs past now and stops at the first later
 // key, which becomes the new earliest time, so finding it costs no second walk and cannot
-// disagree with what the scan removed. unmarshal must not write to the store: the stored time read
-// before the scan is passed on as the current one.
+// disagree with what the scan removed. g must come from newTimeQueueGate, whose keys end at the
+// time, so the first key at now is also the last. unmarshal must not write to the store: the
+// stored time read before the scan is passed on as the current one.
 func dequeueTimeQueue[E any](ctx context.Context, k Keeper, g queueGate, now time.Time, unmarshal func([]byte) ([]E, error)) ([]E, error) {
 	var mature []E
 	nowBz := sdk.FormatTimeBytes(now)

@@ -411,6 +411,7 @@ func TestValidatorQueueTimePrefix(t *testing.T) {
 	prefix := types.ValidatorQueueTimePrefix(timeBz)
 
 	require.True(t, bytes.HasPrefix(types.GetValidatorQueueKey(at, 0), prefix))
+	require.Equal(t, len(prefix), cap(prefix), "spare capacity would let appends to the prefix share memory")
 	require.Negative(t, bytes.Compare(prefix, types.GetValidatorQueueKey(at, 0)))
 	require.Positive(t, bytes.Compare(prefix, types.GetValidatorQueueKey(at.Add(-time.Nanosecond), math2.MaxInt64)))
 	require.Equal(t, timeBz, types.ValidatorQueueKeyTimeBytes(prefix))
@@ -430,14 +431,17 @@ func TestValidatorQueueKeyTimeBytes(t *testing.T) {
 		key         []byte
 		expTime     []byte
 		expParseErr bool
+		expHeight   int64
 	}{
-		{"well-formed key", key, sdk.FormatTimeBytes(at), false},
-		{"empty key", nil, nil, true},
-		{"wrong prefix", append([]byte{0x41}, key[prefixLen:]...), sdk.FormatTimeBytes(at), true},
-		{"shorter than the length field", key[:prefixLen+4], nil, true},
-		{"length field past the key end", key[:prefixLen+8+25], nil, true},
-		{"truncated height", key[:len(key)-3], sdk.FormatTimeBytes(at), true},
-		{"bytes after the height", append(bytes.Clone(key), 0), sdk.FormatTimeBytes(at), true},
+		{"well-formed key", key, sdk.FormatTimeBytes(at), false, 7},
+		{"empty key", nil, nil, true, 0},
+		{"wrong prefix", append([]byte{0x41}, key[prefixLen:]...), sdk.FormatTimeBytes(at), true, 0},
+		{"shorter than the length field", key[:prefixLen+4], nil, true, 0},
+		{"length field past the key end", key[:prefixLen+8+25], nil, true, 0},
+		{"partial height", key[:len(key)-3], sdk.FormatTimeBytes(at), true, 0},
+		// Read as upstream v0.55.0 reads them.
+		{"no height", key[:len(key)-8], sdk.FormatTimeBytes(at), false, 0},
+		{"bytes after the height", append(bytes.Clone(key), 0), sdk.FormatTimeBytes(at), false, 7},
 	}
 
 	for _, tc := range testCases {
@@ -451,7 +455,7 @@ func TestValidatorQueueKeyTimeBytes(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, at, ts)
-			require.Equal(t, int64(7), height)
+			require.Equal(t, tc.expHeight, height)
 		})
 	}
 }
