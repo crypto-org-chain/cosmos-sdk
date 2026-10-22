@@ -30,7 +30,7 @@ type queueGate struct {
 	// keyTimeBytes returns the formatted time inside a queue key.
 	keyTimeBytes func(key []byte) []byte
 	// firstKeyAt returns a key that sorts at or before every queue key with the given formatted
-	// time, and after every key with an earlier one.
+	// time, and after every key with an earlier time of the same width.
 	firstKeyAt func(timeBz []byte) []byte
 }
 
@@ -91,8 +91,8 @@ func (e queueEarliest) scanStart(g queueGate) []byte {
 
 // RecomputeQueueEarliest recomputes the earliest entry time of the validator, unbonding and
 // redelegation queues from each queue's first entry, replacing any pending-slot list that fork
-// v0.54.x stored under the same keys. Staking's 5 to 6 migration runs it; run it again after
-// writing queue entries without the keeper's queue setters.
+// v0.54.x stored under the same keys. Run it after writing queue entries without the keeper's
+// queue setters.
 func (k Keeper) RecomputeQueueEarliest(ctx context.Context) error {
 	store := k.storeService.OpenKVStore(ctx)
 	for _, g := range queueGates {
