@@ -40,7 +40,9 @@ func newTimeQueueGate(earliestKey, queuePrefix []byte) queueGate {
 		earliestKey:  earliestKey,
 		queuePrefix:  queuePrefix,
 		keyTimeBytes: func(key []byte) []byte { return key[len(queuePrefix):] },
-		firstKeyAt:   func(timeBz []byte) []byte { return append(bytes.Clone(queuePrefix), timeBz...) },
+		firstKeyAt: func(timeBz []byte) []byte {
+			return append(append(make([]byte, 0, len(queuePrefix)+len(timeBz)), queuePrefix...), timeBz...)
+		},
 	}
 }
 
@@ -79,7 +81,7 @@ func (e queueEarliest) due(nowBz []byte) bool {
 }
 
 // scanStart returns the first key at the stored time, which sorts at or before every queue key, or
-// the queue start when that time is unknown.
+// the queue start when that time is unknown or the queue is empty.
 func (e queueEarliest) scanStart(g queueGate) []byte {
 	if !e.known || e.empty {
 		return g.queuePrefix
@@ -201,7 +203,7 @@ func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byt
 }
 
 // lowerQueueEarliest records t as the earliest entry time if it is earlier than the stored one, or
-// clears a known time when t isn't sortableTimeLen wide. It runs on every queue insert: it reads
+// clears a known time or the empty marker when t isn't sortableTimeLen wide. It runs on every queue insert: it reads
 // the stored value, 0, 1 or 29 bytes once any fork v0.54.x list is replaced, and writes only on a
 // change.
 func (k Keeper) lowerQueueEarliest(ctx context.Context, g queueGate, t time.Time) error {
