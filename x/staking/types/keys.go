@@ -51,13 +51,13 @@ var (
 	RedelegationQueueKey = []byte{0x42} // prefix for the timestamps in redelegations queue
 	ValidatorQueueKey    = []byte{0x43} // prefix for the timestamps in validator queue
 
-	// ValidatorQueueEarliestKey and the two keys after it hold a time whose queue key sorts at or
-	// before every entry of the queues above; end-block scans a queue only once it is due, starting
-	// there. Write queue entries only through the keeper's queue setters, which keep these times, or
-	// call Keeper.RecomputeQueueEarliest after a direct write.
-	ValidatorQueueEarliestKey    = []byte{0x44}
-	UBDQueueEarliestKey          = []byte{0x45}
-	RedelegationQueueEarliestKey = []byte{0x46}
+	// ValidatorQueueEarliestKey and the two keys after it each hold a time at or before the first
+	// entry of their queue, or 0x00 when it is empty; end-block scans a queue only once that time is
+	// due, starting there. Write queue entries only through the keeper's queue setters, which keep
+	// these times, or call Keeper.RecomputeQueueEarliest after a direct write.
+	ValidatorQueueEarliestKey    = []byte{0x44} // earliest time in the validator queue
+	UBDQueueEarliestKey          = []byte{0x45} // earliest time in the unbonding queue
+	RedelegationQueueEarliestKey = []byte{0x46} // earliest time in the redelegations queue
 
 	HistoricalInfoKey   = []byte{0x50} // prefix for the historical info
 	ValidatorUpdatesKey = []byte{0x61} // prefix for the end block validator updates key

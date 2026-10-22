@@ -79,16 +79,10 @@ var timeQueues = []timeQueue{
 	},
 }
 
-// earliestReadGas is the gas of reading a valueLen-byte value from a one-byte earliest-time key.
-func (s *KeeperTestSuite) earliestReadGas(valueLen int) storetypes.Gas {
-	cfg := s.ctx.KVGasConfig()
-	return cfg.ReadCostFlat + cfg.ReadCostPerByte*storetypes.Gas(1+valueLen)
-}
-
 // requireOnlyEarliestRead requires that the end-block run on gasCtx read only the stored earliest
 // time, which shows its gate skipped the scan.
 func (s *KeeperTestSuite) requireOnlyEarliestRead(gasCtx sdk.Context, stored []byte) {
-	s.Require().Equal(s.earliestReadGas(len(stored)), gasCtx.GasMeter().GasConsumed(), "scanned although not due")
+	s.Require().Equal(earliestReadGas(gasCtx.KVGasConfig(), len(stored)), gasCtx.GasMeter().GasConsumed(), "scanned although not due")
 }
 
 // earliestWrites counts the writes run makes to key, using the multistore's change listener.
@@ -111,12 +105,19 @@ func atQueueTime(ctx sdk.Context, t time.Time) sdk.Context {
 	return ctx.WithBlockTime(t).WithHeaderInfo(header.Info{Time: t})
 }
 
-// legacyPendingSlots encodes one slot in the fork v0.54.x pending-slot list format.
-func legacyPendingSlots(slotBytes int) []byte {
-	bz := make([]byte, 4+slotBytes)
-	binary.BigEndian.PutUint32(bz, 1)
-	binary.BigEndian.PutUint64(bz[4:], uint64(queueNow.Add(-time.Hour).UnixNano()))
+// legacyPendingSlots encodes count slots in the fork v0.54.x pending-slot list format.
+func legacyPendingSlots(count uint32, slotBytes int) []byte {
+	bz := make([]byte, 4+int(count)*slotBytes)
+	binary.BigEndian.PutUint32(bz, count)
+	for i := range int(count) {
+		binary.BigEndian.PutUint64(bz[4+i*slotBytes:], uint64(queueNow.Add(-time.Duration(i+1)*time.Hour).UnixNano()))
+	}
 	return bz
+}
+
+// earliestReadGas is the gas of reading a valueLen-byte value from a one-byte earliest-time key.
+func earliestReadGas(cfg storetypes.GasConfig, valueLen int) storetypes.Gas {
+	return cfg.ReadCostFlat + cfg.ReadCostPerByte*storetypes.Gas(1+valueLen)
 }
 
 func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
@@ -237,7 +238,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 		{
 			name: "insert leaves a fork v0.54.x list in place until the next scan replaces it",
 			malleate: func(q timeQueue, ctx sdk.Context, store storetypes.KVStore) {
-				legacy := legacyPendingSlots(8)
+				legacy := legacyPendingSlots(1, 8)
 				store.Set(q.earliestKey, legacy)
 				s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
 				s.Require().Equal(legacy, store.Get(q.earliestKey))
@@ -249,7 +250,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 		{
 			name: "fork v0.54.x pending-slot list is replaced",
 			malleate: func(q timeQueue, _ sdk.Context, store storetypes.KVStore) {
-				store.Set(q.earliestKey, legacyPendingSlots(8))
+				store.Set(q.earliestKey, legacyPendingSlots(1, 8))
 				store.Set(q.timeKey(queueNow.Add(-hour)), q.slice())
 			},
 			now:         queueNow,
@@ -301,7 +302,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 
 func (s *KeeperTestSuite) TestTimeQueueInsertGas() {
 	cfg := s.ctx.KVGasConfig()
-	readGas := s.earliestReadGas
+	readGas := func(valueLen int) storetypes.Gas { return earliestReadGas(cfg, valueLen) }
 	writeGas := func(valueLen int) storetypes.Gas {
 		return cfg.WriteCostFlat + cfg.WriteCostPerByte*storetypes.Gas(1+valueLen)
 	}
@@ -495,7 +496,7 @@ func (s *KeeperTestSuite) TestQueueTimesOutsideSortableRange() {
 func (s *KeeperTestSuite) TestPopulateQueuePendingSlotsAlias() {
 	ctx := atQueueTime(s.ctx, queueNow)
 	store := ctx.KVStore(s.storeKey)
-	store.Set(timeQueues[0].earliestKey, legacyPendingSlots(8))
+	store.Set(timeQueues[0].earliestKey, legacyPendingSlots(1, 8))
 	s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
 	s.Require().Equal(queueEmptyMarker, store.Get(timeQueues[0].earliestKey))
 }
@@ -503,9 +504,9 @@ func (s *KeeperTestSuite) TestPopulateQueuePendingSlotsAlias() {
 func (s *KeeperTestSuite) TestMigrate5to6RecomputesQueueEarliest() {
 	ctx := atQueueTime(s.ctx, queueNow)
 	store := ctx.KVStore(s.storeKey)
-	store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(16))
+	store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(1, 16))
 	for _, q := range timeQueues {
-		store.Set(q.earliestKey, legacyPendingSlots(8))
+		store.Set(q.earliestKey, legacyPendingSlots(1, 8))
 		store.Set(q.timeKey(queueNow.Add(-time.Hour)), q.slice())
 	}
 
@@ -601,10 +602,19 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 		{
 			name: "fork v0.54.x pending-slot list is replaced",
 			malleate: func(_ sdk.Context, store storetypes.KVStore) {
-				store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(16))
+				store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(1, 16))
 				s.setRawValidatorQueue(store, queueNow.Add(hour))
 			},
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
+		},
+		{
+			// Unlike a one-slot list, it doesn't start with 0x00, so it must not be read as a time.
+			name: "fork v0.54.x pending-slot list with two slots scans from the queue start",
+			malleate: func(_ sdk.Context, store storetypes.KVStore) {
+				store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(2, 16))
+				s.setRawValidatorQueue(store, queueNow.Add(-hour))
+			},
+			expErr: stakingtypes.ErrNoValidatorFound,
 		},
 		{
 			name: "earlier insert lowers the earliest and a later one keeps it",
@@ -714,10 +724,10 @@ func (s *KeeperTestSuite) TestRecomputeQueueEarliest() {
 	store := ctx.KVStore(s.storeKey)
 	first := queueNow.Add(time.Hour)
 
-	store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(16))
+	store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(1, 16))
 	s.setRawValidatorQueue(store, first)
 	s.setRawValidatorQueue(store, first.Add(time.Hour))
-	store.Set(timeQueues[0].earliestKey, legacyPendingSlots(8))
+	store.Set(timeQueues[0].earliestKey, legacyPendingSlots(1, 8))
 	store.Set(timeQueues[0].timeKey(first.Add(time.Hour)), timeQueues[0].slice())
 	store.Set(timeQueues[0].timeKey(first), timeQueues[0].slice())
 	// The redelegation queue is left empty.

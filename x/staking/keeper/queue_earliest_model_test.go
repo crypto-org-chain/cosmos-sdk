@@ -112,7 +112,6 @@ func inTx(tb testing.TB, blockCtx sdk.Context, fn func(sdk.Context) error) {
 // but the gate scanned anyway.
 func gatedSkip(tb testing.TB, ctx sdk.Context, key *storetypes.KVStoreKey, earliestKey []byte, now time.Time, endBlock func(sdk.Context) error) bool {
 	tb.Helper()
-	gasConfig := storetypes.KVGasConfig()
 	stored := ctx.KVStore(key).Get(earliestKey)
 	notDue := bytes.Equal(stored, queueEmptyMarker) || (len(stored) > 1 && bytes.Compare(stored, sdk.FormatTimeBytes(now)) > 0)
 	meteredCtx := ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -120,8 +119,7 @@ func gatedSkip(tb testing.TB, ctx sdk.Context, key *storetypes.KVStoreKey, earli
 	if !notDue {
 		return false
 	}
-	oneRead := gasConfig.ReadCostFlat + gasConfig.ReadCostPerByte*uint64(len(earliestKey)+len(stored))
-	require.Equal(tb, oneRead, meteredCtx.GasMeter().GasConsumed(), "scanned although not due")
+	require.Equal(tb, earliestReadGas(meteredCtx.KVGasConfig(), len(stored)), meteredCtx.GasMeter().GasConsumed(), "scanned although not due")
 	return true
 }
 
@@ -180,7 +178,7 @@ func TestQueueEarliestMatchesUpstreamScan(t *testing.T) {
 			case 0:
 				require.NoError(t, gated.k.RecomputeQueueEarliest(gatedCtx))
 			case 1:
-				gatedCtx.KVStore(gated.key).Set(stakingtypes.UBDQueueEarliestKey, legacyPendingSlots(8))
+				gatedCtx.KVStore(gated.key).Set(stakingtypes.UBDQueueEarliestKey, legacyPendingSlots(1+uint32(r.Intn(3)), 8))
 			case 2:
 				gatedCtx.KVStore(gated.key).Delete(stakingtypes.RedelegationQueueEarliestKey)
 			}
@@ -316,7 +314,7 @@ func TestValidatorQueueEarliestMatchesUpstreamScan(t *testing.T) {
 			case 0:
 				require.NoError(t, gated.k.RecomputeQueueEarliest(gatedCtx))
 			case 1:
-				gatedCtx.KVStore(gated.key).Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(16))
+				gatedCtx.KVStore(gated.key).Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(1+uint32(r.Intn(3)), 16))
 			case 2:
 				gatedCtx.KVStore(gated.key).Delete(stakingtypes.ValidatorQueueEarliestKey)
 			}
