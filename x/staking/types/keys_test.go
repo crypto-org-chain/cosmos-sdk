@@ -423,6 +423,15 @@ func TestValidatorQueueKeyTimeBytes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.exp, types.ValidatorQueueKeyTimeBytes(tc.key))
+
+			ts, height, err := types.ParseValidatorQueueKey(tc.key)
+			if tc.exp == nil {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, at, ts)
+			require.Equal(t, int64(7), height)
 		})
 	}
 }
