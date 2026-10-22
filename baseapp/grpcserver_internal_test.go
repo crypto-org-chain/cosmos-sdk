@@ -13,6 +13,8 @@ import (
 
 	"cosmossdk.io/log/v2"
 
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	grpctypes "github.com/cosmos/cosmos-sdk/types/grpc"
 )
 
@@ -139,6 +141,86 @@ func TestGRPCQueryInterceptor_BlockHeightHeaderOk_NoTrailer(t *testing.T) {
 			if tc.expectedLastDebug != "" {
 				require.Equal(t, tc.expectedLastDebug, logger.lastDebug)
 			}
+		})
+	}
+}
+
+// cacheMultiStore aliases the interface so embedding it does not shadow the
+// promoted CacheMultiStore() method.
+type cacheMultiStore = storetypes.CacheMultiStore
+
+// closeTrackingCacheStore records whether the query multistore was closed.
+type closeTrackingCacheStore struct {
+	cacheMultiStore
+	closed *bool
+}
+
+func (s closeTrackingCacheStore) Close() error {
+	*s.closed = true
+	return nil
+}
+
+// closeTrackingQueryStore hands out close-tracking versioned branches, mirroring
+// the memiavl store whose read-only snapshot handles must be released.
+type closeTrackingQueryStore struct {
+	storetypes.MultiStore
+	closed *bool
+}
+
+func (s closeTrackingQueryStore) CacheMultiStoreWithVersion(version int64) (storetypes.CacheMultiStore, error) {
+	cms, err := s.MultiStore.CacheMultiStoreWithVersion(version)
+	if err != nil {
+		return nil, err
+	}
+	return closeTrackingCacheStore{cacheMultiStore: cms, closed: s.closed}, nil
+}
+
+func TestGRPCQueryInterceptorClosesQueryMultiStore(t *testing.T) {
+	testCases := []struct {
+		name       string
+		handler    grpc.UnaryHandler
+		expectErrs []error
+	}{
+		{
+			name: "handler returns normally",
+			handler: func(_ context.Context, _ any) (any, error) {
+				return "ok", nil
+			},
+		},
+		{
+			name: "handler panics out of gas",
+			handler: func(_ context.Context, _ any) (any, error) {
+				panic(storetypes.ErrorOutOfGas{Descriptor: "query"})
+			},
+			expectErrs: []error{sdkerrors.ErrOutOfGas},
+		},
+		{
+			name: "handler returns an error",
+			handler: func(_ context.Context, _ any) (any, error) {
+				return nil, errors.New("boom")
+			},
+			expectErrs: []error{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupBaseAppForGRPCQueryTests(t, log.NewNopLogger())
+
+			var closed bool
+			app.SetQueryMultiStore(closeTrackingQueryStore{MultiStore: app.cms, closed: &closed})
+
+			stream := &fakeServerTransportStream{method: "/test.TestService/TestMethod"}
+			grpcCtx := grpc.NewContextWithServerTransportStream(context.Background(), stream)
+			grpcCtx = metadata.NewIncomingContext(grpcCtx, metadata.MD{})
+
+			interceptor := app.grpcQueryInterceptor(false)
+			_, err := interceptor(grpcCtx, struct{}{}, &grpc.UnaryServerInfo{FullMethod: stream.method}, tc.handler)
+
+			for _, want := range tc.expectErrs {
+				require.ErrorIs(t, err, want)
+			}
+			require.True(t, closed, "query multistore was not closed; its file handles leak")
 		})
 	}
 }
