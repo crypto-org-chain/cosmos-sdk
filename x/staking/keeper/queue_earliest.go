@@ -91,8 +91,8 @@ func (e queueEarliest) scanStart(g queueGate) []byte {
 
 // RecomputeQueueEarliest recomputes the earliest entry time of the validator, unbonding and
 // redelegation queues from each queue's first entry, replacing any pending-slot list that fork
-// v0.53.x or v0.54.x stored under the same keys. Run it after writing queue entries without the keeper's
-// queue setters.
+// v0.53.x or v0.54.x stored under the same keys. Run it after writing queue entries without the
+// keeper's queue setters.
 func (k Keeper) RecomputeQueueEarliest(ctx context.Context) error {
 	store := k.storeService.OpenKVStore(ctx)
 	for _, g := range queueGates {
@@ -147,6 +147,7 @@ func dequeueTimeQueue[E any](ctx context.Context, k Keeper, g queueGate, now tim
 	nowBz := sdk.FormatTimeBytes(now)
 	err := k.runGatedScan(ctx, g, nowBz, func(earliest queueEarliest) (stored, next []byte, err error) {
 		mature, next, err = dequeueTimeSlices(ctx, k, g, earliest.scanStart(g), nowBz, unmarshal)
+		// Nothing writes the stored time during this scan, so it is still the value read before it.
 		return earliest.raw, next, err
 	})
 	if err != nil {
