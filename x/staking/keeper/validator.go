@@ -581,8 +581,8 @@ func (k Keeper) unbondAllMatureValidators(ctx context.Context, start []byte, blo
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	blockHeight := sdkCtx.BlockHeight()
 
-	// unbondingValIterator will contain all validator addresses indexed under
-	// the ValidatorQueueKey prefix. Note, the entire index key is composed as
+	// unbondingValIterator will contain all validator addresses indexed from
+	// start. Note, the entire index key is composed as
 	// ValidatorQueueKey | timeBzLen (8-byte big endian) | timeBz | heightBz (8-byte big endian),
 	// so it may be possible that certain validator addresses that are iterated
 	// over are not ready to unbond, so an explicit check is required.

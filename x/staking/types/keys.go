@@ -53,8 +53,9 @@ var (
 
 	// ValidatorQueueEarliestKey and the two keys after it each hold a time at or before the first
 	// entry of their queue, or 0x00 when it is empty; end-block scans a queue only once that time is
-	// due, starting there. Write queue entries only through the keeper's queue setters, which keep
-	// these times, or call Keeper.RecomputeQueueEarliest after a direct write.
+	// due, starting there. An absent key means unknown: the next end-block scans from the queue
+	// start. Write queue entries only through the keeper's queue setters, which keep these times, or
+	// call Keeper.RecomputeQueueEarliest after a direct write.
 	ValidatorQueueEarliestKey    = []byte{0x44} // earliest time in the validator queue
 	UBDQueueEarliestKey          = []byte{0x45} // earliest time in the unbonding queue
 	RedelegationQueueEarliestKey = []byte{0x46} // earliest time in the redelegations queue
