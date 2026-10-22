@@ -134,6 +134,19 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 			expEarliest: queueEmptyMarker,
 		},
 		{
+			name: "due scan matures an entry written below the stored time",
+			malleate: func(q timeQueue, ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().NoError(q.insert(s, ctx, queueNow.Add(-hour)))
+				s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
+				// Bypasses the gate and sorts before the stored time.
+				store.Set(q.timeKey(queueNow.Add(-2*hour)), q.slice())
+			},
+			now:         queueNow,
+			expMatured:  2,
+			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
+		},
+		{
 			name: "due earliest scans and records the next entry",
 			malleate: func(q timeQueue, ctx sdk.Context, _ storetypes.KVStore) {
 				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
@@ -432,6 +445,17 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			name: "missing earliest scans the queue",
 			malleate: func(_ sdk.Context, store storetypes.KVStore) {
 				s.setRawValidatorQueue(store, queueNow.Add(-hour))
+			},
+			expErr: stakingtypes.ErrNoValidatorFound,
+		},
+		{
+			name: "due scan reaches an entry written below the stored time",
+			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				// Due by time but not by height, so it alone would not fail the scan.
+				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(-hour), 20, []string{unknownValAddress}))
+				// Bypasses the gate and sorts before the stored time; a scan fails on it.
+				s.setRawValidatorQueue(store, queueNow.Add(-2*hour))
 			},
 			expErr: stakingtypes.ErrNoValidatorFound,
 		},

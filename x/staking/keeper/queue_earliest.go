@@ -222,9 +222,10 @@ func emptyQueueValue() []byte {
 }
 
 // storeQueueEarliest writes value (nil clears it) unless it equals prev, the value read before the
-// scan, so a queue that stays due does not rewrite it every block. A scan can only lower or clear
-// the stored value (the validator scan re-sets entries through lowerQueueEarliest), and either
-// stays a valid bound, so a write skipped because value equals prev was never needed.
+// scan, so a queue that stays due does not rewrite it every block. Writes made during the scan
+// (the validator scan re-sets entries through lowerQueueEarliest) can only lower or clear the
+// stored value, which stays a valid bound, so a write skipped because value equals prev was never
+// needed.
 func (k Keeper) storeQueueEarliest(ctx context.Context, g queueGate, prev, value []byte) error {
 	if bytes.Equal(prev, value) {
 		return nil
