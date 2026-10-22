@@ -326,7 +326,8 @@ Each queue above also keeps a time whose queue key sorts at or before its first
 entry, so `EndBlock` skips scanning a queue until that time is due and then
 starts the scan there; each scan resets it to the first remaining entry. `0x00`
 marks an empty queue. An absent key makes the next `EndBlock` scan the queue
-from its start and record its first entry's time, or `0x00` if it is empty. A time outside
+from its start and record its first remaining entry's time, or `0x00` if none
+remain. A time outside
 years 0000-9999 leaves the key absent when it is inserted, or while it is the
 queue's first entry. Such a time needs a direct call to the queue setters, or
 a block time so late that completion falls after year 9999.
