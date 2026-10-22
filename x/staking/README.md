@@ -313,7 +313,7 @@ https://github.com/cosmos/cosmos-sdk/blob/v0.47.0-rc1/proto/cosmos/staking/v1bet
 For the purpose of tracking progress of unbonding validators the validator
 queue is kept.
 
-* ValidatorQueueTime: `0x43 | format(time) -> []sdk.ValAddress`
+* ValidatorQueueTime: `0x43 | len(format(time)) (8 bytes) | format(time) | height (8 bytes) -> []sdk.ValAddress`
 
 The stored object by each key is an array of validator operator addresses from
 which the validator object can be accessed. Typically it is expected that only
@@ -329,7 +329,7 @@ marks an empty queue. An absent key makes the next `EndBlock` scan the queue
 from its start and record its first entry's time, or `0x00` if it is empty. A time outside
 years 0000-9999 leaves the key absent when it is inserted, or while it is the
 queue's first entry. Such a time needs a direct call to the queue setters, or
-an unbonding period that pushes completion past year 9999.
+a block time so late that completion falls after year 9999.
 
 * ValidatorQueueEarliest: `0x44 -> format(time) | 0x00`
 * UnbondingDelegationQueueEarliest: `0x45 -> format(time) | 0x00`

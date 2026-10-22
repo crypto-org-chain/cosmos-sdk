@@ -79,6 +79,18 @@ var timeQueues = []timeQueue{
 	},
 }
 
+// earliestReadGas is the gas of reading a valueLen-byte value from a one-byte earliest-time key.
+func (s *KeeperTestSuite) earliestReadGas(valueLen int) storetypes.Gas {
+	cfg := s.ctx.KVGasConfig()
+	return cfg.ReadCostFlat + cfg.ReadCostPerByte*storetypes.Gas(1+valueLen)
+}
+
+// requireOnlyEarliestRead requires that the end-block run on gasCtx read only the stored earliest
+// time, which shows its gate skipped the scan.
+func (s *KeeperTestSuite) requireOnlyEarliestRead(gasCtx sdk.Context, stored []byte) {
+	s.Require().Equal(s.earliestReadGas(len(stored)), gasCtx.GasMeter().GasConsumed(), "scanned although not due")
+}
+
 // earliestWrites counts the writes run makes to key, using the multistore's change listener.
 func (s *KeeperTestSuite) earliestWrites(ctx sdk.Context, key []byte, run func()) int {
 	cms, ok := ctx.MultiStore().(storetypes.CommitMultiStore)
@@ -113,18 +125,18 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 		name        string
 		malleate    func(q timeQueue, ctx sdk.Context, store storetypes.KVStore)
 		now         time.Time
+		expSkip     bool
 		expMatured  int
 		expEarliest []byte
 	}{
 		{
 			name: "earliest in the future skips the scan",
-			malleate: func(q timeQueue, ctx sdk.Context, store storetypes.KVStore) {
+			malleate: func(q timeQueue, ctx sdk.Context, _ storetypes.KVStore) {
 				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
-				// Bypasses the gate, so only a scan would find it.
-				store.Set(q.timeKey(queueNow.Add(-hour)), q.slice())
 			},
 			now:         queueNow,
+			expSkip:     true,
 			expMatured:  0,
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
@@ -136,6 +148,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 				store.Set(q.timeKey(queueNow.Add(-hour)), q.slice())
 			},
 			now:         queueNow,
+			expSkip:     true,
 			expMatured:  0,
 			expEarliest: queueEmptyMarker,
 		},
@@ -273,10 +286,14 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 				store := ctx.KVStore(s.storeKey)
 				tc.malleate(q, ctx, store)
 
-				matured, err := q.dequeue(s, ctx)
+				gasCtx := ctx.WithGasMeter(storetypes.NewGasMeter(math.MaxUint64))
+				matured, err := q.dequeue(s, gasCtx)
 				s.Require().NoError(err)
 				s.Require().Equal(tc.expMatured, matured)
 				s.Require().Equal(tc.expEarliest, store.Get(q.earliestKey))
+				if tc.expSkip {
+					s.requireOnlyEarliestRead(gasCtx, tc.expEarliest)
+				}
 			})
 		}
 	}
@@ -284,9 +301,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 
 func (s *KeeperTestSuite) TestTimeQueueInsertGas() {
 	cfg := s.ctx.KVGasConfig()
-	readGas := func(valueLen int) storetypes.Gas {
-		return cfg.ReadCostFlat + cfg.ReadCostPerByte*storetypes.Gas(1+valueLen)
-	}
+	readGas := s.earliestReadGas
 	writeGas := func(valueLen int) storetypes.Gas {
 		return cfg.WriteCostFlat + cfg.WriteCostPerByte*storetypes.Gas(1+valueLen)
 	}
@@ -514,17 +529,17 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 	testCases := []struct {
 		name        string
 		malleate    func(ctx sdk.Context, store storetypes.KVStore)
+		expSkip     bool
 		expErr      error
 		expEarliest []byte
 	}{
 		{
 			name: "earliest in the future skips the scan",
-			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+			malleate: func(ctx sdk.Context, _ storetypes.KVStore) {
 				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(hour), 1, []string{unknownValAddress}))
-				// Bypasses the gate; a scan would fail on the unknown validator.
-				s.setRawValidatorQueue(store, queueNow.Add(-hour))
 			},
+			expSkip:     true,
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
 		{
@@ -534,6 +549,7 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 				// Bypasses the gate; a scan would fail on the unknown validator.
 				s.setRawValidatorQueue(store, queueNow.Add(-hour))
 			},
+			expSkip:     true,
 			expEarliest: queueEmptyMarker,
 		},
 		{
@@ -622,13 +638,17 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			store := ctx.KVStore(s.storeKey)
 			tc.malleate(ctx, store)
 
-			err := s.stakingKeeper.UnbondAllMatureValidators(ctx)
+			gasCtx := ctx.WithGasMeter(storetypes.NewGasMeter(math.MaxUint64))
+			err := s.stakingKeeper.UnbondAllMatureValidators(gasCtx)
 			if tc.expErr != nil {
 				s.Require().ErrorIs(err, tc.expErr)
 				return
 			}
 			s.Require().NoError(err)
 			s.Require().Equal(tc.expEarliest, store.Get(stakingtypes.ValidatorQueueEarliestKey))
+			if tc.expSkip {
+				s.requireOnlyEarliestRead(gasCtx, tc.expEarliest)
+			}
 		})
 	}
 }
@@ -636,17 +656,19 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 func (s *KeeperTestSuite) TestRedelegationQueueGateUsesHeaderTime() {
 	q := timeQueues[1]
 	// The redelegation scan is bounded by HeaderInfo().Time, not its currTime argument, so the
-	// gate must be too: a gate on the later block time would scan and dequeue the bypassed entry.
+	// gate must be too: one on the later block time would scan although nothing matures.
 	ctx := s.ctx.WithBlockTime(queueNow).WithHeaderInfo(header.Info{Time: queueNow.Add(-2 * time.Hour)})
 	store := ctx.KVStore(s.storeKey)
 	s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 	s.Require().NoError(q.insert(s, ctx, queueNow.Add(-time.Hour)))
-	store.Set(q.timeKey(queueNow.Add(-3*time.Hour)), q.slice())
 
-	matured, err := q.dequeue(s, ctx)
+	gasCtx := ctx.WithGasMeter(storetypes.NewGasMeter(math.MaxUint64))
+	matured, err := q.dequeue(s, gasCtx)
 	s.Require().NoError(err)
 	s.Require().Zero(matured)
-	s.Require().Equal(sdk.FormatTimeBytes(queueNow.Add(-time.Hour)), store.Get(q.earliestKey))
+	stored := sdk.FormatTimeBytes(queueNow.Add(-time.Hour))
+	s.Require().Equal(stored, store.Get(q.earliestKey))
+	s.requireOnlyEarliestRead(gasCtx, stored)
 }
 
 func (s *KeeperTestSuite) TestValidatorScanSeesEntriesQueuedDuringIt() {
