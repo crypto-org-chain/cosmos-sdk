@@ -493,7 +493,7 @@ func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, k
 	if err = store.Set(types.GetUnbondingDelegationTimeKey(timestamp), bz); err != nil {
 		return err
 	}
-	return k.lowerQueueEarliest(ctx, ubdQueueGate, timestamp)
+	return k.lowerQueueEarliest(ctx, ubdQueueGate.queueGate, timestamp)
 }
 
 // InsertUBDQueue inserts an unbonding delegation to the appropriate timeslice
@@ -528,43 +528,11 @@ func (k Keeper) UBDQueueIterator(ctx context.Context, endTime time.Time) (corest
 // currTime, and deletes the timeslices from the queue. It scans the queue only when its earliest
 // entry is due.
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) ([]types.DVPair, error) {
-	due, err := k.queueDue(ctx, ubdQueueGate, currTime)
-	if err != nil || !due {
-		return nil, err
-	}
-	matureUnbonds, err := k.dequeueAllMatureUBDQueue(ctx, currTime)
-	if err != nil {
-		return matureUnbonds, err
-	}
-	return matureUnbonds, k.refreshQueueEarliest(ctx, ubdQueueGate)
-}
-
-func (k Keeper) dequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
-	store := k.storeService.OpenKVStore(ctx)
-
-	// gets an iterator for all timeslices from time 0 until the current Blockheader time
-	unbondingTimesliceIterator, err := k.UBDQueueIterator(ctx, currTime)
-	if err != nil {
-		return matureUnbonds, err
-	}
-	defer unbondingTimesliceIterator.Close()
-
-	for ; unbondingTimesliceIterator.Valid(); unbondingTimesliceIterator.Next() {
-		timeslice := types.DVPairs{}
-		value := unbondingTimesliceIterator.Value()
-		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
-			return matureUnbonds, err
-		}
-
-		matureUnbonds = append(matureUnbonds, timeslice.Pairs...)
-
-		if err = store.Delete(unbondingTimesliceIterator.Key()); err != nil {
-			return matureUnbonds, err
-		}
-
-	}
-
-	return matureUnbonds, nil
+	return dequeueTimeQueue(ctx, k, ubdQueueGate, currTime, func(bz []byte) ([]types.DVPair, error) {
+		var timeslice types.DVPairs
+		err := k.cdc.Unmarshal(bz, &timeslice)
+		return timeslice.Pairs, err
+	})
 }
 
 // GetRedelegations returns a given amount of all the delegator redelegations.
@@ -820,7 +788,7 @@ func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 	if err = store.Set(types.GetRedelegationTimeKey(timestamp), bz); err != nil {
 		return err
 	}
-	return k.lowerQueueEarliest(ctx, redelegationQueueGate, timestamp)
+	return k.lowerQueueEarliest(ctx, redelegationQueueGate.queueGate, timestamp)
 }
 
 // InsertRedelegationQueue insert an redelegation delegation to the appropriate
@@ -852,47 +820,16 @@ func (k Keeper) RedelegationQueueIterator(ctx context.Context, endTime time.Time
 }
 
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
-// timeslices inclusively previous to currTime, and deletes the timeslices from
-// the queue. It scans the queue only when its earliest entry is due.
-func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) ([]types.DVVTriplet, error) {
-	// Gate on the same time the scan below bounds its iterator by.
-	due, err := k.queueDue(ctx, redelegationQueueGate, sdk.UnwrapSDKContext(ctx).HeaderInfo().Time)
-	if err != nil || !due {
-		return nil, err
-	}
-	matureRedelegations, err := k.dequeueAllMatureRedelegationQueue(ctx, currTime)
-	if err != nil {
-		return matureRedelegations, err
-	}
-	return matureRedelegations, k.refreshQueueEarliest(ctx, redelegationQueueGate)
-}
-
-func (k Keeper) dequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
-	store := k.storeService.OpenKVStore(ctx)
-
-	// gets an iterator for all timeslices from time 0 until the current Blockheader time
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	redelegationTimesliceIterator, err := k.RedelegationQueueIterator(ctx, sdkCtx.HeaderInfo().Time)
-	if err != nil {
-		return nil, err
-	}
-	defer redelegationTimesliceIterator.Close()
-
-	for ; redelegationTimesliceIterator.Valid(); redelegationTimesliceIterator.Next() {
-		timeslice := types.DVVTriplets{}
-		value := redelegationTimesliceIterator.Value()
-		if err = k.cdc.Unmarshal(value, &timeslice); err != nil {
-			return nil, err
-		}
-
-		matureRedelegations = append(matureRedelegations, timeslice.Triplets...)
-
-		if err = store.Delete(redelegationTimesliceIterator.Key()); err != nil {
-			return nil, err
-		}
-	}
-
-	return matureRedelegations, nil
+// timeslices inclusively previous to the block header time, and deletes the
+// timeslices from the queue. As in upstream, currTime is ignored in favor of
+// HeaderInfo().Time. It scans the queue only when its earliest entry is due.
+func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, _ time.Time) ([]types.DVVTriplet, error) {
+	now := sdk.UnwrapSDKContext(ctx).HeaderInfo().Time
+	return dequeueTimeQueue(ctx, k, redelegationQueueGate, now, func(bz []byte) ([]types.DVVTriplet, error) {
+		var timeslice types.DVVTriplets
+		err := k.cdc.Unmarshal(bz, &timeslice)
+		return timeslice.Triplets, err
+	})
 }
 
 // Delegate performs a delegation, set/update everything necessary within the store.

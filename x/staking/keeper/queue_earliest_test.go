@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 	"time"
@@ -21,6 +22,7 @@ var (
 // timeQueue drives the unbonding and redelegation queues, which share one shape.
 type timeQueue struct {
 	name        string
+	prefix      []byte
 	earliestKey []byte
 	timeKey     func(time.Time) []byte
 	slice       func() []byte
@@ -31,6 +33,7 @@ type timeQueue struct {
 var timeQueues = []timeQueue{
 	{
 		name:        "unbonding",
+		prefix:      stakingtypes.UnbondingQueueKey,
 		earliestKey: stakingtypes.UBDQueueEarliestKey,
 		timeKey:     stakingtypes.GetUnbondingDelegationTimeKey,
 		slice: func() []byte {
@@ -50,6 +53,7 @@ var timeQueues = []timeQueue{
 	},
 	{
 		name:        "redelegation",
+		prefix:      stakingtypes.RedelegationQueueKey,
 		earliestKey: stakingtypes.RedelegationQueueEarliestKey,
 		timeKey:     stakingtypes.GetRedelegationTimeKey,
 		slice: func() []byte {
@@ -67,6 +71,22 @@ var timeQueues = []timeQueue{
 			return len(mature), err
 		},
 	},
+}
+
+// earliestWrites counts the writes run makes to key, using the multistore's change listener.
+func (s *KeeperTestSuite) earliestWrites(ctx sdk.Context, key []byte, run func()) int {
+	cms, ok := ctx.MultiStore().(storetypes.CommitMultiStore)
+	s.Require().True(ok)
+	cms.AddListeners([]storetypes.StoreKey{s.storeKey})
+	cms.PopStateCache()
+	run()
+	writes := 0
+	for _, pair := range cms.PopStateCache() {
+		if bytes.Equal(pair.Key, key) {
+			writes++
+		}
+	}
+	return writes
 }
 
 func atQueueTime(ctx sdk.Context, t time.Time) sdk.Context {
@@ -93,7 +113,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 		{
 			name: "earliest in the future skips the scan",
 			malleate: func(q timeQueue, ctx sdk.Context, store storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
 				// Bypasses the gate, so only a scan would find it.
 				store.Set(q.timeKey(queueNow.Add(-hour)), q.slice())
@@ -103,9 +123,20 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
 		{
+			name: "empty marker skips the scan",
+			malleate: func(q timeQueue, ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				// Bypasses the gate, so only a scan would find it.
+				store.Set(q.timeKey(queueNow.Add(-hour)), q.slice())
+			},
+			now:         queueNow,
+			expMatured:  0,
+			expEarliest: queueEmptyMarker,
+		},
+		{
 			name: "due earliest scans and records the next entry",
 			malleate: func(q timeQueue, ctx sdk.Context, _ storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(q.insert(s, ctx, queueNow.Add(-hour)))
 				s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
 			},
@@ -114,9 +145,20 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
 		{
+			name: "entry one nanosecond after now becomes the next earliest",
+			malleate: func(q timeQueue, ctx sdk.Context, _ storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().NoError(q.insert(s, ctx, queueNow))
+				s.Require().NoError(q.insert(s, ctx, queueNow.Add(time.Nanosecond)))
+			},
+			now:         queueNow,
+			expMatured:  1,
+			expEarliest: sdk.FormatTimeBytes(queueNow.Add(time.Nanosecond)),
+		},
+		{
 			name: "draining the queue records the empty marker",
 			malleate: func(q timeQueue, ctx sdk.Context, _ storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(q.insert(s, ctx, queueNow))
 			},
 			now:         queueNow,
@@ -126,7 +168,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 		{
 			name: "earlier insert lowers the earliest and a later one keeps it",
 			malleate: func(q timeQueue, ctx sdk.Context, _ storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(q.insert(s, ctx, queueNow.Add(2*hour)))
 				s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
 				s.Require().NoError(q.insert(s, ctx, queueNow.Add(3*hour)))
@@ -144,6 +186,18 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 			},
 			now:         queueNow,
 			expMatured:  1,
+			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
+		},
+		{
+			name: "insert leaves a fork v0.54.x list in place until the next scan replaces it",
+			malleate: func(q timeQueue, ctx sdk.Context, store storetypes.KVStore) {
+				legacy := legacyPendingSlots(8)
+				store.Set(q.earliestKey, legacy)
+				s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
+				s.Require().Equal(legacy, store.Get(q.earliestKey))
+			},
+			now:         queueNow,
+			expMatured:  0,
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
 		{
@@ -169,7 +223,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 		{
 			name: "times outside the UnixNano range mature",
 			malleate: func(q timeQueue, ctx sdk.Context, _ storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(q.insert(s, ctx, time.Date(2300, 1, 1, 0, 0, 0, 0, time.UTC)))
 			},
 			now:         time.Date(2300, 1, 1, 0, 0, 1, 0, time.UTC),
@@ -201,7 +255,7 @@ func (s *KeeperTestSuite) TestTimeQueueInsertGasIsConstant() {
 			insertGas := func(pending int) storetypes.Gas {
 				s.SetupTest()
 				ctx := atQueueTime(s.ctx, queueNow)
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				for i := range pending {
 					s.Require().NoError(q.insert(s, ctx, queueNow.Add(time.Duration(i+1)*time.Second)))
 				}
@@ -215,6 +269,130 @@ func (s *KeeperTestSuite) TestTimeQueueInsertGasIsConstant() {
 	}
 }
 
+func (s *KeeperTestSuite) TestQueueEarliestSkipsUnchangedWrites() {
+	hour := time.Hour
+	for _, q := range timeQueues {
+		s.Run(q.name+"/insert at the stored time", func() {
+			s.SetupTest()
+			ctx := atQueueTime(s.ctx, queueNow)
+			s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+			s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
+			s.Require().Zero(s.earliestWrites(ctx, q.earliestKey, func() {
+				s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
+			}))
+		})
+	}
+	s.Run("validator/due scan that keeps the same earliest entry", func() {
+		s.SetupTest()
+		ctx := atQueueTime(s.ctx, queueNow).WithBlockHeight(10)
+		s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+		// Due by time but not by height, so every block scans it and keeps it.
+		s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(-hour), 20, []string{unknownValAddress}))
+		s.Require().Zero(s.earliestWrites(ctx, stakingtypes.ValidatorQueueEarliestKey, func() {
+			s.Require().NoError(s.stakingKeeper.UnbondAllMatureValidators(ctx))
+		}))
+	})
+}
+
+func (s *KeeperTestSuite) TestQueueTimesOutsideSortableRange() {
+	hour := time.Hour
+	farFuture := time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)
+	negativeYear := time.Date(-1, 1, 1, 0, 0, 0, 0, time.UTC)
+	ubd := timeQueues[0]
+	testCases := []struct {
+		name        string
+		malleate    func(ctx sdk.Context, store storetypes.KVStore)
+		endBlock    func(ctx sdk.Context) (int, error)
+		earliestKey []byte
+		expMatured  int
+		expEarliest []byte
+	}{
+		{
+			name: "validator insert past year 9999 makes the earliest time unknown",
+			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, farFuture, 1, []string{unknownValAddress}))
+				s.Require().Nil(store.Get(stakingtypes.ValidatorQueueEarliestKey))
+			},
+			endBlock:    func(ctx sdk.Context) (int, error) { return 0, s.stakingKeeper.UnbondAllMatureValidators(ctx) },
+			earliestKey: stakingtypes.ValidatorQueueEarliestKey,
+		},
+		{
+			name: "validator insert before year 0 makes a known earliest time unknown",
+			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(hour), 1, []string{unknownValAddress}))
+				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, negativeYear, 1, []string{unknownValAddress}))
+				s.Require().Nil(store.Get(stakingtypes.ValidatorQueueEarliestKey))
+			},
+			// Its longer time bytes sort it after every other key, out of the scan's bound as in
+			// upstream, so one scan finds the +1h entry first again.
+			endBlock:    func(ctx sdk.Context) (int, error) { return 0, s.stakingKeeper.UnbondAllMatureValidators(ctx) },
+			earliestKey: stakingtypes.ValidatorQueueEarliestKey,
+			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
+		},
+		{
+			name: "unbonding insert past year 9999 makes a known earliest time unknown",
+			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().NoError(ubd.insert(s, ctx, queueNow.Add(hour)))
+				s.Require().NoError(ubd.insert(s, ctx, farFuture))
+				s.Require().Nil(store.Get(ubd.earliestKey))
+			},
+			// As in upstream, the year-10000 key sorts before present-day keys and matures at once.
+			endBlock:    func(ctx sdk.Context) (int, error) { return ubd.dequeue(s, ctx) },
+			earliestKey: ubd.earliestKey,
+			expMatured:  1,
+			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
+		},
+		{
+			name: "unsortable key left first after an unbonding scan clears the earliest time",
+			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().NoError(ubd.insert(s, ctx, queueNow.Add(-hour)))
+				// "20310-..." sorts after "2030-...", so the scan stops at it and it stays queued.
+				store.Set(ubd.timeKey(time.Date(20310, 1, 1, 0, 0, 0, 0, time.UTC)), ubd.slice())
+			},
+			endBlock:    func(ctx sdk.Context) (int, error) { return ubd.dequeue(s, ctx) },
+			earliestKey: ubd.earliestKey,
+			expMatured:  1,
+		},
+		{
+			name: "recompute clears a known time when the first entry is unsortable",
+			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().Equal(queueEmptyMarker, store.Get(stakingtypes.ValidatorQueueEarliestKey))
+				s.setRawValidatorQueue(store, farFuture)
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+			},
+			endBlock:    func(sdk.Context) (int, error) { return 0, nil },
+			earliestKey: stakingtypes.ValidatorQueueEarliestKey,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			ctx := atQueueTime(s.ctx, queueNow).WithBlockHeight(10)
+			store := ctx.KVStore(s.storeKey)
+			tc.malleate(ctx, store)
+
+			matured, err := tc.endBlock(ctx)
+			s.Require().NoError(err)
+			s.Require().Equal(tc.expMatured, matured)
+			s.Require().Equal(tc.expEarliest, store.Get(tc.earliestKey))
+		})
+	}
+}
+
+func (s *KeeperTestSuite) TestPopulateQueuePendingSlotsAlias() {
+	ctx := atQueueTime(s.ctx, queueNow)
+	store := ctx.KVStore(s.storeKey)
+	store.Set(timeQueues[0].earliestKey, legacyPendingSlots(8))
+	s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+	s.Require().Equal(queueEmptyMarker, store.Get(timeQueues[0].earliestKey))
+}
+
 func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 	hour := time.Hour
 	testCases := []struct {
@@ -226,7 +404,7 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 		{
 			name: "earliest in the future skips the scan",
 			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(hour), 1, []string{unknownValAddress}))
 				// Bypasses the gate; a scan would fail on the unknown validator.
 				s.setRawValidatorQueue(store, queueNow.Add(-hour))
@@ -234,9 +412,18 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
 		{
+			name: "empty marker skips the scan",
+			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				// Bypasses the gate; a scan would fail on the unknown validator.
+				s.setRawValidatorQueue(store, queueNow.Add(-hour))
+			},
+			expEarliest: queueEmptyMarker,
+		},
+		{
 			name: "due earliest scans the queue",
 			malleate: func(ctx sdk.Context, _ storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(-hour), 1, []string{unknownValAddress}))
 			},
 			expErr: stakingtypes.ErrNoValidatorFound,
@@ -259,7 +446,7 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 		{
 			name: "earlier insert lowers the earliest and a later one keeps it",
 			malleate: func(ctx sdk.Context, _ storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				for _, t := range []time.Time{queueNow.Add(2 * hour), queueNow.Add(hour), queueNow.Add(3 * hour)} {
 					s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, t, 1, []string{unknownValAddress}))
 				}
@@ -269,7 +456,7 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 		{
 			name: "entry due by time but not by height stays queued and due",
 			malleate: func(ctx sdk.Context, _ storetypes.KVStore) {
-				s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(-hour), 20, []string{unknownValAddress}))
 			},
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(-hour)),
@@ -305,7 +492,7 @@ func (s *KeeperTestSuite) TestRedelegationQueueGateUsesHeaderTime() {
 	// gate must be too: a gate on the later block time would scan and dequeue the bypassed entry.
 	ctx := s.ctx.WithBlockTime(queueNow).WithHeaderInfo(header.Info{Time: queueNow.Add(-2 * time.Hour)})
 	store := ctx.KVStore(s.storeKey)
-	s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+	s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 	s.Require().NoError(q.insert(s, ctx, queueNow.Add(-time.Hour)))
 	store.Set(q.timeKey(queueNow.Add(-3*time.Hour)), q.slice())
 
@@ -321,7 +508,7 @@ func (s *KeeperTestSuite) setRawValidatorQueue(store storetypes.KVStore, t time.
 	store.Set(stakingtypes.GetValidatorQueueKey(t, 1), bz)
 }
 
-func (s *KeeperTestSuite) TestPopulateQueuePendingSlots() {
+func (s *KeeperTestSuite) TestRecomputeQueueEarliest() {
 	ctx := atQueueTime(s.ctx, queueNow)
 	store := ctx.KVStore(s.storeKey)
 	first := queueNow.Add(time.Hour)
@@ -341,7 +528,7 @@ func (s *KeeperTestSuite) TestPopulateQueuePendingSlots() {
 	}
 	// Upgrade handlers may call it on a chain whose end-block already recorded the times.
 	for range 2 {
-		s.Require().NoError(s.stakingKeeper.PopulateQueuePendingSlots(ctx))
+		s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 		for key, value := range expected {
 			s.Require().Equal(value, store.Get([]byte(key)))
 		}

@@ -322,10 +322,13 @@ that multiple validators exist in the queue at the same location.
 
 #### Queue Earliest Times
 
-Each queue above also keeps the time of its earliest entry, so `EndBlock` skips
-scanning a queue until that time is due. The value is `format(time)`, or `0x00`
-when the queue is empty; an absent key makes the next `EndBlock` scan the queue
-and record it.
+Each queue above also keeps a time whose queue key sorts at or before its first
+entry, so `EndBlock` skips scanning a queue until that time is due; each scan
+resets it to the first remaining entry. The value is `format(time)`, or `0x00`
+when the queue is empty. An absent key makes the next `EndBlock` scan the queue
+and record its first entry's time, or `0x00` if it is empty; the key stays
+absent while the first entry's time is outside years 0000-9999, which only a
+direct call to the queue setters can write.
 
 * ValidatorQueueEarliest: `0x44 -> format(time)`
 * UnbondingDelegationQueueEarliest: `0x45 -> format(time)`
