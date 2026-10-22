@@ -170,7 +170,10 @@ func (app SimApp) RegisterUpgradeHandlers() {
                 return nil, err
             }
             // crypto-org-chain fork: see Staking Queue Earliest-Time Gate below.
-            return versionMap, app.StakingKeeper.RecomputeQueueEarliest(ctx)
+            if err := app.StakingKeeper.RecomputeQueueEarliest(ctx); err != nil {
+                return nil, err
+            }
+            return versionMap, nil
         },
     )
 
