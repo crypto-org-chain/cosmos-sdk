@@ -371,9 +371,9 @@ func requireEarliestBound(t *testing.T, ctx sdk.Context, key *storetypes.KVStore
 // BenchmarkQueueEndBlock compares the unbonding queue end-block with upstream v0.55.0's scan on
 // goleveldb, whose iterators don't read ahead the way MemDB's do, with 50 and 500 future
 // timeslices. The after-5000-matured cases first mature and delete 5000 timeslices across
-// committed versions; an iterator over the queue still steps past those deleted keys. The gate
-// skips that iterator on idle blocks, while a due block pays it as upstream does. Each op also
-// creates a CacheContext, which costs the same in both columns.
+// committed versions; an iterator from the queue start still steps past those deleted keys, while
+// the gated scan starts at the stored time. Each op also creates a CacheContext, which costs the
+// same in both columns.
 func BenchmarkQueueEndBlock(b *testing.B) {
 	slice := func(n int) []stakingtypes.DVPair {
 		return []stakingtypes.DVPair{{DelegatorAddress: fmt.Sprint("del", n), ValidatorAddress: "val"}}
@@ -397,6 +397,7 @@ func BenchmarkQueueEndBlock(b *testing.B) {
 			b.Run(fmt.Sprintf("future-%d/%s", future, bc.name), func(b *testing.B) {
 				db, err := dbm.NewGoLevelDB("bench", b.TempDir(), nil)
 				require.NoError(b, err)
+				b.Cleanup(func() { require.NoError(b, db.Close()) })
 				ctx, k, _ := newQueueTestKeeperWithDB(b, db)
 				ctx = ctx.WithBlockTime(queueNow).WithHeaderInfo(header.Info{Time: queueNow})
 				require.NoError(b, k.RecomputeQueueEarliest(ctx))
@@ -452,6 +453,7 @@ func BenchmarkValidatorQueueEndBlock(b *testing.B) {
 		b.Run(bc.name, func(b *testing.B) {
 			db, err := dbm.NewGoLevelDB("bench", b.TempDir(), nil)
 			require.NoError(b, err)
+			b.Cleanup(func() { require.NoError(b, db.Close()) })
 			ctx, k, _ := newQueueTestKeeperWithDB(b, db)
 			ctx = ctx.WithBlockTime(queueNow).WithBlockHeight(10)
 			require.NoError(b, k.RecomputeQueueEarliest(ctx))

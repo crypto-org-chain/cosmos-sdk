@@ -323,17 +323,17 @@ that multiple validators exist in the queue at the same location.
 #### Queue Earliest Times
 
 Each queue above also keeps a time whose queue key sorts at or before its first
-entry, so `EndBlock` skips scanning a queue until that time is due; each scan
-resets it to the first remaining entry. The value is `format(time)`, or `0x00`
-when the queue is empty. An absent key makes the next `EndBlock` scan the queue
-and record its first entry's time, or `0x00` if it is empty. A time outside
+entry, so `EndBlock` skips scanning a queue until that time is due and then
+starts the scan there; each scan resets it to the first remaining entry. `0x00`
+marks an empty queue. An absent key makes the next `EndBlock` scan the queue
+from its start and record its first entry's time, or `0x00` if it is empty. A time outside
 years 0000-9999, which only a direct call to the queue setters can write,
 leaves the key absent when it is inserted, or while it is the queue's first
 entry.
 
-* ValidatorQueueEarliest: `0x44 -> format(time)`
-* UnbondingDelegationQueueEarliest: `0x45 -> format(time)`
-* RedelegationQueueEarliest: `0x46 -> format(time)`
+* ValidatorQueueEarliest: `0x44 -> format(time) | 0x00`
+* UnbondingDelegationQueueEarliest: `0x45 -> format(time) | 0x00`
+* RedelegationQueueEarliest: `0x46 -> format(time) | 0x00`
 
 ### HistoricalInfo
 
@@ -789,7 +789,8 @@ Within staking, certain state-transitions are not instantaneous but take place
 over a duration of time (typically the unbonding period). When these
 transitions are mature certain operations must take place in order to complete
 the state operation. This is achieved through the use of queues which are
-checked/processed at the end of each block.
+checked/processed at the end of each block, once their earliest time is due; see
+[Queue Earliest Times](#queue-earliest-times).
 
 #### Unbonding Validators
 
@@ -806,8 +807,7 @@ block height). At this point any mature validators which do not have any
 delegations remaining are deleted from state. For all other mature unbonding
 validators that still have remaining delegations, the `validator.Status` is
 switched from `types.Unbonding` to
-`types.Unbonded`. The check is skipped while the queue's earliest time is not
-yet due; see [Queue Earliest Times](#queue-earliest-times).
+`types.Unbonded`.
 
 Unbonding operations can be put on hold by external modules via the `PutUnbondingOnHold(unbondingId)` method.
  As a result, an unbonding operation (e.g., an unbonding delegation) that is on hold, cannot complete

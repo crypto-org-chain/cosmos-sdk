@@ -493,7 +493,7 @@ func (k Keeper) SetUBDQueueTimeSlice(ctx context.Context, timestamp time.Time, k
 	if err = store.Set(types.GetUnbondingDelegationTimeKey(timestamp), bz); err != nil {
 		return err
 	}
-	return k.lowerQueueEarliest(ctx, ubdQueueGate.queueGate, timestamp)
+	return k.lowerQueueEarliest(ctx, ubdQueueGate, timestamp)
 }
 
 // InsertUBDQueue inserts an unbonding delegation to the appropriate timeslice
@@ -788,7 +788,7 @@ func (k Keeper) SetRedelegationQueueTimeSlice(ctx context.Context, timestamp tim
 	if err = store.Set(types.GetRedelegationTimeKey(timestamp), bz); err != nil {
 		return err
 	}
-	return k.lowerQueueEarliest(ctx, redelegationQueueGate.queueGate, timestamp)
+	return k.lowerQueueEarliest(ctx, redelegationQueueGate, timestamp)
 }
 
 // InsertRedelegationQueue insert an redelegation delegation to the appropriate

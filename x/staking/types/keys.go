@@ -52,10 +52,9 @@ var (
 	ValidatorQueueKey    = []byte{0x43} // prefix for the timestamps in validator queue
 
 	// ValidatorQueueEarliestKey and the two keys after it hold a time whose queue key sorts at or
-	// before every entry of the queues above; end-block skips a queue scan until it is due. Fork
-	// v0.54.x stored a pending-slot list under the same keys, which the next end-block scan replaces.
-	// Write queue entries only through the keeper's queue setters, which lower these times; after a
-	// direct write, call Keeper.RecomputeQueueEarliest or the entry may wait past its time.
+	// before every entry of the queues above; end-block scans a queue only once it is due, starting
+	// there. Write queue entries only through the keeper's queue setters, which keep these times, or
+	// call Keeper.RecomputeQueueEarliest after a direct write.
 	ValidatorQueueEarliestKey    = []byte{0x44}
 	UBDQueueEarliestKey          = []byte{0x45}
 	RedelegationQueueEarliestKey = []byte{0x46}
