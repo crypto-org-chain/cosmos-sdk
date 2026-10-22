@@ -268,7 +268,8 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 			expEarliest: sdk.FormatTimeBytes(queueNow.Add(hour)),
 		},
 		{
-			name: "times outside the UnixNano range mature",
+			// Fork v0.54.x encoded times as UnixNano, which can't represent them.
+			name: "times past year 2262 mature",
 			malleate: func(q timeQueue, ctx sdk.Context, _ storetypes.KVStore) {
 				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().NoError(q.insert(s, ctx, time.Date(2300, 1, 1, 0, 0, 0, 0, time.UTC)))
@@ -663,6 +664,36 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			}
 		})
 	}
+}
+
+func (s *KeeperTestSuite) TestUnbondingQueueGateUsesCurrTime() {
+	q := timeQueues[0]
+	hour := time.Hour
+	// Unlike redelegations, unbonding delegations mature by the currTime argument, so the gate must
+	// use it too, not the block time.
+	s.Run("currTime after the block time matures", func() {
+		s.SetupTest()
+		ctx := atQueueTime(s.ctx, queueNow)
+		s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+		s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
+
+		matured, err := s.stakingKeeper.DequeueAllMatureUBDQueue(ctx, queueNow.Add(2*hour))
+		s.Require().NoError(err)
+		s.Require().Len(matured, 1)
+		s.Require().Equal(queueEmptyMarker, ctx.KVStore(s.storeKey).Get(q.earliestKey))
+	})
+	s.Run("currTime before the block time skips", func() {
+		s.SetupTest()
+		ctx := atQueueTime(s.ctx, queueNow.Add(2*hour))
+		s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+		s.Require().NoError(q.insert(s, ctx, queueNow.Add(hour)))
+
+		gasCtx := ctx.WithGasMeter(storetypes.NewGasMeter(math.MaxUint64))
+		matured, err := s.stakingKeeper.DequeueAllMatureUBDQueue(gasCtx, queueNow)
+		s.Require().NoError(err)
+		s.Require().Empty(matured)
+		s.requireOnlyEarliestRead(gasCtx, sdk.FormatTimeBytes(queueNow.Add(hour)))
+	})
 }
 
 func (s *KeeperTestSuite) TestRedelegationQueueGateUsesHeaderTime() {
