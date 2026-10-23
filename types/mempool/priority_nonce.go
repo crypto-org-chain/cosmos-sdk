@@ -37,7 +37,8 @@ type (
 		// - if MaxTx == 0, there is no cap on the number of transactions in the mempool
 		// - if MaxTx > 0, the mempool will cap the number of transactions it stores:
 		//   at capacity a tx for a new sender-nonce is rejected, while a tx for a pooled
-		//   sender-nonce is still checked against TxReplacement since it doesn't grow the pool.
+		//   sender-nonce still replaces it (subject to TxReplacement, if set) since it doesn't
+		//   grow the pool.
 		// - if MaxTx < 0, `Insert` is a no-op.
 		MaxTx int
 
@@ -201,11 +202,11 @@ func (mp *PriorityNonceMempool[C]) NextSenderTx(sender string) sdk.Tx {
 // GetTx returns the pooled transaction for a given sender and nonce in O(log n) time.
 // sender is the String() of the first signer from the SignerExtractor, and nonce is its
 // sequence (for an unordered tx, its timeout timestamp in Unix nanoseconds; see ChooseNonce).
-// The result reflects this node's pool only, and is a snapshot: a later Insert re-applies
-// TxReplacement under the lock.
-// It takes the mempool lock, so it must not be called from a mempool callback
-// (SignerExtractor, TxPriority, TxReplacement) or a SelectBy callback, such as an ante
-// handler run during PrepareProposal.
+// The result reflects this node's pool only, and is a snapshot: the tx may be replaced or
+// removed before a later Insert, which re-checks under the lock and treats a removed one's
+// sender and nonce as new.
+// It takes the mempool lock, so it must not be called from TxReplacement or a SelectBy
+// callback, such as an ante handler run during PrepareProposal.
 func (mp *PriorityNonceMempool[C]) GetTx(sender string, nonce uint64) (sdk.Tx, bool) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
@@ -227,14 +228,13 @@ func (mp *PriorityNonceMempool[C]) GetTx(sender string, nonce uint64) (sdk.Tx, b
 //
 // Transactions are unique by sender and nonce. A tx for a pooled sender and nonce
 // replaces the pooled tx, changing the total order of the mempool, unless
-// TxReplacement rejects it with ErrTxReplacement.
+// TxReplacement is set and returns false, in which case Insert returns ErrTxReplacement.
 func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error {
-	mp.mtx.Lock()
-	defer mp.mtx.Unlock()
 	if mp.cfg.MaxTx < 0 {
 		return nil
 	}
 
+	// Derive the key outside the lock, as Remove does.
 	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
 	if err != nil {
 		return err
@@ -251,6 +251,8 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 		return err
 	}
 
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
 	sk := txMeta[C]{nonce: nonce, sender: sender}
 	oldScore, txExists := mp.scores[sk]
 	// A replacement doesn't grow the pool, so a full pool still applies the replacement rule.
@@ -275,8 +277,7 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	// re-insert it to avoid having the same tx with different priorityIndex indexed
 	// twice in the mempool.
 	//
-	// This O(log n) remove operation is rare and only happens when a tx's priority
-	// changes.
+	// This O(log n) remove operation happens on every accepted replacement.
 	if txExists {
 		if mp.cfg.TxReplacement != nil && !mp.cfg.TxReplacement(oldScore.priority, priority, senderIndex.Get(key).Value.(sdk.Tx), tx) {
 			return fmt.Errorf("%w, oldPriority: %v, newPriority: %v", ErrTxReplacement, oldScore.priority, priority)

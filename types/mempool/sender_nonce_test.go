@@ -173,6 +173,7 @@ func (s *MempoolTestSuite) TestMaxTx() {
 	overwrite := testTx{nonce: 0, address: accounts[0].Address, priority: tx.priority + 1}
 	require.NoError(t, mp.Insert(ctx, overwrite))
 	require.Equal(t, 1, mp.CountTx())
+	require.Equal(t, sdk.Tx(overwrite), mp.Select(ctx, nil).Tx())
 }
 
 func (s *MempoolTestSuite) TestTxRejectedWithUnorderedAndSequence() {
