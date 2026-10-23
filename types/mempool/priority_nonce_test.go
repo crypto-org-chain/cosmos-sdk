@@ -1034,6 +1034,24 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, replacement, pooled)
 
+	// a full pool applies the replacement rule, not the capacity error
+	mp = mempool.NewPriorityMempool(
+		mempool.PriorityNonceMempoolConfig[int64]{
+			TxPriority:      mempool.NewDefaultTxPriority(),
+			MaxTx:           1,
+			TxReplacement:   func(op, np int64, _, _ sdk.Tx) bool { return np > op },
+			SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
+		},
+	)
+	require.NoError(t, mp.Insert(ctx.WithPriority(txs[0].priority), txs[0]))
+	lower := testTx{priority: 10, nonce: 1, address: sa}
+	err := mp.Insert(ctx.WithPriority(lower.priority), lower)
+	require.ErrorContains(t, err, "replacement rule")
+	require.NotErrorIs(t, err, mempool.ErrMempoolTxMaxCapacity)
+	pooled, ok = mp.GetTx(sa.String(), 1)
+	require.True(t, ok)
+	require.Equal(t, txs[0], pooled)
+
 	// disabled
 	mp = mempool.NewPriorityMempool(
 		mempool.PriorityNonceMempoolConfig[int64]{
