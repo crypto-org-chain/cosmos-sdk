@@ -845,39 +845,46 @@ func TestPriorityNonceMempool_GetTx(t *testing.T) {
 	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
 	accA := accounts[0].Address
 	accB := accounts[1].Address
-
-	mp := mempool.DefaultPriorityMempool()
-	txs := []testTx{
-		{priority: 20, nonce: 1, address: accA},
-		{priority: 15, nonce: 3, address: accA},
-		{priority: 30, nonce: 3, address: accA}, // replaces the nonce 3 tx
-	}
-	for _, tx := range txs {
-		require.NoError(t, mp.Insert(ctx.WithPriority(tx.priority), tx))
-	}
+	a1 := testTx{priority: 20, nonce: 1, address: accA}
+	a3 := testTx{priority: 15, nonce: 3, address: accA}
+	a3Higher := testTx{priority: 30, nonce: 3, address: accA}
+	a3Lower := testTx{priority: 10, nonce: 3, address: accA}
 
 	testCases := []struct {
 		name   string
+		insert []testTx // a rejected replacement is ignored
+		remove []testTx
 		sender string
 		nonce  uint64
 		expTx  sdk.Tx
 	}{
-		{name: "pooled", sender: accA.String(), nonce: 1, expTx: txs[0]},
-		{name: "replaced", sender: accA.String(), nonce: 3, expTx: txs[2]},
-		{name: "nonce gap", sender: accA.String(), nonce: 2},
-		{name: "unknown sender", sender: accB.String(), nonce: 1},
+		{name: "pooled", insert: []testTx{a1, a3}, sender: accA.String(), nonce: 1, expTx: a1},
+		{name: "replaced", insert: []testTx{a1, a3, a3Higher}, sender: accA.String(), nonce: 3, expTx: a3Higher},
+		{name: "rejected replacement keeps the original", insert: []testTx{a3, a3Lower}, sender: accA.String(), nonce: 3, expTx: a3},
+		{name: "nonce gap", insert: []testTx{a1, a3}, sender: accA.String(), nonce: 2},
+		{name: "unknown sender", insert: []testTx{a1}, sender: accB.String(), nonce: 1},
+		{name: "removed", insert: []testTx{a1, a3}, remove: []testTx{a1}, sender: accA.String(), nonce: 1},
+		{name: "sender's only tx removed", insert: []testTx{a1}, remove: []testTx{a1}, sender: accA.String(), nonce: 1},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			mp := mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+				TxPriority:      mempool.NewDefaultTxPriority(),
+				TxReplacement:   func(op, np int64, _, _ sdk.Tx) bool { return np > op },
+				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
+			})
+			for _, tx := range tc.insert {
+				_ = mp.Insert(ctx.WithPriority(tx.priority), tx)
+			}
+			for _, tx := range tc.remove {
+				require.NoError(t, mp.Remove(tx))
+			}
+
 			tx, ok := mp.GetTx(tc.sender, tc.nonce)
 			require.Equal(t, tc.expTx != nil, ok)
 			require.Equal(t, tc.expTx, tx)
 		})
 	}
-
-	require.NoError(t, mp.Remove(txs[0]))
-	_, ok := mp.GetTx(accA.String(), 1)
-	require.False(t, ok)
 }
 
 func TestPriorityNonceMempool_UnorderedTxsSnapshot(t *testing.T) {
