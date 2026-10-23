@@ -947,6 +947,18 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 		close(stopCh)
 	}()
 
+	// Replace a pooled nonce concurrently, so GetTx races with the replacement path too.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			tx := testTx{id: iterations + i, priority: int64(i + 10), nonce: 1, address: account}
+			if err := mp.Insert(ctx.WithPriority(tx.priority), tx); err != nil {
+				panic(err)
+			}
+		}
+	}()
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -962,6 +974,7 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 						}
 					}()
 					_ = mp.NextSenderTx(account.String())
+					_, _ = mp.GetTx(account.String(), 1)
 				}()
 			}
 		}
@@ -970,7 +983,7 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 
 	if v := panicVal.Load(); v != nil {
-		t.Fatalf("NextSenderTx panicked under concurrent access: %v", v)
+		t.Fatalf("NextSenderTx or GetTx panicked under concurrent access: %v", v)
 	}
 }
 

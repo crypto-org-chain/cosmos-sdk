@@ -14,6 +14,7 @@ import (
 var (
 	_ ExtMempool       = (*PriorityNonceMempool[int64])(nil)
 	_ UnorderedMempool = (*PriorityNonceMempool[int64])(nil)
+	_ TxLookupMempool  = (*PriorityNonceMempool[int64])(nil)
 	_ Iterator         = (*PriorityNonceIterator[int64])(nil)
 )
 

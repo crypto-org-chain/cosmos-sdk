@@ -38,6 +38,15 @@ type ExtMempool interface {
 	RemoveWithReason(context.Context, sdk.Tx, RemoveReason) error
 }
 
+// TxLookupMempool is implemented by mempools that can look up a pooled tx by its
+// first signer and nonce.
+type TxLookupMempool interface {
+	Mempool
+
+	// GetTx returns the tx pooled at sender and nonce, if any.
+	GetTx(sender string, nonce uint64) (sdk.Tx, bool)
+}
+
 // UnorderedMempool is implemented by mempools that can list pooled txs
 // without paying for priority ordering.
 type UnorderedMempool interface {
