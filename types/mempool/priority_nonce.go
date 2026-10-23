@@ -35,9 +35,9 @@ type (
 		// MaxTx sets the maximum number of transactions allowed in the mempool with
 		// the semantics:
 		// - if MaxTx == 0, there is no cap on the number of transactions in the mempool
-		// - if MaxTx > 0, the mempool will cap the number of transactions it stores,
-		//   and will prioritize transactions by their priority and sender-nonce
-		//   (sequence number) when evicting transactions.
+		// - if MaxTx > 0, the mempool will cap the number of transactions it stores:
+		//   at capacity a tx for a new sender-nonce is rejected, while a tx for a pooled
+		//   sender-nonce is still checked against TxReplacement since it doesn't grow the pool.
 		// - if MaxTx < 0, `Insert` is a no-op.
 		MaxTx int
 
@@ -201,7 +201,8 @@ func (mp *PriorityNonceMempool[C]) NextSenderTx(sender string) sdk.Tx {
 // GetTx returns the pooled transaction for a given sender and nonce in O(log n) time.
 // sender is the String() of the first signer from the SignerExtractor, and nonce is its
 // sequence (for an unordered tx, its timeout timestamp in Unix nanoseconds; see ChooseNonce).
-// The result reflects this node's pool only.
+// The result reflects this node's pool only, and is a snapshot: a later Insert re-applies
+// TxReplacement under the lock.
 // It takes the mempool lock, so it must not be called from a mempool callback
 // (SignerExtractor, TxPriority, TxReplacement) or a SelectBy callback, such as an ante
 // handler run during PrepareProposal.
@@ -224,11 +225,9 @@ func (mp *PriorityNonceMempool[C]) GetTx(sender string, nonce uint64) (sdk.Tx, b
 // returning an error if unsuccessful. Sender and nonce are derived from the
 // transaction's first signature.
 //
-// Transactions are unique by sender and nonce. Inserting a duplicate tx is an
-// O(log n) no-op.
-//
-// Inserting a duplicate tx with a different priority overwrites the existing tx,
-// changing the total order of the mempool.
+// Transactions are unique by sender and nonce. A tx for a pooled sender and nonce
+// replaces the pooled tx, changing the total order of the mempool, unless
+// TxReplacement rejects it with ErrTxReplacement.
 func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
@@ -280,13 +279,7 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	// changes.
 	if txExists {
 		if mp.cfg.TxReplacement != nil && !mp.cfg.TxReplacement(oldScore.priority, priority, senderIndex.Get(key).Value.(sdk.Tx), tx) {
-			return fmt.Errorf(
-				"tx doesn't fit the replacement rule, oldPriority: %v, newPriority: %v, oldTx: %v, newTx: %v",
-				oldScore.priority,
-				priority,
-				senderIndex.Get(key).Value.(sdk.Tx),
-				tx,
-			)
+			return fmt.Errorf("%w, oldPriority: %v, newPriority: %v", ErrTxReplacement, oldScore.priority, priority)
 		}
 
 		oldKey := txMeta[C]{nonce: nonce, sender: sender, priority: oldScore.priority, weight: oldScore.weight}

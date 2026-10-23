@@ -168,6 +168,11 @@ func (s *MempoolTestSuite) TestMaxTx() {
 	ctx = ctx.WithPriority(tx.priority)
 	err = mp.Insert(ctx, tx2)
 	require.Equal(t, mempool.ErrMempoolTxMaxCapacity, err)
+
+	// a full pool still overwrites a pooled sender and nonce
+	overwrite := testTx{nonce: 0, address: accounts[0].Address, priority: tx.priority + 1}
+	require.NoError(t, mp.Insert(ctx, overwrite))
+	require.Equal(t, 1, mp.CountTx())
 }
 
 func (s *MempoolTestSuite) TestTxRejectedWithUnorderedAndSequence() {

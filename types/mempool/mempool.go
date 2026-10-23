@@ -80,6 +80,7 @@ type Iterator interface {
 var (
 	ErrTxNotFound           = errors.New("tx not found in mempool")
 	ErrMempoolTxMaxCapacity = errors.New("pool reached max tx capacity")
+	ErrTxReplacement        = errors.New("tx doesn't fit the replacement rule")
 )
 
 // SelectBy is compatible with old interface to avoid breaking api.

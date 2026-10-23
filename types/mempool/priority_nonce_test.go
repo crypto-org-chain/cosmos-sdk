@@ -849,6 +849,8 @@ func TestPriorityNonceMempool_GetTx(t *testing.T) {
 	a3 := testTx{priority: 15, nonce: 3, address: accA}
 	a3Higher := testTx{priority: 30, nonce: 3, address: accA}
 	a3Lower := testTx{priority: 10, nonce: 3, address: accA}
+	timeout := time.Now().Add(time.Hour)
+	unordered := testTx{priority: 5, address: accB, unordered: true, timeout: &timeout}
 
 	testCases := []struct {
 		name   string
@@ -865,6 +867,7 @@ func TestPriorityNonceMempool_GetTx(t *testing.T) {
 		{name: "unknown sender", insert: []testTx{a1}, sender: accB.String(), nonce: 1},
 		{name: "removed", insert: []testTx{a1, a3}, remove: []testTx{a1}, sender: accA.String(), nonce: 1},
 		{name: "sender's only tx removed", insert: []testTx{a1}, remove: []testTx{a1}, sender: accA.String(), nonce: 1},
+		{name: "unordered tx by its timeout", insert: []testTx{unordered}, sender: accB.String(), nonce: uint64(timeout.UnixNano()), expTx: unordered},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1033,6 +1036,10 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	pooled, ok := mp.GetTx(sa.String(), 1)
 	require.True(t, ok)
 	require.Equal(t, replacement, pooled)
+	selected := fetchTxs(mp.Select(ctx, nil), 10)
+	require.Len(t, selected, 3)
+	require.Contains(t, selected, sdk.Tx(replacement))
+	require.NotContains(t, selected, sdk.Tx(txs[0]))
 
 	// a full pool applies the replacement rule, not the capacity error
 	mp = mempool.NewPriorityMempool(
@@ -1046,7 +1053,7 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	require.NoError(t, mp.Insert(ctx.WithPriority(txs[0].priority), txs[0]))
 	lower := testTx{priority: 10, nonce: 1, address: sa}
 	err := mp.Insert(ctx.WithPriority(lower.priority), lower)
-	require.ErrorContains(t, err, "replacement rule")
+	require.ErrorIs(t, err, mempool.ErrTxReplacement)
 	require.NotErrorIs(t, err, mempool.ErrMempoolTxMaxCapacity)
 	pooled, ok = mp.GetTx(sa.String(), 1)
 	require.True(t, ok)

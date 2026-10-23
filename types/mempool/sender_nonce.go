@@ -121,9 +121,6 @@ func (snm *SenderNonceMempool) NextSenderTx(sender string) sdk.Tx {
 func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 	snm.mtx.Lock()
 	defer snm.mtx.Unlock()
-	if snm.maxTx > 0 && len(snm.existingTx) >= snm.maxTx {
-		return ErrMempoolTxMaxCapacity
-	}
 	if snm.maxTx < 0 {
 		return nil
 	}
@@ -143,6 +140,12 @@ func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 		return err
 	}
 
+	key := txKey{nonce: nonce, address: sender}
+	// Overwriting a pooled sender and nonce doesn't grow the pool, so a full pool still accepts it.
+	if snm.maxTx > 0 && !snm.existingTx[key] && len(snm.existingTx) >= snm.maxTx {
+		return ErrMempoolTxMaxCapacity
+	}
+
 	senderTxs, found := snm.senders[sender]
 	if !found {
 		senderTxs = skiplist.New(skiplist.Uint64)
@@ -150,8 +153,6 @@ func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 	}
 
 	senderTxs.Set(nonce, tx)
-
-	key := txKey{nonce: nonce, address: sender}
 	snm.existingTx[key] = true
 
 	return nil
