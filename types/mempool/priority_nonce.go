@@ -232,9 +232,7 @@ func (mp *PriorityNonceMempool[C]) GetTx(sender string, nonce uint64) (sdk.Tx, b
 func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
-	if mp.cfg.MaxTx > 0 && mp.priorityIndex.Len() >= mp.cfg.MaxTx {
-		return ErrMempoolTxMaxCapacity
-	} else if mp.cfg.MaxTx < 0 {
+	if mp.cfg.MaxTx < 0 {
 		return nil
 	}
 
@@ -252,6 +250,13 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	nonce, err := ChooseNonce(sig.Sequence, tx)
 	if err != nil {
 		return err
+	}
+
+	sk := txMeta[C]{nonce: nonce, sender: sender}
+	oldScore, txExists := mp.scores[sk]
+	// A replacement doesn't grow the pool, so a full pool still applies the replacement rule.
+	if !txExists && mp.cfg.MaxTx > 0 && mp.priorityIndex.Len() >= mp.cfg.MaxTx {
+		return ErrMempoolTxMaxCapacity
 	}
 
 	key := txMeta[C]{nonce: nonce, priority: priority, sender: sender}
@@ -273,8 +278,7 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	//
 	// This O(log n) remove operation is rare and only happens when a tx's priority
 	// changes.
-	sk := txMeta[C]{nonce: nonce, sender: sender}
-	if oldScore, txExists := mp.scores[sk]; txExists {
+	if txExists {
 		if mp.cfg.TxReplacement != nil && !mp.cfg.TxReplacement(oldScore.priority, priority, senderIndex.Get(key).Value.(sdk.Tx), tx) {
 			return fmt.Errorf(
 				"tx doesn't fit the replacement rule, oldPriority: %v, newPriority: %v, oldTx: %v, newTx: %v",

@@ -1026,6 +1026,13 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 			require.Equal(t, 3, mp.CountTx())
 		}
 	}
+	// a full pool still replaces a pooled tx
+	replacement := testTx{priority: 30, nonce: 1, address: sa}
+	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement))
+	require.Equal(t, 3, mp.CountTx())
+	pooled, ok := mp.GetTx(sa.String(), 1)
+	require.True(t, ok)
+	require.Equal(t, replacement, pooled)
 
 	// disabled
 	mp = mempool.NewPriorityMempool(
