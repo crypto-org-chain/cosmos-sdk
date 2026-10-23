@@ -306,8 +306,8 @@ func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 
 // ValidatorQueueKeyTimeBytes returns the formatted time inside a key created by
 // GetValidatorQueueKey, or nil if the key lacks the validator queue prefix or is too short for its
-// length field or for the time length that field declares.
-// The result shares bz's memory.
+// length field or for the time length that field declares. The result shares bz's memory, without
+// spare capacity, so appending to it can't overwrite the height.
 func ValidatorQueueKeyTimeBytes(bz []byte) []byte {
 	start := len(ValidatorQueueKey) + 8
 	if len(bz) < start || !bytes.HasPrefix(bz, ValidatorQueueKey) {
@@ -317,7 +317,8 @@ func ValidatorQueueKeyTimeBytes(bz []byte) []byte {
 	if timeBzL > uint64(len(bz)-start) {
 		return nil
 	}
-	return bz[start : start+int(timeBzL)]
+	end := start + int(timeBzL)
+	return bz[start:end:end]
 }
 
 // GetDelegationKey creates the key for delegator bond with validator

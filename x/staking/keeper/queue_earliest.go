@@ -39,7 +39,7 @@ func newTimeQueueGate(earliestKey, queuePrefix []byte) queueGate {
 	return queueGate{
 		earliestKey:  earliestKey,
 		queuePrefix:  queuePrefix,
-		keyTimeBytes: func(key []byte) []byte { return key[len(queuePrefix):] },
+		keyTimeBytes: func(key []byte) []byte { return key[len(queuePrefix):len(key):len(key)] },
 		firstKeyAt: func(timeBz []byte) []byte {
 			return append(append(make([]byte, 0, len(queuePrefix)+len(timeBz)), queuePrefix...), timeBz...)
 		},
@@ -81,7 +81,7 @@ type queueEarliest struct {
 	empty bool
 }
 
-// due reports whether end-block has to scan the queue at nowBz, the formatted block time.
+// due reports whether end-block has to scan the queue at nowBz, the formatted maturity cutoff.
 func (e queueEarliest) due(nowBz []byte) bool {
 	return !e.known || (!e.empty && bytes.Compare(e.raw, nowBz) <= 0)
 }
@@ -124,9 +124,9 @@ func (k Keeper) PopulateQueuePendingSlots(ctx context.Context) error {
 	return k.RecomputeQueueEarliest(ctx)
 }
 
-// runGatedScan runs scan once g's earliest time is due at nowBz, the formatted block time. scan
-// returns the value stored when it finishes and the earliest time to store, which is written if it
-// differs.
+// runGatedScan runs scan once g's earliest time is due at nowBz, the formatted maturity cutoff.
+// scan returns the value stored when it finishes and the earliest time to store, which is written
+// if it differs.
 func (k Keeper) runGatedScan(ctx context.Context, g queueGate, nowBz []byte, scan func(earliest queueEarliest) (stored, next []byte, err error)) error {
 	earliest, err := k.getQueueEarliest(ctx, g)
 	if err != nil {
