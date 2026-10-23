@@ -446,7 +446,9 @@ func TestValidatorQueueKeyTimeBytes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.expTime, types.ValidatorQueueKeyTimeBytes(tc.key))
+			timeBz := types.ValidatorQueueKeyTimeBytes(tc.key)
+			require.Equal(t, tc.expTime, timeBz)
+			require.Equal(t, len(timeBz), cap(timeBz), "spare capacity would let appends overwrite the height")
 
 			ts, height, err := types.ParseValidatorQueueKey(tc.key)
 			if tc.expParseErr {
