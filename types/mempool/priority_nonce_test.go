@@ -877,7 +877,12 @@ func TestPriorityNonceMempool_GetTx(t *testing.T) {
 				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
 			})
 			for _, tx := range tc.insert {
-				_ = mp.Insert(ctx.WithPriority(tx.priority), tx)
+				err := mp.Insert(ctx.WithPriority(tx.priority), tx)
+				if tx.priority == a3Lower.priority { // the one rejected replacement
+					require.ErrorIs(t, err, mempool.ErrTxReplacement)
+					continue
+				}
+				require.NoError(t, err)
 			}
 			for _, tx := range tc.remove {
 				require.NoError(t, mp.Remove(tx))
@@ -1141,12 +1146,12 @@ func TestNextSenderTx_TxReplacement(t *testing.T) {
 	checkNextSenderTx(sa.String(), txs[0])
 
 	c = ctx.WithPriority(txs[1].priority)
-	require.Error(t, mp.Insert(c, txs[1], mempool.InsertOption{}))
+	require.ErrorIs(t, mp.Insert(c, txs[1], mempool.InsertOption{}), mempool.ErrTxReplacement)
 	require.Equal(t, 1, mp.CountTx())
 	checkNextSenderTx(sa.String(), txs[0])
 
 	c = ctx.WithPriority(txs[2].priority)
-	require.Error(t, mp.Insert(c, txs[2], mempool.InsertOption{}))
+	require.ErrorIs(t, mp.Insert(c, txs[2], mempool.InsertOption{}), mempool.ErrTxReplacement)
 	require.Equal(t, 1, mp.CountTx())
 	checkNextSenderTx(sa.String(), txs[0])
 
