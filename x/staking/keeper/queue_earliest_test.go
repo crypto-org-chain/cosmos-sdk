@@ -506,6 +506,17 @@ func (s *KeeperTestSuite) TestQueueTimesOutsideSortableRange() {
 	}
 }
 
+func (s *KeeperTestSuite) TestValidatorGateScansPastYear9999() {
+	ctx := atQueueTime(s.ctx, queueNow).WithBlockHeight(10)
+	s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+	s.Require().NoError(s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, queueNow.Add(time.Hour), 1, []string{unknownValAddress}))
+
+	// Upstream's scan bound for a 30-byte block time sorts after every 29-byte key, so the entry is
+	// due, although "2030-..." sorts after "10000-..." byte by byte. The scan fails on it.
+	err := s.stakingKeeper.UnbondAllMatureValidators(atQueueTime(ctx, time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)))
+	s.Require().ErrorIs(err, stakingtypes.ErrNoValidatorFound)
+}
+
 func (s *KeeperTestSuite) TestPopulateQueuePendingSlotsAlias() {
 	ctx := atQueueTime(s.ctx, queueNow)
 	store := ctx.KVStore(s.storeKey)
