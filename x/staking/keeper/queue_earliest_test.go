@@ -467,7 +467,7 @@ func (s *KeeperTestSuite) TestQueueTimesOutsideSortableRange() {
 			expMatured:  1,
 		},
 		{
-			name: "recompute clears a known time when the first entry is unsortable",
+			name: "recompute clears the empty marker when the only entry is unsortable",
 			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
 				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
 				s.Require().Equal(queueEmptyMarker, store.Get(stakingtypes.ValidatorQueueEarliestKey))
@@ -476,6 +476,18 @@ func (s *KeeperTestSuite) TestQueueTimesOutsideSortableRange() {
 			},
 			endBlock:    func(sdk.Context) (int, error) { return 0, nil },
 			earliestKey: stakingtypes.ValidatorQueueEarliestKey,
+		},
+		{
+			name: "recompute clears a known time when the first entry is unsortable",
+			malleate: func(ctx sdk.Context, store storetypes.KVStore) {
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+				s.Require().NoError(ubd.insert(s, ctx, queueNow.Add(hour)))
+				// "10000-..." sorts before "2030-...", so it becomes the first entry.
+				store.Set(ubd.timeKey(time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)), ubd.slice())
+				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
+			},
+			endBlock:    func(sdk.Context) (int, error) { return 0, nil },
+			earliestKey: ubd.earliestKey,
 		},
 	}
 
