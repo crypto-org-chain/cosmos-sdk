@@ -76,7 +76,8 @@ type (
 	// priorities. Priorities must be comparable.
 	TxPriority[C comparable] struct {
 		// GetTxPriority returns the priority of the transaction. A priority must be
-		// comparable via Compare.
+		// comparable via Compare. Insert calls it without the mempool lock, so it must be
+		// safe for concurrent use.
 		GetTxPriority func(ctx context.Context, tx sdk.Tx) C
 
 		// Compare compares two transaction priorities. The result must be 0 if
@@ -234,7 +235,7 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 		return nil
 	}
 
-	// Derive the key outside the lock, as Remove does.
+	// Derive the key and priority outside the lock; the config doesn't change after construction.
 	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
 	if err != nil {
 		return err

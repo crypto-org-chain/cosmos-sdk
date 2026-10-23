@@ -853,16 +853,17 @@ func TestPriorityNonceMempool_GetTx(t *testing.T) {
 	unordered := testTx{priority: 5, address: accB, unordered: true, timeout: &timeout}
 
 	testCases := []struct {
-		name   string
-		insert []testTx // a rejected replacement is ignored
-		remove []testTx
-		sender string
-		nonce  uint64
-		expTx  sdk.Tx
+		name     string
+		insert   []testTx
+		rejected []testTx // inserted after insert, each refused by TxReplacement
+		remove   []testTx
+		sender   string
+		nonce    uint64
+		expTx    sdk.Tx
 	}{
 		{name: "pooled", insert: []testTx{a1, a3}, sender: accA.String(), nonce: 1, expTx: a1},
 		{name: "replaced", insert: []testTx{a1, a3, a3Higher}, sender: accA.String(), nonce: 3, expTx: a3Higher},
-		{name: "rejected replacement keeps the original", insert: []testTx{a3, a3Lower}, sender: accA.String(), nonce: 3, expTx: a3},
+		{name: "rejected replacement keeps the original", insert: []testTx{a3}, rejected: []testTx{a3Lower}, sender: accA.String(), nonce: 3, expTx: a3},
 		{name: "nonce gap", insert: []testTx{a1, a3}, sender: accA.String(), nonce: 2},
 		{name: "unknown sender", insert: []testTx{a1}, sender: accB.String(), nonce: 1},
 		{name: "removed", insert: []testTx{a1, a3}, remove: []testTx{a1}, sender: accA.String(), nonce: 1},
@@ -877,12 +878,10 @@ func TestPriorityNonceMempool_GetTx(t *testing.T) {
 				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
 			})
 			for _, tx := range tc.insert {
-				err := mp.Insert(ctx.WithPriority(tx.priority), tx)
-				if tx.priority == a3Lower.priority { // the one rejected replacement
-					require.ErrorIs(t, err, mempool.ErrTxReplacement)
-					continue
-				}
-				require.NoError(t, err)
+				require.NoError(t, mp.Insert(ctx.WithPriority(tx.priority), tx))
+			}
+			for _, tx := range tc.rejected {
+				require.ErrorIs(t, mp.Insert(ctx.WithPriority(tx.priority), tx), mempool.ErrTxReplacement)
 			}
 			for _, tx := range tc.remove {
 				require.NoError(t, mp.Remove(tx))
@@ -1063,6 +1062,12 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	pooled, ok = mp.GetTx(sa.String(), 1)
 	require.True(t, ok)
 	require.Equal(t, txs[0], pooled)
+
+	// a full pool reports a malformed tx's own error, not the capacity error a retry would follow
+	malformed := testTx{nonce: 1, address: sb, unordered: true} // an unordered tx can't carry a sequence
+	err = mp.Insert(ctx, malformed)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, mempool.ErrMempoolTxMaxCapacity)
 
 	// disabled
 	mp = mempool.NewPriorityMempool(
