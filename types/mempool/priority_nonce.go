@@ -199,6 +199,8 @@ func (mp *PriorityNonceMempool[C]) NextSenderTx(sender string) sdk.Tx {
 }
 
 // GetTx returns the pooled transaction for a given sender and nonce in O(log n) time.
+// It takes the mempool lock, so it must not be called from a SelectBy callback, such as
+// an ante handler run during PrepareProposal.
 func (mp *PriorityNonceMempool[C]) GetTx(sender string, nonce uint64) (sdk.Tx, bool) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
