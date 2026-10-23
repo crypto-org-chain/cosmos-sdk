@@ -119,7 +119,7 @@ func gatedSkip(tb testing.TB, ctx sdk.Context, key *storetypes.KVStoreKey, earli
 	if !notDue {
 		return false
 	}
-	require.Equal(tb, earliestReadGas(meteredCtx.KVGasConfig(), len(stored)), meteredCtx.GasMeter().GasConsumed(), "scanned although not due")
+	requireOnlyEarliestRead(tb, meteredCtx, stored)
 	return true
 }
 
