@@ -404,3 +404,60 @@ func TestParseRotationLockedConsAddrIndexValue_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatorQueueTimePrefix(t *testing.T) {
+	at := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	timeBz := sdk.FormatTimeBytes(at)
+	prefix := types.ValidatorQueueTimePrefix(timeBz)
+
+	require.True(t, bytes.HasPrefix(types.GetValidatorQueueKey(at, 0), prefix))
+	require.Equal(t, len(prefix), cap(prefix), "spare capacity would let appends to the prefix share memory")
+	require.Negative(t, bytes.Compare(prefix, types.GetValidatorQueueKey(at, 0)))
+	require.Positive(t, bytes.Compare(prefix, types.GetValidatorQueueKey(at.Add(-time.Nanosecond), math2.MaxInt64)))
+	require.Equal(t, timeBz, types.ValidatorQueueKeyTimeBytes(prefix))
+	// The layout of keys already in state: prefix | time length | time | height.
+	require.Equal(t,
+		"43"+"000000000000001d"+hex.EncodeToString(timeBz)+"0000000000000007",
+		hex.EncodeToString(types.GetValidatorQueueKey(at, 7)))
+}
+
+func TestValidatorQueueKeyTimeBytes(t *testing.T) {
+	at := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	key := types.GetValidatorQueueKey(at, 7)
+	prefixLen := len(types.ValidatorQueueKey)
+
+	testCases := []struct {
+		name        string
+		key         []byte
+		expTime     []byte
+		expParseErr bool
+		expHeight   int64
+	}{
+		{"well-formed key", key, sdk.FormatTimeBytes(at), false, 7},
+		{"empty key", nil, nil, true, 0},
+		{"wrong prefix", append([]byte{0x41}, key[prefixLen:]...), nil, true, 0},
+		{"shorter than the length field", key[:prefixLen+4], nil, true, 0},
+		{"length field past the key end", key[:prefixLen+8+25], nil, true, 0},
+		{"partial height", key[:len(key)-3], sdk.FormatTimeBytes(at), true, 0},
+		// Read as upstream v0.55.0 reads them.
+		{"no height", key[:len(key)-8], sdk.FormatTimeBytes(at), false, 0},
+		{"bytes after the height", append(bytes.Clone(key), 0), sdk.FormatTimeBytes(at), false, 7},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			timeBz := types.ValidatorQueueKeyTimeBytes(tc.key)
+			require.Equal(t, tc.expTime, timeBz)
+			require.Equal(t, len(timeBz), cap(timeBz), "spare capacity would let appends overwrite the height")
+
+			ts, height, err := types.ParseValidatorQueueKey(tc.key)
+			if tc.expParseErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, at, ts)
+			require.Equal(t, tc.expHeight, height)
+		})
+	}
+}
