@@ -44,7 +44,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Remove the fork v0.54.x pending-slot API: the `Keeper` methods `Get`/`Set`/`Add{Validator,UBD,Redelegation}QueuePendingSlot(s)` and `RemoveValidatorQueuePendingSlot`, `types.TimeHeightQueueSlot`, and `ErrPendingQueueSlotMissingCount`/`ErrPendingQueueSlotInsufficientCapacity`. Those errors had codes 46/47, which v0.55 gives to key rotation's `ErrConsensusPubKeyAlreadyUsedForValidator`/`ErrConsensusPubKeyInRotationHistory`.
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Rename `types.{Validator,UBD,Redelegation}QueuePendingSlotsKey` to `*QueueEarliestKey`: same bytes, new value format.
 * (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `DequeueAllMatureRedelegationQueue` again matures by `HeaderInfo().Time` and ignores `currTime`, as in upstream.
-* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `types.ParseValidatorQueueKey` returns an error instead of panicking on a key too short for its prefix, time or height; keys it read before parse the same.
 
 ### State Machine Breaking
 
@@ -64,6 +63,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `types.ParseValidatorQueueKey` returns an error instead of panicking on a key too short for its prefix, time or height; keys it read before parse the same.
 * (store) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (port of upstream [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586), closed unmerged).
 * (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport of [#1808](https://github.com/crypto-org-chain/cosmos-sdk/pull/1808) from `release/v0.53.x`).
 * (baseapp) [#1849](https://github.com/crypto-org-chain/cosmos-sdk/pull/1849) Close the query multistore when a gRPC query handler panics out of gas.
