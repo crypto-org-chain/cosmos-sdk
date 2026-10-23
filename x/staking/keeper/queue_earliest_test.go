@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
+	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"cosmossdk.io/core/header"
@@ -21,7 +23,7 @@ import (
 
 var (
 	queueNow          = time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	queueEmptyMarker  = []byte{0}
+	queueEmptyMarker  = stakingkeeper.QueueEmptyMarker
 	unknownValAddress = sdk.ValAddress(PKs[0].Address()).String()
 )
 
@@ -81,8 +83,9 @@ var timeQueues = []timeQueue{
 
 // requireOnlyEarliestRead requires that the end-block run on gasCtx read only the stored earliest
 // time, which shows its gate skipped the scan.
-func (s *KeeperTestSuite) requireOnlyEarliestRead(gasCtx sdk.Context, stored []byte) {
-	s.Require().Equal(earliestReadGas(gasCtx.KVGasConfig(), len(stored)), gasCtx.GasMeter().GasConsumed(), "scanned although not due")
+func requireOnlyEarliestRead(tb testing.TB, gasCtx sdk.Context, stored []byte) {
+	tb.Helper()
+	require.Equal(tb, earliestReadGas(gasCtx.KVGasConfig(), len(stored)), gasCtx.GasMeter().GasConsumed(), "scanned although not due")
 }
 
 // earliestWrites counts the writes run makes to key, using the multistore's change listener.
@@ -294,7 +297,7 @@ func (s *KeeperTestSuite) TestTimeQueueEarliestGate() {
 				s.Require().Equal(tc.expMatured, matured)
 				s.Require().Equal(tc.expEarliest, store.Get(q.earliestKey))
 				if tc.expSkip {
-					s.requireOnlyEarliestRead(gasCtx, tc.expEarliest)
+					requireOnlyEarliestRead(s.T(), gasCtx, tc.expEarliest)
 				}
 			})
 		}
@@ -683,7 +686,7 @@ func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {
 			s.Require().NoError(err)
 			s.Require().Equal(tc.expEarliest, store.Get(stakingtypes.ValidatorQueueEarliestKey))
 			if tc.expSkip {
-				s.requireOnlyEarliestRead(gasCtx, tc.expEarliest)
+				requireOnlyEarliestRead(s.T(), gasCtx, tc.expEarliest)
 			}
 		})
 	}
@@ -715,7 +718,7 @@ func (s *KeeperTestSuite) TestUnbondingQueueGateUsesCurrTime() {
 		matured, err := s.stakingKeeper.DequeueAllMatureUBDQueue(gasCtx, queueNow)
 		s.Require().NoError(err)
 		s.Require().Empty(matured)
-		s.requireOnlyEarliestRead(gasCtx, sdk.FormatTimeBytes(queueNow.Add(hour)))
+		requireOnlyEarliestRead(s.T(), gasCtx, sdk.FormatTimeBytes(queueNow.Add(hour)))
 	})
 }
 
@@ -734,7 +737,7 @@ func (s *KeeperTestSuite) TestRedelegationQueueGateUsesHeaderTime() {
 	s.Require().Zero(matured)
 	stored := sdk.FormatTimeBytes(queueNow.Add(-time.Hour))
 	s.Require().Equal(stored, store.Get(q.earliestKey))
-	s.requireOnlyEarliestRead(gasCtx, stored)
+	requireOnlyEarliestRead(s.T(), gasCtx, stored)
 }
 
 func (s *KeeperTestSuite) TestValidatorScanSeesEntriesQueuedDuringIt() {
