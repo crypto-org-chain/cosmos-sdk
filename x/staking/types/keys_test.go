@@ -435,7 +435,7 @@ func TestValidatorQueueKeyTimeBytes(t *testing.T) {
 	}{
 		{"well-formed key", key, sdk.FormatTimeBytes(at), false, 7},
 		{"empty key", nil, nil, true, 0},
-		{"wrong prefix", append([]byte{0x41}, key[prefixLen:]...), sdk.FormatTimeBytes(at), true, 0},
+		{"wrong prefix", append([]byte{0x41}, key[prefixLen:]...), nil, true, 0},
 		{"shorter than the length field", key[:prefixLen+4], nil, true, 0},
 		{"length field past the key end", key[:prefixLen+8+25], nil, true, 0},
 		{"partial height", key[:len(key)-3], sdk.FormatTimeBytes(at), true, 0},
