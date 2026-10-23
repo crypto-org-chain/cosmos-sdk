@@ -11,6 +11,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
+// QueueEmptyMarker is the stored value for a queue known to be empty.
+var QueueEmptyMarker = []byte(queueEmptyMarker)
+
 // The ungated end-block scans of upstream v0.55.0, copied verbatim apart from their names: the
 // reference the gated scans are checked against. The validator copy is kept even though production
 // keeps the same loop, so a change to that loop shows up as a difference from upstream; re-sync it
