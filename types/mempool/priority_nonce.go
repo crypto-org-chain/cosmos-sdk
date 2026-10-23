@@ -200,7 +200,8 @@ func (mp *PriorityNonceMempool[C]) NextSenderTx(sender string) sdk.Tx {
 
 // GetTx returns the pooled transaction for a given sender and nonce in O(log n) time.
 // sender is the String() of the first signer from the SignerExtractor, and nonce is its
-// sequence (for an unordered tx, its timeout timestamp in Unix nanoseconds; see ChooseNonce). The result reflects this node's pool only.
+// sequence (for an unordered tx, its timeout timestamp in Unix nanoseconds; see ChooseNonce).
+// The result reflects this node's pool only.
 // It takes the mempool lock, so it must not be called from a mempool callback
 // (SignerExtractor, TxPriority, TxReplacement) or a SelectBy callback, such as an ante
 // handler run during PrepareProposal.
