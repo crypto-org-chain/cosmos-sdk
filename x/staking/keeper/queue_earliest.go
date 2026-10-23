@@ -81,9 +81,10 @@ type queueEarliest struct {
 	empty bool
 }
 
-// due reports whether end-block has to scan the queue at nowBz, the formatted maturity cutoff.
+// due reports whether end-block has to scan the queue at nowBz, the formatted maturity cutoff. A
+// cutoff of another width doesn't compare by time with the stored one, so it always scans.
 func (e queueEarliest) due(nowBz []byte) bool {
-	return !e.known || (!e.empty && bytes.Compare(e.raw, nowBz) <= 0)
+	return !e.known || len(nowBz) != sortableTimeLen || (!e.empty && bytes.Compare(e.raw, nowBz) <= 0)
 }
 
 // scanStart returns the first key at the stored time, which sorts at or before every queue key, or
@@ -100,9 +101,8 @@ func (e queueEarliest) scanStart(g queueGate) []byte {
 // v0.53.x or v0.54.x stored under the same keys. Run it after writing queue entries without the
 // keeper's queue setters.
 func (k Keeper) RecomputeQueueEarliest(ctx context.Context) error {
-	store := k.storeService.OpenKVStore(ctx)
 	for _, g := range queueGates {
-		prev, err := store.Get(g.earliestKey)
+		prev, err := k.getQueueEarliest(ctx, g)
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func (k Keeper) RecomputeQueueEarliest(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := k.storeQueueEarliest(ctx, g, prev, next); err != nil {
+		if err := k.storeQueueEarliest(ctx, g, prev.raw, next); err != nil {
 			return err
 		}
 	}
