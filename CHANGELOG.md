@@ -51,7 +51,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (mempool) [#1850](https://github.com/crypto-org-chain/cosmos-sdk/pull/1850) Add `UnorderedTxs` to `PriorityNonceMempool`.
-* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) add GetTx to PriorityNonceMempool
+* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) add GetTx to PriorityNonceMempool, and ErrTxReplacement for a replacement TxReplacement refuses
 
 ### Improvements
 
@@ -59,7 +59,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (store) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (port of upstream [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586), closed unmerged).
 * (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport of [#1808](https://github.com/crypto-org-chain/cosmos-sdk/pull/1808) from `release/v0.53.x`).
-* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) Apply the replacement rule instead of returning `ErrMempoolTxMaxCapacity` when a full PriorityNonceMempool receives a tx for a pooled sender and nonce (SenderNonceMempool overwrites it the same way). A rejected replacement now returns `ErrTxReplacement` without dumping both txs. At capacity, a malformed tx now gets its own error instead of `ErrMempoolTxMaxCapacity`, and Insert derives the sender and nonce before taking the lock.
+* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) A full mempool no longer refuses a tx for a pooled sender and nonce: PriorityNonceMempool applies the replacement rule, SenderNonceMempool overwrites. A malformed tx at capacity gets its own error, not `ErrMempoolTxMaxCapacity`. The replacement error no longer prints both txs. PriorityNonceMempool.Insert now calls the signer extractor and `GetTxPriority` outside the lock.
 * (baseapp) [#1849](https://github.com/crypto-org-chain/cosmos-sdk/pull/1849) Close the query multistore when a gRPC query handler panics out of gas.
 * (baseapp) [#1818](https://github.com/crypto-org-chain/cosmos-sdk/pull/1818) Insert into the mempool before committing the AnteHandler state in `CheckTx`, so a failed `mempool.Insert` (e.g. pool at capacity) no longer advances the sender's nonce in `checkState` for a tx that never entered the pool ([#26521](https://github.com/cosmos/cosmos-sdk/issues/26521)).
 * (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport of [#1760](https://github.com/crypto-org-chain/cosmos-sdk/pull/1760) from `release/v0.53.x`).
