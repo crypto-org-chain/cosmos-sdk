@@ -198,6 +198,22 @@ func (mp *PriorityNonceMempool[C]) NextSenderTx(sender string) sdk.Tx {
 	return cursor.Value.(sdk.Tx)
 }
 
+// GetTx returns the pooled transaction for a given sender and nonce in O(log n) time.
+func (mp *PriorityNonceMempool[C]) GetTx(sender string, nonce uint64) (sdk.Tx, bool) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+	senderIndex, ok := mp.senderIndices[sender]
+	if !ok {
+		return nil, false
+	}
+
+	elem := senderIndex.Get(txMeta[C]{nonce: nonce, sender: sender})
+	if elem == nil {
+		return nil, false
+	}
+	return elem.Value.(sdk.Tx), true
+}
+
 // Insert attempts to insert a Tx into the app-side mempool in O(log n) time,
 // returning an error if unsuccessful. Sender and nonce are derived from the
 // transaction's first signature.

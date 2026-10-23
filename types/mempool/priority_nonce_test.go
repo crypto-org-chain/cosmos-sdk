@@ -840,6 +840,46 @@ func TestPriorityNonceMempool_NextSenderTx(t *testing.T) {
 	require.Equal(t, txs[0], tx)
 }
 
+func TestPriorityNonceMempool_GetTx(t *testing.T) {
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), 2)
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+	accA := accounts[0].Address
+	accB := accounts[1].Address
+
+	mp := mempool.DefaultPriorityMempool()
+	txs := []testTx{
+		{priority: 20, nonce: 1, address: accA},
+		{priority: 15, nonce: 3, address: accA},
+		{priority: 30, nonce: 3, address: accA}, // replaces the nonce 3 tx
+	}
+	for _, tx := range txs {
+		require.NoError(t, mp.Insert(ctx.WithPriority(tx.priority), tx))
+	}
+
+	testCases := []struct {
+		name   string
+		sender string
+		nonce  uint64
+		expTx  sdk.Tx
+	}{
+		{name: "pooled", sender: accA.String(), nonce: 1, expTx: txs[0]},
+		{name: "replaced", sender: accA.String(), nonce: 3, expTx: txs[2]},
+		{name: "nonce gap", sender: accA.String(), nonce: 2},
+		{name: "unknown sender", sender: accB.String(), nonce: 1},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tx, ok := mp.GetTx(tc.sender, tc.nonce)
+			require.Equal(t, tc.expTx != nil, ok)
+			require.Equal(t, tc.expTx, tx)
+		})
+	}
+
+	require.NoError(t, mp.Remove(txs[0]))
+	_, ok := mp.GetTx(accA.String(), 1)
+	require.False(t, ok)
+}
+
 func TestPriorityNonceMempool_UnorderedTxsSnapshot(t *testing.T) {
 	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), 3)
 	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
