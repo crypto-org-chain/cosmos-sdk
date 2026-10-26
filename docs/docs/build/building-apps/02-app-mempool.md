@@ -82,7 +82,7 @@ It is an integer value that sets the mempool in one of three modes, *bounded*, *
 
 * **negative**: Disabled, mempool does not insert new transaction and return early.
 * **zero**: Unbounded mempool has no transaction limit and will never fail with `ErrMempoolTxMaxCapacity`.
-* **positive**: Bounded, it fails with `ErrMempoolTxMaxCapacity` for a new sender and nonce when the `maxTx` value is the same as `CountTx()`; a tx for a pooled sender and nonce still goes through `TxReplacement`.
+* **positive**: Bounded, it fails with `ErrMempoolTxMaxCapacity` for a new sender and nonce when the `maxTx` value is the same as `CountTx()`; a tx for a pooled sender and nonce still replaces the pooled one, subject to `TxReplacement` if set.
 
 #### Callback
 

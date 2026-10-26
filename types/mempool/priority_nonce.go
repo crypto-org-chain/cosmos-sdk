@@ -47,7 +47,8 @@ type (
 		// - if MaxTx < 0, `Insert` is a no-op.
 		MaxTx int
 
-		// SignerExtractor is an implementation which retrieves signer data from an sdk.Tx
+		// SignerExtractor is an implementation which retrieves signer data from an sdk.Tx.
+		// Insert and Remove call it without the mempool lock, so it must be safe for concurrent use.
 		SignerExtractor SignerExtractionAdapter
 	}
 
