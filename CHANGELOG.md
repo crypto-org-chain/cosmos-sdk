@@ -51,7 +51,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (mempool) [#1850](https://github.com/crypto-org-chain/cosmos-sdk/pull/1850) Add `UnorderedTxs` to `PriorityNonceMempool`.
-* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) add GetTx (and the TxLookupMempool interface) to PriorityNonceMempool, and ErrTxReplacement (codespace `mempool`, code 1), returned when TxReplacement rejects a tx
+* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) add GetTx (and the TxLookupMempool interface) to PriorityNonceMempool, and ErrTxReplacement (codespace `mempool`, code 2), returned when TxReplacement rejects a tx
 
 ### Improvements
 
