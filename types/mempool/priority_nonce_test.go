@@ -894,6 +894,35 @@ func TestPriorityNonceMempool_GetTx(t *testing.T) {
 	}
 }
 
+func BenchmarkPriorityNonceMempool_GetTx(b *testing.B) {
+	const senders, txsPerSender = 5000, 4
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), senders)
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+	mp := mempool.DefaultPriorityMempool()
+	addrs := make([]string, senders)
+	for i, acc := range accounts {
+		addrs[i] = acc.Address.String()
+		for n := range txsPerSender {
+			require.NoError(b, mp.Insert(ctx, testTx{id: i*txsPerSender + n, nonce: uint64(n), address: acc.Address}))
+		}
+	}
+
+	for _, bc := range []struct {
+		name  string
+		nonce uint64
+	}{
+		{"hit", txsPerSender - 1},
+		{"miss", txsPerSender},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			for i := 0; b.Loop(); i++ {
+				_, ok := mp.GetTx(addrs[i%senders], bc.nonce)
+				require.Equal(b, bc.nonce < txsPerSender, ok)
+			}
+		})
+	}
+}
+
 func TestPriorityNonceMempool_UnorderedTxsSnapshot(t *testing.T) {
 	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), 3)
 	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
