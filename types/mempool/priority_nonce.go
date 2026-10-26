@@ -8,6 +8,8 @@ import (
 
 	"github.com/huandu/skiplist"
 
+	errorsmod "cosmossdk.io/errors"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -283,7 +285,8 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx, option
 	// This O(log n) remove operation happens on every accepted replacement.
 	if txExists {
 		if mp.cfg.TxReplacement != nil && !mp.cfg.TxReplacement(oldScore.priority, priority, senderIndex.Get(key).Value.(PooledTx).Tx, tx) {
-			return fmt.Errorf("%w, oldPriority: %v, newPriority: %v", ErrTxReplacement, oldScore.priority, priority)
+			// errorsmod wrapping keeps ErrTxReplacement's ABCI code; fmt's %w would report it as internal.
+			return errorsmod.Wrapf(ErrTxReplacement, "oldPriority: %v, newPriority: %v", oldScore.priority, priority)
 		}
 
 		oldKey := txMeta[C]{nonce: nonce, sender: sender, priority: oldScore.priority, weight: oldScore.weight}
