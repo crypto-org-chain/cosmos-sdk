@@ -916,14 +916,16 @@ func BenchmarkPriorityNonceMempool_GetTx(b *testing.B) {
 		{"miss", txsPerSender},
 	} {
 		b.Run(bc.name, func(b *testing.B) {
-			misses := 0
-			for i := 0; b.Loop(); i++ {
-				if _, ok := mp.GetTx(addrs[i%senders], bc.nonce); !ok {
+			lookups, misses := 0, 0
+			for ; b.Loop(); lookups++ {
+				if _, ok := mp.GetTx(addrs[lookups%senders], bc.nonce); !ok {
 					misses++
 				}
 			}
 			if bc.nonce < txsPerSender {
 				require.Zero(b, misses)
+			} else {
+				require.Equal(b, lookups, misses)
 			}
 		})
 	}
@@ -996,7 +998,7 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 		}
 	}()
 
-	// The reader runs until both writers finish, so it overlaps every insert.
+	// The reader runs until both writers finish, so it also overlaps the replacement goroutine.
 	go func() {
 		writers.Wait()
 		close(stopCh)

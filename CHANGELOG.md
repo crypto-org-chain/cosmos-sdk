@@ -46,7 +46,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (blockstm) [#26208](https://github.com/cosmos/cosmos-sdk/pull/26208) Add Block-STM configuration support: `block-executor`, `block-stm-workers` and `block-stm-pre-estimate`.
 * (mempool) [#1850](https://github.com/crypto-org-chain/cosmos-sdk/pull/1850) add UnorderedTxs to PriorityNonceMempool
-* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) add GetTx (and the TxLookupMempool interface) to PriorityNonceMempool, and ErrTxReplacement (codespace `mempool`, code 1), returned when TxReplacement rejects a tx
+* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) add GetTx (and the TxLookupMempool interface) to PriorityNonceMempool, and ErrTxReplacement (codespace `mempool`, code 2), returned when TxReplacement rejects a tx
 
 ### Improvements
 

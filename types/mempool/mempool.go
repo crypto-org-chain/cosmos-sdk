@@ -91,8 +91,9 @@ type Iterator interface {
 var (
 	ErrTxNotFound           = errors.New("tx not found in mempool")
 	ErrMempoolTxMaxCapacity = errors.New("pool reached max tx capacity")
-	// Registered so CheckTx reports it under its own ABCI code, which clients can match on.
-	ErrTxReplacement = errorsmod.Register(codespace, 1, "tx doesn't fit the replacement rule")
+	// Registered so CheckTx reports it under its own codespace and code, which clients can match on.
+	// Code 1 is left out, as ABCIInfo reports every unregistered error as code 1.
+	ErrTxReplacement = errorsmod.Register(codespace, 2, "tx doesn't fit the replacement rule")
 )
 
 const codespace = "mempool"
