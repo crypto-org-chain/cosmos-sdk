@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	errorsmod "cosmossdk.io/errors"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -89,8 +91,11 @@ type Iterator interface {
 var (
 	ErrTxNotFound           = errors.New("tx not found in mempool")
 	ErrMempoolTxMaxCapacity = errors.New("pool reached max tx capacity")
-	ErrTxReplacement        = errors.New("tx doesn't fit the replacement rule")
+	// Registered so CheckTx reports it under its own ABCI code, which clients can match on.
+	ErrTxReplacement = errorsmod.Register(codespace, 1, "tx doesn't fit the replacement rule")
 )
+
+const codespace = "mempool"
 
 // SelectBy is compatible with old interface to avoid breaking api.
 // In v0.52+, this function is removed and SelectBy is merged into Mempool interface.

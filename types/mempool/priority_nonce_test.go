@@ -13,6 +13,7 @@ import (
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/require"
 
+	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/log/v2"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -959,14 +960,15 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 	const iterations = 1000
 
 	var (
-		wg       sync.WaitGroup
-		panicVal atomic.Value
-		stopCh   = make(chan struct{})
+		wg, writers sync.WaitGroup
+		panicVal    atomic.Value
+		stopCh      = make(chan struct{})
+		insertErrs  = make(chan error, 2)
 	)
 
-	wg.Add(1)
+	writers.Add(1)
 	go func() {
-		defer wg.Done()
+		defer writers.Done()
 		for i := 0; i < iterations; i++ {
 			tx := testTx{
 				id:       i,
@@ -975,22 +977,29 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 				address:  account,
 			}
 			if err := mp.Insert(ctx.WithPriority(tx.priority), tx); err != nil {
-				panic(err)
+				insertErrs <- err
+				return
 			}
 		}
-		close(stopCh)
 	}()
 
 	// Replace a pooled nonce concurrently, so GetTx races with the replacement path too.
-	wg.Add(1)
+	writers.Add(1)
 	go func() {
-		defer wg.Done()
+		defer writers.Done()
 		for i := 0; i < iterations; i++ {
 			tx := testTx{id: iterations + i, priority: int64(i + 10), nonce: 1, address: account}
 			if err := mp.Insert(ctx.WithPriority(tx.priority), tx); err != nil {
-				panic(err)
+				insertErrs <- err
+				return
 			}
 		}
+	}()
+
+	// The reader runs until both writers finish, so it overlaps every insert.
+	go func() {
+		writers.Wait()
+		close(stopCh)
 	}()
 
 	wg.Add(1)
@@ -1015,6 +1024,10 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 	}()
 
 	wg.Wait()
+	close(insertErrs)
+	for err := range insertErrs {
+		require.NoError(t, err)
+	}
 
 	if v := panicVal.Load(); v != nil {
 		t.Fatalf("NextSenderTx or GetTx panicked under concurrent access: %v", v)
@@ -1106,6 +1119,9 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	err := mp.Insert(ctx.WithPriority(lower.priority), lower)
 	require.ErrorIs(t, err, mempool.ErrTxReplacement)
 	require.NotErrorIs(t, err, mempool.ErrMempoolTxMaxCapacity)
+	codespace, code, _ := errorsmod.ABCIInfo(err, false)
+	require.Equal(t, mempool.ErrTxReplacement.Codespace(), codespace)
+	require.Equal(t, mempool.ErrTxReplacement.ABCICode(), code)
 	pooled, ok = mp.GetTx(sa.String(), 1)
 	require.True(t, ok)
 	require.Equal(t, txs[0], pooled)
