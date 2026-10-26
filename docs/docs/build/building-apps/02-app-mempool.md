@@ -59,7 +59,7 @@ It is an integer value that sets the mempool in one of three modes, *bounded*, *
 
 * **negative**: Disabled, mempool does not insert new transaction and return early.
 * **zero**: Unbounded mempool has no transaction limit and will never fail with `ErrMempoolTxMaxCapacity`.
-* **positive**: Bounded, it fails with `ErrMempoolTxMaxCapacity` when the `maxTx` value is the same as `CountTx()`
+* **positive**: Bounded, it fails with `ErrMempoolTxMaxCapacity` for a new sender and nonce when the `maxTx` value is the same as `CountTx()`; a tx for a pooled sender and nonce overwrites the pooled one.
 
 #### Seed
 
@@ -82,13 +82,13 @@ It is an integer value that sets the mempool in one of three modes, *bounded*, *
 
 * **negative**: Disabled, mempool does not insert new transaction and return early.
 * **zero**: Unbounded mempool has no transaction limit and will never fail with `ErrMempoolTxMaxCapacity`.
-* **positive**: Bounded, it fails with `ErrMempoolTxMaxCapacity` when the `maxTx` value is the same as `CountTx()`
+* **positive**: Bounded, it fails with `ErrMempoolTxMaxCapacity` for a new sender and nonce when the `maxTx` value is the same as `CountTx()`; a tx for a pooled sender and nonce still goes through `TxReplacement`.
 
 #### Callback
 
 The priority nonce mempool provides mempool options allowing the application to set callback(s).
 
 * **OnRead**: Set a callback to be called when a transaction is read from the mempool.
-* **TxReplacement**: Sets a callback to be called when duplicate transaction nonce detected during mempool insert. Application can define a transaction replacement rule based on tx priority or certain transaction fields.
+* **TxReplacement**: Sets a callback to be called when duplicate transaction nonce detected during mempool insert. Application can define a transaction replacement rule based on tx priority or certain transaction fields. When it returns false, `Insert` returns `ErrTxReplacement` and keeps the pooled tx.
 
 More information on the SDK mempool implementation can be found in the [godocs](https://pkg.go.dev/github.com/cosmos/cosmos-sdk/types/mempool).

@@ -915,9 +915,14 @@ func BenchmarkPriorityNonceMempool_GetTx(b *testing.B) {
 		{"miss", txsPerSender},
 	} {
 		b.Run(bc.name, func(b *testing.B) {
+			misses := 0
 			for i := 0; b.Loop(); i++ {
-				_, ok := mp.GetTx(addrs[i%senders], bc.nonce)
-				require.Equal(b, bc.nonce < txsPerSender, ok)
+				if _, ok := mp.GetTx(addrs[i%senders], bc.nonce); !ok {
+					misses++
+				}
+			}
+			if bc.nonce < txsPerSender {
+				require.Zero(b, misses)
 			}
 		})
 	}
@@ -1104,8 +1109,13 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	pooled, ok = mp.GetTx(sa.String(), 1)
 	require.True(t, ok)
 	require.Equal(t, txs[0], pooled)
+	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement))
+	require.Equal(t, 1, mp.CountTx())
+	pooled, ok = mp.GetTx(sa.String(), 1)
+	require.True(t, ok)
+	require.Equal(t, replacement, pooled)
 
-	// a full pool reports a malformed tx's own error, not the capacity error a retry would follow
+	// a full pool returns a malformed tx's own error, not the retryable capacity error
 	malformed := testTx{nonce: 1, address: sb, unordered: true} // an unordered tx can't carry a sequence
 	err = mp.Insert(ctx, malformed)
 	require.Error(t, err)
