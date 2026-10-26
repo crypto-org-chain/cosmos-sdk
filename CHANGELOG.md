@@ -41,6 +41,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Breaking Changes
 
 * (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) PriorityNonceMempool.Insert calls `TxPriority.GetTxPriority` without the mempool lock, so it must be safe for concurrent use.
+* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) CheckTx reports a tx refused by `TxReplacement` as `ErrTxReplacement` (codespace `mempool`, code 2) instead of an internal error (codespace `undefined`, code 1), with the log `oldPriority: X, newPriority: Y: tx doesn't fit the replacement rule`.
 
 ### Features
 

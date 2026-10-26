@@ -32,7 +32,9 @@ type (
 
 		// TxReplacement is a callback to be called when a duplicated transaction nonce
 		// is detected during mempool insert. An application can define a transaction
-		// replacement rule based on tx priority or certain transaction fields.
+		// replacement rule based on tx priority or certain transaction fields. It runs under the
+		// mempool lock, so it must not call back into the mempool; returning false makes Insert
+		// return ErrTxReplacement.
 		TxReplacement func(op, np C, oTx, nTx sdk.Tx) bool
 
 		// MaxTx sets the maximum number of transactions allowed in the mempool with
