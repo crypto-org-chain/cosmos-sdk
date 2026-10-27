@@ -82,8 +82,7 @@ type (
 	// priorities. Priorities must be comparable.
 	TxPriority[C comparable] struct {
 		// GetTxPriority returns the priority of the transaction. A priority must be
-		// comparable via Compare. Insert calls it without the mempool lock, so it must be
-		// safe for concurrent use.
+		// comparable via Compare.
 		GetTxPriority func(ctx context.Context, tx sdk.Tx) C
 
 		// Compare compares two transaction priorities. The result must be 0 if
@@ -242,12 +241,11 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx, option
 	}
 	memTx := NewPooledTx(tx, option.GasWanted)
 
-	// Derive the key and priority outside the lock; the config doesn't change after construction.
+	// Derive the key outside the lock, as Remove does; the config doesn't change after construction.
 	sender, nonce, err := mp.txSenderNonce(tx)
 	if err != nil {
 		return err
 	}
-	priority := mp.cfg.TxPriority.GetTxPriority(ctx, tx)
 
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
@@ -258,6 +256,7 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx, option
 		return ErrMempoolTxMaxCapacity
 	}
 
+	priority := mp.cfg.TxPriority.GetTxPriority(ctx, tx)
 	key := txMeta[C]{nonce: nonce, priority: priority, sender: sender}
 
 	senderIndex, ok := mp.senderIndices[sender]
