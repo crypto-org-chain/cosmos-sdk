@@ -119,7 +119,7 @@ func (snm *SenderNonceMempool) NextSenderTx(sender string) sdk.Tx {
 // at least one signer. Note, priority is ignored. At capacity it returns ErrMempoolTxMaxCapacity
 // for a new sender and nonce, while a pooled sender and nonce is overwritten.
 func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
-	// maxTx only changes at construction, so it and the tx's key are read outside the lock.
+	// maxTx is fixed after construction and the key depends only on tx, so both are read outside the lock.
 	if snm.maxTx < 0 {
 		return nil
 	}
