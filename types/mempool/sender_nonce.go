@@ -125,17 +125,7 @@ func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 		return nil
 	}
 
-	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
-	if err != nil {
-		return err
-	}
-	if len(sigs) == 0 {
-		return fmt.Errorf("tx must have at least one signer")
-	}
-
-	sig := sigs[0]
-	sender := sdk.AccAddress(sig.PubKey.Address()).String()
-	nonce, err := ChooseNonce(sig.Sequence, tx)
+	sender, nonce, err := senderNonceOf(tx)
 	if err != nil {
 		return err
 	}
@@ -215,22 +205,29 @@ func (snm *SenderNonceMempool) CountTx() int {
 	return len(snm.existingTx)
 }
 
+// senderNonceOf returns the sender and nonce the pool keys tx by, from its first signature.
+func senderNonceOf(tx sdk.Tx) (sender string, nonce uint64, err error) {
+	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
+	if err != nil {
+		return "", 0, err
+	}
+	if len(sigs) == 0 {
+		return "", 0, fmt.Errorf("tx must have at least one signer")
+	}
+	sig := sigs[0]
+	nonce, err = ChooseNonce(sig.Sequence, tx)
+	if err != nil {
+		return "", 0, err
+	}
+	return sdk.AccAddress(sig.PubKey.Address()).String(), nonce, nil
+}
+
 // Remove removes a tx from the mempool. It returns an error if the tx does not
 // have at least one signer or the tx was not found in the pool.
 func (snm *SenderNonceMempool) Remove(tx sdk.Tx) error {
 	snm.mtx.Lock()
 	defer snm.mtx.Unlock()
-	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
-	if err != nil {
-		return err
-	}
-	if len(sigs) == 0 {
-		return fmt.Errorf("tx must have at least one signer")
-	}
-
-	sig := sigs[0]
-	sender := sdk.AccAddress(sig.PubKey.Address()).String()
-	nonce, err := ChooseNonce(sig.Sequence, tx)
+	sender, nonce, err := senderNonceOf(tx)
 	if err != nil {
 		return err
 	}
