@@ -242,21 +242,11 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	}
 
 	// Derive the key and priority outside the lock; the config doesn't change after construction.
-	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
+	sender, nonce, err := mp.txKey(tx)
 	if err != nil {
 		return err
 	}
-	if len(sigs) == 0 {
-		return fmt.Errorf("tx must have at least one signer")
-	}
-
-	sig := sigs[0]
-	sender := sig.Signer.String()
 	priority := mp.cfg.TxPriority.GetTxPriority(ctx, tx)
-	nonce, err := ChooseNonce(sig.Sequence, tx)
-	if err != nil {
-		return err
-	}
 
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
@@ -492,20 +482,28 @@ func (mp *PriorityNonceMempool[C]) UnorderedTxs(_ context.Context) []sdk.Tx {
 	return txs
 }
 
+// txKey returns the sender and nonce the pool keys tx by, from its first signer. Insert,
+// Remove and GetTx's callers must agree on it.
+func (mp *PriorityNonceMempool[C]) txKey(tx sdk.Tx) (sender string, nonce uint64, err error) {
+	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
+	if err != nil {
+		return "", 0, err
+	}
+	if len(sigs) == 0 {
+		return "", 0, fmt.Errorf("tx must have at least one signer")
+	}
+	sig := sigs[0]
+	nonce, err = ChooseNonce(sig.Sequence, tx)
+	if err != nil {
+		return "", 0, err
+	}
+	return sig.Signer.String(), nonce, nil
+}
+
 // Remove removes a transaction from the mempool in O(log n) time, returning an
 // error if unsuccessful.
 func (mp *PriorityNonceMempool[C]) Remove(tx sdk.Tx) error {
-	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
-	if err != nil {
-		return err
-	}
-	if len(sigs) == 0 {
-		return fmt.Errorf("attempted to remove a tx with no signatures")
-	}
-
-	sig := sigs[0]
-	sender := sig.Signer.String()
-	nonce, err := ChooseNonce(sig.Sequence, tx)
+	sender, nonce, err := mp.txKey(tx)
 	if err != nil {
 		return err
 	}

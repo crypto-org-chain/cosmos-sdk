@@ -929,6 +929,32 @@ func BenchmarkPriorityNonceMempool_GetTx(b *testing.B) {
 			}
 		})
 	}
+
+	// A hit contending for the lock with replacements at nonce 0, as CheckTx's lookup does with Insert.
+	b.Run("hit under concurrent replacement", func(b *testing.B) {
+		stop, done := make(chan struct{}), make(chan struct{})
+		go func() {
+			defer close(done)
+			for i := 1; ; i++ {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				tx := testTx{id: senders*txsPerSender + i, priority: int64(i), address: accounts[i%senders].Address}
+				_ = mp.Insert(ctx.WithPriority(tx.priority), tx)
+			}
+		}()
+		misses := 0
+		for i := 0; b.Loop(); i++ {
+			if _, ok := mp.GetTx(addrs[i%senders], txsPerSender-1); !ok {
+				misses++
+			}
+		}
+		close(stop)
+		<-done
+		require.Zero(b, misses)
+	})
 }
 
 func TestPriorityNonceMempool_UnorderedTxsSnapshot(t *testing.T) {
