@@ -4,7 +4,6 @@ import (
 	"context"
 	crand "crypto/rand" // #nosec // crypto/rand is used for seed generation
 	"encoding/binary"
-	"fmt"
 	"math/rand" // #nosec // math/rand is used for random selection and seeded from crypto/rand
 	"slices"
 	"sync"
@@ -133,7 +132,7 @@ func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 	defer snm.mtx.Unlock()
 	key := txKey{nonce: nonce, address: sender}
 	// Overwriting a pooled sender and nonce doesn't grow the pool, so a full pool still accepts it.
-	if snm.maxTx > 0 && !snm.existingTx[key] && len(snm.existingTx) >= snm.maxTx {
+	if snm.maxTx > 0 && len(snm.existingTx) >= snm.maxTx && !snm.existingTx[key] {
 		return ErrMempoolTxMaxCapacity
 	}
 
@@ -206,14 +205,11 @@ func (snm *SenderNonceMempool) CountTx() int {
 	return len(snm.existingTx)
 }
 
-// firstSignatureSenderNonce is senderNonce over tx's first signature only: unlike
-// DefaultSignerExtractionAdapter it doesn't read later signers' pubkeys, which a tx may omit.
+// firstSignatureSenderNonce is senderNonce over tx's first signature only, as the pool always
+// keyed it: unlike DefaultSignerExtractionAdapter it doesn't read later signers' pubkeys. It keeps
+// the unchecked type assertion, since FinalizeBlock's Remove result is part of the block result.
 func firstSignatureSenderNonce(tx sdk.Tx) (sender string, nonce uint64, err error) {
-	sigTx, ok := tx.(signing.SigVerifiableTx)
-	if !ok {
-		return "", 0, fmt.Errorf("tx of type %T does not implement SigVerifiableTx", tx)
-	}
-	sigs, err := sigTx.GetSignaturesV2()
+	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
 	if err != nil {
 		return "", 0, err
 	}

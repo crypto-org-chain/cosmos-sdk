@@ -118,13 +118,6 @@ func (sigErrTx) GetPubKeys() ([]cryptotypes.PubKey, error) { return nil, nil }
 
 func (t sigErrTx) GetSignaturesV2() ([]txsigning.SignatureV2, error) { return t.getSigs() }
 
-// plainTx is an sdk.Tx that isn't a SigVerifiableTx.
-type plainTx struct{}
-
-func (plainTx) GetMsgs() []sdk.Msg { return nil }
-
-func (plainTx) GetMsgsV2() ([]protov2.Message, error) { return nil, nil }
-
 type txSpec struct {
 	i int
 	p int
@@ -199,6 +192,7 @@ func (s *MempoolTestSuite) TestDefaultMempool() {
 	// Both pools reject a tx whose signers can't be read, with the same errors.
 	for name, mp := range map[string]mempool.Mempool{"sender nonce": s.mempool, "priority nonce": mempool.DefaultPriorityMempool()} {
 		s.Run(name, func() {
+			t := s.T()
 			tx := &sigErrTx{getSigs: func() ([]txsigning.SignatureV2, error) {
 				return nil, fmt.Errorf("error")
 			}}
@@ -209,8 +203,6 @@ func (s *MempoolTestSuite) TestDefaultMempool() {
 			}
 			require.EqualError(t, mp.Insert(ctx, tx), "tx must have at least one signer")
 			require.EqualError(t, mp.Remove(tx), "tx must have at least one signer")
-			require.ErrorContains(t, mp.Insert(ctx, plainTx{}), "does not implement SigVerifiableTx")
-			require.ErrorContains(t, mp.Remove(plainTx{}), "does not implement SigVerifiableTx")
 		})
 	}
 
