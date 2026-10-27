@@ -2,6 +2,7 @@ package mempool_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -954,6 +955,63 @@ func BenchmarkPriorityNonceMempool_GetTx(b *testing.B) {
 		close(stop)
 		<-done
 		require.Zero(b, misses)
+	})
+}
+
+func BenchmarkPriorityNonceMempool_Insert(b *testing.B) {
+	const senders = 5000
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), senders)
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+	// Each case starts with nonce 0 pooled for every sender, so a full pool stays full.
+	newPool := func(b *testing.B, maxTx int) *mempool.PriorityNonceMempool[int64] {
+		b.Helper()
+		mp := mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+			TxPriority: mempool.NewDefaultTxPriority(),
+			MaxTx:      maxTx,
+		})
+		for i, acc := range accounts {
+			require.NoError(b, mp.Insert(ctx, testTx{id: i, address: acc.Address}))
+		}
+		return mp
+	}
+	insert := func(mp *mempool.PriorityNonceMempool[int64], i int, nonce uint64) error {
+		tx := testTx{id: senders + i, priority: int64(i), nonce: nonce, address: accounts[i%senders].Address}
+		return mp.Insert(ctx.WithPriority(tx.priority), tx)
+	}
+
+	b.Run("replacement", func(b *testing.B) {
+		mp := newPool(b, 0)
+		failed := 0
+		for i := 1; b.Loop(); i++ {
+			if insert(mp, i, 0) != nil {
+				failed++
+			}
+		}
+		require.Zero(b, failed)
+	})
+
+	b.Run("new nonce at capacity", func(b *testing.B) {
+		mp := newPool(b, senders)
+		unexpected := 0
+		for i := 1; b.Loop(); i++ {
+			if !errors.Is(insert(mp, i, 1), mempool.ErrMempoolTxMaxCapacity) {
+				unexpected++
+			}
+		}
+		require.Zero(b, unexpected)
+	})
+
+	b.Run("parallel replacement", func(b *testing.B) {
+		mp := newPool(b, 0)
+		var next, failed atomic.Int64
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				if insert(mp, int(next.Add(1)), 0) != nil {
+					failed.Add(1)
+				}
+			}
+		})
+		require.Zero(b, failed.Load())
 	})
 }
 

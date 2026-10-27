@@ -40,7 +40,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Breaking Changes
 
-* (mempool) [#1891](https://github.com/crypto-org-chain/cosmos-sdk/pull/1891) PriorityNonceMempool.Insert calls `TxPriority.GetTxPriority` without the mempool lock, so it must be safe for concurrent use. Insert now also calls `SignerExtractor.GetSigners` unlocked, as Remove already did.
+* (mempool) [#1891](https://github.com/crypto-org-chain/cosmos-sdk/pull/1891) PriorityNonceMempool.Insert calls `SignerExtractor.GetSigners` without the mempool lock, as Remove already did, so it must be safe for concurrent use.
 * (mempool) [#1891](https://github.com/crypto-org-chain/cosmos-sdk/pull/1891) CheckTx reports a tx refused by `TxReplacement` as `ErrTxReplacement` (codespace `mempool`, code 2) instead of an internal error (codespace `undefined`, code 1). Its log contains `oldPriority: X, newPriority: Y: tx doesn't fit the replacement rule`. PriorityNonceMempool.Remove reports a tx with no signers as `tx must have at least one signer`, as Insert does, instead of `attempted to remove a tx with no signatures`.
 
 ### Features
