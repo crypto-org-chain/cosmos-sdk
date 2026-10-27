@@ -198,8 +198,8 @@ func (s *MempoolTestSuite) TestDefaultMempool() {
 	tx.getSigs = func() ([]txsigning.SignatureV2, error) {
 		return nil, nil
 	}
-	require.Error(t, s.mempool.Insert(ctx, tx, mempool.InsertOption{}))
-	require.Error(t, s.mempool.Remove(tx))
+	require.EqualError(t, s.mempool.Insert(ctx, tx, mempool.InsertOption{}), "tx must have at least one signer")
+	require.EqualError(t, s.mempool.Remove(tx), "tx must have at least one signer")
 
 	// removing a tx not in the mempool should error
 	s.resetMempool()
