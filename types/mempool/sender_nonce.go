@@ -116,10 +116,9 @@ func (snm *SenderNonceMempool) NextSenderTx(sender string) sdk.Tx {
 }
 
 // Insert adds a tx to the mempool. It returns an error if the tx does not have
-// at least one signer. Note, priority is ignored. At capacity it returns ErrMempoolTxMaxCapacity
-// for a new sender and nonce, while a pooled sender and nonce is overwritten.
+// at least one signer. Note, priority is ignored. A full pool still overwrites a pooled sender and nonce.
 func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
-	// maxTx is fixed after construction and the key depends only on tx, so both are read outside the lock.
+	// maxTx and the key don't depend on pool state, so read them unlocked.
 	if snm.maxTx < 0 {
 		return nil
 	}
@@ -205,9 +204,8 @@ func (snm *SenderNonceMempool) CountTx() int {
 	return len(snm.existingTx)
 }
 
-// firstSignatureSenderNonce is senderNonce over tx's first signature only, as the pool always
-// keyed it: unlike DefaultSignerExtractionAdapter it doesn't read later signers' pubkeys. It keeps
-// the unchecked type assertion, since FinalizeBlock's Remove result is part of the block result.
+// firstSignatureSenderNonce keys tx by its first signature only, as this pool always has. The
+// unchecked type assertion stays, since FinalizeBlock's Remove result is part of the block result.
 func firstSignatureSenderNonce(tx sdk.Tx) (sender string, nonce uint64, err error) {
 	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
 	if err != nil {
