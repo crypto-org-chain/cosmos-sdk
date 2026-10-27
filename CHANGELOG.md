@@ -56,7 +56,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
-* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) A full mempool no longer refuses a tx for a pooled sender and nonce: PriorityNonceMempool applies the replacement rule, SenderNonceMempool overwrites. A malformed tx at capacity gets its own error, not `ErrMempoolTxMaxCapacity`. The replacement error no longer prints both txs.
+* (mempool) [#NNNN](https://github.com/crypto-org-chain/cosmos-sdk/pull/NNNN) A full mempool no longer refuses a tx for a pooled sender and nonce: PriorityNonceMempool applies the replacement rule, SenderNonceMempool overwrites. A malformed tx at capacity gets its own error, not `ErrMempoolTxMaxCapacity`, and SenderNonceMempool returns an error instead of panicking for a tx that isn't a `SigVerifiableTx`. The replacement error no longer prints both txs.
 * (telemetry) [#26390](https://github.com/cosmos/cosmos-sdk/pull/26390) Fix env var for otel telemetry initialization.
 * (blockstm) [#26627](https://github.com/cosmos/cosmos-sdk/pull/26627) Guard against block-stm estimate panic.
 * (x/auth) [#26515](https://github.com/cosmos/cosmos-sdk/pull/26515) Bound the pubkey and signature indices in `ConsumeMultisignatureVerificationGas` and `VerifyMultisignature` so a multisig signature with a bit array larger than the key set, or with more set bits than supplied signatures, returns an error instead of panicking with index out of range.

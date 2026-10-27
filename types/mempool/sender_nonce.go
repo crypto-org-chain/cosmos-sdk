@@ -4,7 +4,6 @@ import (
 	"context"
 	crand "crypto/rand" // #nosec // crypto/rand is used for seed generation
 	"encoding/binary"
-	"fmt"
 	"math/rand" // #nosec // math/rand is used for random selection and seeded from crypto/rand
 	"slices"
 	"sync"
@@ -12,7 +11,6 @@ import (
 	"github.com/huandu/skiplist"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth/signing"
 )
 
 var (
@@ -117,7 +115,8 @@ func (snm *SenderNonceMempool) NextSenderTx(sender string) sdk.Tx {
 }
 
 // Insert adds a tx to the mempool. It returns an error if the tx does not have
-// at least one signer. Note, priority is ignored.
+// at least one signer. Note, priority is ignored. At capacity it returns ErrMempoolTxMaxCapacity
+// for a new sender and nonce, while a pooled sender and nonce is overwritten.
 func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 	snm.mtx.Lock()
 	defer snm.mtx.Unlock()
@@ -125,7 +124,7 @@ func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 		return nil
 	}
 
-	sender, nonce, err := senderNonceOf(tx)
+	sender, nonce, err := senderNonce(DefaultSignerExtractionAdapter{}, tx)
 	if err != nil {
 		return err
 	}
@@ -205,29 +204,12 @@ func (snm *SenderNonceMempool) CountTx() int {
 	return len(snm.existingTx)
 }
 
-// senderNonceOf returns the sender and nonce the pool keys tx by, from its first signature.
-func senderNonceOf(tx sdk.Tx) (sender string, nonce uint64, err error) {
-	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
-	if err != nil {
-		return "", 0, err
-	}
-	if len(sigs) == 0 {
-		return "", 0, fmt.Errorf("tx must have at least one signer")
-	}
-	sig := sigs[0]
-	nonce, err = ChooseNonce(sig.Sequence, tx)
-	if err != nil {
-		return "", 0, err
-	}
-	return sdk.AccAddress(sig.PubKey.Address()).String(), nonce, nil
-}
-
 // Remove removes a tx from the mempool. It returns an error if the tx does not
 // have at least one signer or the tx was not found in the pool.
 func (snm *SenderNonceMempool) Remove(tx sdk.Tx) error {
 	snm.mtx.Lock()
 	defer snm.mtx.Unlock()
-	sender, nonce, err := senderNonceOf(tx)
+	sender, nonce, err := senderNonce(DefaultSignerExtractionAdapter{}, tx)
 	if err != nil {
 		return err
 	}
