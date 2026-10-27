@@ -242,7 +242,7 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	}
 
 	// Derive the key and priority outside the lock; the config doesn't change after construction.
-	sender, nonce, err := mp.txKey(tx)
+	sender, nonce, err := mp.senderNonce(tx)
 	if err != nil {
 		return err
 	}
@@ -482,9 +482,9 @@ func (mp *PriorityNonceMempool[C]) UnorderedTxs(_ context.Context) []sdk.Tx {
 	return txs
 }
 
-// txKey returns the sender and nonce the pool keys tx by, from its first signer. Insert,
+// senderNonce returns the sender and nonce the pool keys tx by, from its first signer. Insert,
 // Remove and GetTx's callers must agree on it.
-func (mp *PriorityNonceMempool[C]) txKey(tx sdk.Tx) (sender string, nonce uint64, err error) {
+func (mp *PriorityNonceMempool[C]) senderNonce(tx sdk.Tx) (sender string, nonce uint64, err error) {
 	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
 	if err != nil {
 		return "", 0, err
@@ -503,7 +503,7 @@ func (mp *PriorityNonceMempool[C]) txKey(tx sdk.Tx) (sender string, nonce uint64
 // Remove removes a transaction from the mempool in O(log n) time, returning an
 // error if unsuccessful.
 func (mp *PriorityNonceMempool[C]) Remove(tx sdk.Tx) error {
-	sender, nonce, err := mp.txKey(tx)
+	sender, nonce, err := mp.senderNonce(tx)
 	if err != nil {
 		return err
 	}
