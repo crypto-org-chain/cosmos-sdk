@@ -4,6 +4,7 @@ import (
 	"context"
 	crand "crypto/rand" // #nosec // crypto/rand is used for seed generation
 	"encoding/binary"
+	"fmt"
 	"math/rand" // #nosec // math/rand is used for random selection and seeded from crypto/rand
 	"slices"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/huandu/skiplist"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/auth/signing"
 )
 
 var (
@@ -118,17 +120,17 @@ func (snm *SenderNonceMempool) NextSenderTx(sender string) sdk.Tx {
 // at least one signer. Note, priority is ignored. At capacity it returns ErrMempoolTxMaxCapacity
 // for a new sender and nonce, while a pooled sender and nonce is overwritten.
 func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
-	snm.mtx.Lock()
-	defer snm.mtx.Unlock()
+	// maxTx only changes at construction, so it and the tx's key are read outside the lock.
 	if snm.maxTx < 0 {
 		return nil
 	}
-
-	sender, nonce, err := senderNonce(DefaultSignerExtractionAdapter{}, tx)
+	sender, nonce, err := firstSignatureSenderNonce(tx)
 	if err != nil {
 		return err
 	}
 
+	snm.mtx.Lock()
+	defer snm.mtx.Unlock()
 	key := txKey{nonce: nonce, address: sender}
 	// Overwriting a pooled sender and nonce doesn't grow the pool, so a full pool still accepts it.
 	if snm.maxTx > 0 && !snm.existingTx[key] && len(snm.existingTx) >= snm.maxTx {
@@ -204,15 +206,34 @@ func (snm *SenderNonceMempool) CountTx() int {
 	return len(snm.existingTx)
 }
 
+// firstSignatureSenderNonce is senderNonce over tx's first signature only: unlike
+// DefaultSignerExtractionAdapter it doesn't read later signers' pubkeys, which a tx may omit.
+func firstSignatureSenderNonce(tx sdk.Tx) (sender string, nonce uint64, err error) {
+	sigTx, ok := tx.(signing.SigVerifiableTx)
+	if !ok {
+		return "", 0, fmt.Errorf("tx of type %T does not implement SigVerifiableTx", tx)
+	}
+	sigs, err := sigTx.GetSignaturesV2()
+	if err != nil {
+		return "", 0, err
+	}
+	var first []SignerData
+	if len(sigs) > 0 {
+		first = []SignerData{NewSignerData(sigs[0].PubKey.Address().Bytes(), sigs[0].Sequence)}
+	}
+	return senderNonce(tx, first)
+}
+
 // Remove removes a tx from the mempool. It returns an error if the tx does not
 // have at least one signer or the tx was not found in the pool.
 func (snm *SenderNonceMempool) Remove(tx sdk.Tx) error {
-	snm.mtx.Lock()
-	defer snm.mtx.Unlock()
-	sender, nonce, err := senderNonce(DefaultSignerExtractionAdapter{}, tx)
+	sender, nonce, err := firstSignatureSenderNonce(tx)
 	if err != nil {
 		return err
 	}
+
+	snm.mtx.Lock()
+	defer snm.mtx.Unlock()
 
 	senderTxs, found := snm.senders[sender]
 	if !found {

@@ -242,7 +242,7 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	}
 
 	// Derive the key and priority outside the lock; the config doesn't change after construction.
-	sender, nonce, err := senderNonce(mp.cfg.SignerExtractor, tx)
+	sender, nonce, err := mp.txSenderNonce(tx)
 	if err != nil {
 		return err
 	}
@@ -482,28 +482,19 @@ func (mp *PriorityNonceMempool[C]) UnorderedTxs(_ context.Context) []sdk.Tx {
 	return txs
 }
 
-// senderNonce returns the sender and nonce both pools key tx by, from its first signer. Insert,
-// Remove and GetTx's callers must agree on it.
-func senderNonce(extractor SignerExtractionAdapter, tx sdk.Tx) (sender string, nonce uint64, err error) {
-	sigs, err := extractor.GetSigners(tx)
+// txSenderNonce is senderNonce over the configured SignerExtractor's signers.
+func (mp *PriorityNonceMempool[C]) txSenderNonce(tx sdk.Tx) (sender string, nonce uint64, err error) {
+	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
 	if err != nil {
 		return "", 0, err
 	}
-	if len(sigs) == 0 {
-		return "", 0, fmt.Errorf("tx must have at least one signer")
-	}
-	sig := sigs[0]
-	nonce, err = ChooseNonce(sig.Sequence, tx)
-	if err != nil {
-		return "", 0, err
-	}
-	return sig.Signer.String(), nonce, nil
+	return senderNonce(tx, sigs)
 }
 
 // Remove removes a transaction from the mempool in O(log n) time, returning an
 // error if unsuccessful.
 func (mp *PriorityNonceMempool[C]) Remove(tx sdk.Tx) error {
-	sender, nonce, err := senderNonce(mp.cfg.SignerExtractor, tx)
+	sender, nonce, err := mp.txSenderNonce(tx)
 	if err != nil {
 		return err
 	}
