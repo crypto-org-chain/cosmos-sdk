@@ -25,8 +25,7 @@ func ChooseNonce(seq uint64, tx sdk.Tx) (uint64, error) {
 	return seq, nil
 }
 
-// senderNonce returns the sender and nonce a pool keys tx by: its first signer and that signer's
-// nonce. Pool keys and GetTx lookups must use this derivation.
+// senderNonce returns tx's pool key: its first signer and that signer's nonce.
 func senderNonce(tx sdk.Tx, sigs []SignerData) (sender string, nonce uint64, err error) {
 	if len(sigs) == 0 {
 		return "", 0, errors.New("tx must have at least one signer")
