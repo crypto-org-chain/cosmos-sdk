@@ -70,8 +70,8 @@ func (k Keeper) UpstreamDequeueAllMatureRedelegationQueue(ctx context.Context, c
 	return matureRedelegations, nil
 }
 
-// UpstreamUnbondAllMatureValidators is upstream's validator scan: the production loop, started at
-// the queue start without the gate.
+// UpstreamUnbondAllMatureValidators runs the production validator loop ungated from the queue
+// start, as upstream scans.
 func (k Keeper) UpstreamUnbondAllMatureValidators(ctx context.Context) error {
 	return k.unbondAllMatureValidators(ctx, types.ValidatorQueueKey, sdk.UnwrapSDKContext(ctx).BlockTime())
 }

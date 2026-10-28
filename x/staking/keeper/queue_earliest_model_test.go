@@ -232,8 +232,8 @@ func nextBlockTime(r *rand.Rand, now time.Time, pending []time.Time) time.Time {
 }
 
 // TestValidatorQueueEarliestMatchesUpstreamScan drives two keepers through the same unbonding
-// validators. The reference runs upstream's scan on every end-block; the gated keeper must unbond
-// the same validators and keep the same queue.
+// validators. The reference runs the validator loop ungated from the queue start on every
+// end-block; the gated keeper must unbond the same validators and keep the same queue.
 func TestValidatorQueueEarliestMatchesUpstreamScan(t *testing.T) {
 	const seeds, steps = 100, 60
 	skipped, releases := 0, 0

@@ -322,8 +322,8 @@ that multiple validators exist in the queue at the same location.
 
 #### Queue Earliest Times
 
-Each queue above also stores its earliest entry time, so `EndBlock` skips a
-queue until that time is due and then scans from it; each scan records the first
+Each queue above also stores a time at or before its earliest entry, so
+`EndBlock` skips a queue until that time is due and then scans from it; each scan records the first
 remaining entry's time, or `0x00` when none remain. An absent key means unknown:
 the next `EndBlock` scans the queue from its start. Times outside years
 0000-9999 are never stored.
