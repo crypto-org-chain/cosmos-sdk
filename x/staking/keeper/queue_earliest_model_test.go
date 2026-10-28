@@ -370,43 +370,27 @@ func requireEarliestBound(t *testing.T, ctx sdk.Context, key *storetypes.KVStore
 }
 
 // BenchmarkQueueEndBlock compares the unbonding queue end-block with upstream v0.55.0's scan on
-// goleveldb, whose iterators don't read ahead the way MemDB's do, with 50 and 500 future
-// timeslices. The after-5000-matured cases first mature and delete 5000 timeslices across
-// committed versions; an iterator from the queue start still steps past those deleted keys, while
-// the gated scan starts at the stored time. Each op also creates a CacheContext, which costs the
-// same in both columns.
+// goleveldb, whose iterators don't read ahead the way MemDB's do, with 50 future timeslices. The
+// after-matured cases first mature and delete 5000 timeslices across committed versions, which an
+// iterator from the queue start still steps past. Each op also creates a CacheContext, which costs
+// the same either way.
 func BenchmarkQueueEndBlock(b *testing.B) {
 	slice := func(n int) []stakingtypes.DVPair {
 		return []stakingtypes.DVPair{{DelegatorAddress: fmt.Sprint("del", n), ValidatorAddress: "val"}}
 	}
-	for _, future := range []int{50, 500} {
-		for _, bc := range []struct {
-			name    string
-			due     int // timeslices maturing this block
-			matured int // timeslices matured and deleted in earlier committed versions
-			gated   bool
-		}{
-			{"idle/upstream", 0, 0, false},
-			{"idle/gated", 0, 0, true},
-			{"due-1/upstream", 1, 0, false},
-			{"due-1/gated", 1, 0, true},
-			{"idle-after-5000-matured/upstream", 0, 5000, false},
-			{"idle-after-5000-matured/gated", 0, 5000, true},
-			{"due-1-after-5000-matured/upstream", 1, 5000, false},
-			{"due-1-after-5000-matured/gated", 1, 5000, true},
-		} {
-			b.Run(fmt.Sprintf("future-%d/%s", future, bc.name), func(b *testing.B) {
-				db, err := dbm.NewGoLevelDB("bench", b.TempDir(), nil)
-				require.NoError(b, err)
-				b.Cleanup(func() { require.NoError(b, db.Close()) })
-				ctx, k, _ := newQueueTestKeeperWithDB(b, db)
-				ctx = ctx.WithBlockTime(queueNow).WithHeaderInfo(header.Info{Time: queueNow})
-				require.NoError(b, k.RecomputeQueueEarliest(ctx))
-				for i := range future {
+	for _, sc := range []struct {
+		name         string
+		due, matured int
+	}{{"idle", 0, 0}, {"due-1", 1, 0}, {"idle-after-5000-matured", 0, 5000}, {"due-1-after-5000-matured", 1, 5000}} {
+		for _, gated := range []bool{false, true} {
+			b.Run(fmt.Sprintf("%s/gated=%t", sc.name, gated), func(b *testing.B) {
+				ctx, k := newBenchKeeper(b)
+				ctx = ctx.WithHeaderInfo(header.Info{Time: queueNow})
+				for i := range 50 {
 					require.NoError(b, k.SetUBDQueueTimeSlice(ctx, queueNow.Add(time.Duration(i+1)*time.Minute), slice(i)))
 				}
 				cms := ctx.MultiStore().(storetypes.CommitMultiStore)
-				for batch := 0; batch < bc.matured; batch += 500 {
+				for batch := 0; batch < sc.matured; batch += 500 {
 					for i := range 500 {
 						require.NoError(b, k.SetUBDQueueTimeSlice(ctx, queueNow.Add(-time.Duration(batch+i+1)*time.Second), slice(i)))
 					}
@@ -416,22 +400,18 @@ func BenchmarkQueueEndBlock(b *testing.B) {
 					cms.Commit()
 				}
 				require.NoError(b, k.RecomputeQueueEarliest(ctx))
-				for i := range bc.due {
+				for i := range sc.due {
 					require.NoError(b, k.SetUBDQueueTimeSlice(ctx, queueNow.Add(-time.Duration(i+1)*time.Second), slice(i)))
 				}
 				cms.Commit()
 				dequeue := k.UpstreamDequeueAllMatureUBDQueue
-				if bc.gated {
+				if gated {
 					dequeue = k.DequeueAllMatureUBDQueue
 				}
-				b.ReportAllocs()
-				b.ResetTimer()
-				for range b.N {
-					cacheCtx, _ := ctx.CacheContext()
-					if _, err := dequeue(cacheCtx, queueNow); err != nil {
-						b.Fatal(err)
-					}
-				}
+				runEndBlock(b, ctx, func(ctx sdk.Context) error {
+					_, err := dequeue(ctx, queueNow)
+					return err
+				})
 			})
 		}
 	}
@@ -441,54 +421,60 @@ func BenchmarkQueueEndBlock(b *testing.B) {
 // goleveldb, with 50 future unbonding validators. In the held case one validator is due but on
 // hold, so the queue stays due every block and the gate also looks up the first entry.
 func BenchmarkValidatorQueueEndBlock(b *testing.B) {
-	for _, bc := range []struct {
-		name  string
-		held  bool
-		gated bool
-	}{
-		{"idle/upstream", false, false},
-		{"idle/gated", false, true},
-		{"held/upstream", true, false},
-		{"held/gated", true, true},
-	} {
-		b.Run(bc.name, func(b *testing.B) {
-			db, err := dbm.NewGoLevelDB("bench", b.TempDir(), nil)
-			require.NoError(b, err)
-			b.Cleanup(func() { require.NoError(b, db.Close()) })
-			ctx, k, _ := newQueueTestKeeperWithDB(b, db)
-			ctx = ctx.WithBlockTime(queueNow).WithBlockHeight(10)
-			require.NoError(b, k.RecomputeQueueEarliest(ctx))
-			for i := range 51 {
-				if i == 50 && !bc.held {
-					break
+	for _, held := range []bool{false, true} {
+		for _, gated := range []bool{false, true} {
+			b.Run(fmt.Sprintf("held=%t/gated=%t", held, gated), func(b *testing.B) {
+				ctx, k := newBenchKeeper(b)
+				ctx = ctx.WithBlockHeight(10)
+				for i := range 51 {
+					if i == 50 && !held {
+						break
+					}
+					val, err := stakingtypes.NewValidator(sdk.ValAddress(PKs[i].Address()).String(), PKs[i], stakingtypes.Description{})
+					require.NoError(b, err)
+					val.Status = stakingtypes.Unbonding
+					val.Tokens = math.NewInt(1)
+					val.DelegatorShares = math.LegacyOneDec()
+					val.UnbondingHeight = 5
+					val.UnbondingTime = queueNow.Add(time.Duration(i+1) * time.Minute)
+					if i == 50 {
+						val.UnbondingTime = queueNow.Add(-time.Minute)
+						val.UnbondingOnHoldRefCount = 1
+					}
+					require.NoError(b, k.SetValidator(ctx, val))
+					require.NoError(b, k.InsertUnbondingValidatorQueue(ctx, val))
 				}
-				val, err := stakingtypes.NewValidator(sdk.ValAddress(PKs[i].Address()).String(), PKs[i], stakingtypes.Description{})
-				require.NoError(b, err)
-				val.Status = stakingtypes.Unbonding
-				val.Tokens = math.NewInt(1)
-				val.DelegatorShares = math.LegacyOneDec()
-				val.UnbondingHeight = 5
-				val.UnbondingTime = queueNow.Add(time.Duration(i+1) * time.Minute)
-				if i == 50 {
-					val.UnbondingTime = queueNow.Add(-time.Minute)
-					val.UnbondingOnHoldRefCount = 1
+				ctx.MultiStore().(storetypes.CommitMultiStore).Commit()
+				unbond := k.UpstreamUnbondAllMatureValidators
+				if gated {
+					unbond = k.UnbondAllMatureValidators
 				}
-				require.NoError(b, k.SetValidator(ctx, val))
-				require.NoError(b, k.InsertUnbondingValidatorQueue(ctx, val))
-			}
-			ctx.MultiStore().(storetypes.CommitMultiStore).Commit()
-			unbond := k.UpstreamUnbondAllMatureValidators
-			if bc.gated {
-				unbond = k.UnbondAllMatureValidators
-			}
-			b.ReportAllocs()
-			b.ResetTimer()
-			for range b.N {
-				cacheCtx, _ := ctx.CacheContext()
-				if err := unbond(cacheCtx); err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
+				runEndBlock(b, ctx, func(ctx sdk.Context) error { return unbond(ctx) })
+			})
+		}
+	}
+}
+
+// newBenchKeeper returns a keeper on goleveldb with the queue times recorded at queueNow.
+func newBenchKeeper(b *testing.B) (sdk.Context, *stakingkeeper.Keeper) {
+	b.Helper()
+	db, err := dbm.NewGoLevelDB("bench", b.TempDir(), nil)
+	require.NoError(b, err)
+	b.Cleanup(func() { require.NoError(b, db.Close()) })
+	ctx, k, _ := newQueueTestKeeperWithDB(b, db)
+	ctx = ctx.WithBlockTime(queueNow)
+	require.NoError(b, k.RecomputeQueueEarliest(ctx))
+	return ctx, k
+}
+
+func runEndBlock(b *testing.B, ctx sdk.Context, endBlock func(sdk.Context) error) {
+	b.Helper()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		cacheCtx, _ := ctx.CacheContext()
+		if err := endBlock(cacheCtx); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
