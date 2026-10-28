@@ -10,27 +10,23 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-// queueEmptyMarker is the stored value for a queue known to be empty. An absent key means the
-// earliest time is unknown, so end-block scans the queue from its start and records it.
+// queueEmptyMarker is stored for a queue known to be empty; an absent key means unknown.
 const queueEmptyMarker = "\x00"
 
-// sortableTimeLen is the width of sdk.FormatTimeBytes for years 0000-9999, the only times stored:
-// at this width byte order is time order and queue-key order. Other years leave the time unknown.
+// sortableTimeLen is the width of sdk.FormatTimeBytes for years 0000-9999, where byte order is time
+// and queue-key order. Only times of this width are stored.
 const sortableTimeLen = len(sdk.SortableTimeFormat)
 
 // queueGate pairs a maturity queue with the key holding its earliest entry time.
 //
 // Invariant: the first queue key at the stored time sorts at or before every key in the queue, and
-// the empty marker is stored only when the queue has no entries. Inserts keep it by lowering the
-// time; deletes cannot break it; end-block scans start at the stored time and recompute it from
-// the first remaining entry.
+// the empty marker is stored only for an empty queue.
 type queueGate struct {
-	earliestKey []byte
-	queuePrefix []byte
-	// keyTimeBytes returns the formatted time inside a queue key.
+	earliestKey  []byte
+	queuePrefix  []byte
 	keyTimeBytes func(key []byte) []byte
-	// firstKeyAt returns a key that sorts at or before every queue key with the given formatted
-	// time, and after every key with an earlier time of the same width.
+	// firstKeyAt returns a key at or before every queue key with the given formatted time, and
+	// after every key with an earlier time of the same width.
 	firstKeyAt func(timeBz []byte) []byte
 }
 
@@ -46,18 +42,15 @@ func newTimeQueueGate(earliestKey, queuePrefix []byte) queueGate {
 	}
 }
 
-// storableTime returns the formatted time inside key, sharing key's memory, or nil when it isn't
-// sortableTimeLen wide and so can't be stored.
+// storableTime returns the time inside key, sharing its memory, or nil if it can't be stored.
 func (g queueGate) storableTime(key []byte) []byte {
-	bz := g.keyTimeBytes(key)
-	if len(bz) != sortableTimeLen {
-		return nil
+	if bz := g.keyTimeBytes(key); len(bz) == sortableTimeLen {
+		return bz
 	}
-	return bz
+	return nil
 }
 
-// earliestValue is the stored value for a queue whose first entry has key, or nil (unknown) when
-// that entry's time can't be stored.
+// earliestValue is the value to store when key is the queue's first entry; nil means unknown.
 func (g queueGate) earliestValue(key []byte) []byte {
 	return bytes.Clone(g.storableTime(key))
 }
@@ -81,14 +74,13 @@ type queueEarliest struct {
 	empty bool
 }
 
-// due reports whether end-block has to scan the queue at nowBz, the formatted maturity cutoff. A
-// cutoff of another width doesn't compare by time with the stored one, so it always scans.
+// due reports whether the queue must be scanned at the formatted cutoff nowBz. A cutoff of another
+// width doesn't compare by time with the stored value, so it always scans.
 func (e queueEarliest) due(nowBz []byte) bool {
 	return !e.known || len(nowBz) != sortableTimeLen || (!e.empty && bytes.Compare(e.raw, nowBz) <= 0)
 }
 
-// scanStart returns the first key at the stored time, which sorts at or before every queue key, or
-// the queue start when that time is unknown or the queue is empty.
+// scanStart returns the first key at the stored time, or the queue start when there is none.
 func (e queueEarliest) scanStart(g queueGate) []byte {
 	if !e.known || e.empty {
 		return g.queuePrefix
@@ -96,10 +88,9 @@ func (e queueEarliest) scanStart(g queueGate) []byte {
 	return g.firstKeyAt(e.raw)
 }
 
-// RecomputeQueueEarliest recomputes the earliest entry time of the validator, unbonding and
-// redelegation queues from each queue's first entry, replacing any pending-slot list that fork
-// v0.53.x or v0.54.x stored under the same keys. Run it after writing queue entries without the
-// keeper's queue setters.
+// RecomputeQueueEarliest recomputes each queue's earliest entry time from its first entry,
+// replacing any pending-slot list that fork v0.53.x or v0.54.x stored under the same keys. Run it
+// after writing queue entries without the keeper's queue setters.
 func (k Keeper) RecomputeQueueEarliest(ctx context.Context) error {
 	for _, g := range queueGates {
 		prev, err := k.getQueueEarliest(ctx, g)
@@ -124,9 +115,8 @@ func (k Keeper) PopulateQueuePendingSlots(ctx context.Context) error {
 	return k.RecomputeQueueEarliest(ctx)
 }
 
-// runGatedScan runs scan once g's earliest time is due at nowBz, the formatted maturity cutoff.
-// scan returns the value stored when it finishes and the earliest time to store, which is written
-// if it differs.
+// runGatedScan runs scan once g's earliest time is due at the formatted cutoff nowBz. scan returns
+// the value stored when it finishes and the new earliest time, which is written if it differs.
 func (k Keeper) runGatedScan(ctx context.Context, g queueGate, nowBz []byte, scan func(earliest queueEarliest) (stored, next []byte, err error)) error {
 	earliest, err := k.getQueueEarliest(ctx, g)
 	if err != nil {
@@ -142,50 +132,41 @@ func (k Keeper) runGatedScan(ctx context.Context, g queueGate, nowBz []byte, sca
 	return k.storeQueueEarliest(ctx, g, stored, next)
 }
 
-// dequeueTimeQueue removes every timeslice keyed at or before now and returns their entries, once
-// the queue's earliest time is due. The scan's iterator runs past now and stops at the first later
-// key, which becomes the new earliest time, so finding it costs no second walk and cannot
-// disagree with what the scan removed. g must come from newTimeQueueGate, whose keys end at the
-// time, so the first key at now is also the last. unmarshal must not write to the store: the
-// stored time read before the scan is passed on as the current one.
+// dequeueTimeQueue removes and returns every timeslice keyed at or before now, once the queue is
+// due. The iterator stops at the first later key, which becomes the new earliest time. g must come
+// from newTimeQueueGate, whose keys end at the time, and unmarshal must not write to the store.
 func dequeueTimeQueue[E any](ctx context.Context, k Keeper, g queueGate, now time.Time, unmarshal func([]byte) ([]E, error)) ([]E, error) {
 	var mature []E
 	nowBz := sdk.FormatTimeBytes(now)
-	err := k.runGatedScan(ctx, g, nowBz, func(earliest queueEarliest) (stored, next []byte, err error) {
-		mature, next, err = dequeueTimeSlices(ctx, k, g, earliest.scanStart(g), nowBz, unmarshal)
-		// Nothing writes the stored time during this scan, so it is still the value read before it.
-		return earliest.raw, next, err
+	err := k.runGatedScan(ctx, g, nowBz, func(earliest queueEarliest) ([]byte, []byte, error) {
+		store := k.storeService.OpenKVStore(ctx)
+		bound := g.firstKeyAt(nowBz)
+		iter, err := store.Iterator(earliest.scanStart(g), storetypes.PrefixEndBytes(g.queuePrefix))
+		if err != nil {
+			return nil, nil, err
+		}
+		defer iter.Close()
+
+		for ; iter.Valid(); iter.Next() {
+			key := iter.Key()
+			if bytes.Compare(key, bound) > 0 {
+				return earliest.raw, g.earliestValue(key), nil
+			}
+			entries, err := unmarshal(iter.Value())
+			if err != nil {
+				return nil, nil, err
+			}
+			mature = append(mature, entries...)
+			if err := store.Delete(key); err != nil {
+				return nil, nil, err
+			}
+		}
+		return earliest.raw, []byte(queueEmptyMarker), nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return mature, nil
-}
-
-func dequeueTimeSlices[E any](ctx context.Context, k Keeper, g queueGate, start, nowBz []byte, unmarshal func([]byte) ([]E, error)) (mature []E, next []byte, err error) {
-	store := k.storeService.OpenKVStore(ctx)
-	bound := g.firstKeyAt(nowBz)
-	iter, err := store.Iterator(start, storetypes.PrefixEndBytes(g.queuePrefix))
-	if err != nil {
-		return nil, nil, err
-	}
-	defer iter.Close()
-
-	for ; iter.Valid(); iter.Next() {
-		key := iter.Key()
-		if bytes.Compare(key, bound) > 0 {
-			return mature, g.earliestValue(key), nil
-		}
-		var entries []E
-		if entries, err = unmarshal(iter.Value()); err != nil {
-			return nil, nil, err
-		}
-		mature = append(mature, entries...)
-		if err = store.Delete(key); err != nil {
-			return nil, nil, err
-		}
-	}
-	return mature, []byte(queueEmptyMarker), nil
 }
 
 func (k Keeper) getQueueEarliest(ctx context.Context, g queueGate) (queueEarliest, error) {
@@ -198,18 +179,14 @@ func (k Keeper) getQueueEarliest(ctx context.Context, g queueGate) (queueEarlies
 	case len(bz) == sortableTimeLen:
 		return queueEarliest{raw: bz, known: true}, nil
 	default:
-		// Absent, or a fork v0.53.x or v0.54.x pending-slot list (4+8n or 4+16n bytes, never 1 or
-		// 29). A fork v0.53.x chain is already at staking version 6 and skips the migration that
-		// replaces the list, so its next scan replaces it here.
+		// Absent, or a fork v0.53.x/v0.54.x pending-slot list (4+8n or 4+16n bytes, never 1 or 29).
+		// Fork v0.53.x is already at staking version 6 and skips the migration, so a scan replaces it.
 		return queueEarliest{raw: bz}, nil
 	}
 }
 
 // setQueueEntry writes a queue entry and lowers the stored earliest time to the time in key, or
-// clears a known time or the empty marker when that time isn't sortableTimeLen wide. Every queue
-// insert goes through it, which keeps the gate's invariant; deletes cannot break it. Besides the
-// entry, it reads the stored value, 0, 1 or 29 bytes once any fork pending-slot list is replaced,
-// and writes it only on a change.
+// clears it when that time can't be stored. Every queue insert must go through it.
 func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byte) error {
 	store := k.storeService.OpenKVStore(ctx)
 	if err := store.Set(key, value); err != nil {
@@ -233,8 +210,7 @@ func (k Keeper) setQueueEntry(ctx context.Context, g queueGate, key, value []byt
 	return store.Set(g.earliestKey, bytes.Clone(timeBz))
 }
 
-// earliestFrom returns the value to store for the queue's first entry at or after start: its time,
-// the empty marker when there is none, or nil when that time isn't sortableTimeLen wide.
+// earliestFrom returns the value to store for the queue's first entry at or after start.
 func (k Keeper) earliestFrom(ctx context.Context, g queueGate, start []byte) ([]byte, error) {
 	iter, err := k.storeService.OpenKVStore(ctx).Iterator(start, storetypes.PrefixEndBytes(g.queuePrefix))
 	if err != nil {
@@ -247,8 +223,8 @@ func (k Keeper) earliestFrom(ctx context.Context, g queueGate, start []byte) ([]
 	return g.earliestValue(iter.Key()), nil
 }
 
-// storeQueueEarliest writes value, or clears the key when value is nil, unless it equals prev, the
-// value currently stored, so a queue that stays due is not rewritten every block.
+// storeQueueEarliest writes value (nil clears the key) unless it equals prev, the stored value, so
+// a queue that stays due is not rewritten every block.
 func (k Keeper) storeQueueEarliest(ctx context.Context, g queueGate, prev, value []byte) error {
 	if bytes.Equal(prev, value) {
 		return nil
