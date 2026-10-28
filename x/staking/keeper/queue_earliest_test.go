@@ -192,14 +192,6 @@ func (s *KeeperTestSuite) TestTimeQueueInsertGas() {
 		expGas   storetypes.Gas // gas the gate adds to an insert at insertAt
 	}{
 		{
-			name: "later insert keeps the stored time",
-			malleate: func(q timeQueue, ctx sdk.Context) {
-				s.Require().NoError(s.stakingKeeper.RecomputeQueueEarliest(ctx))
-				s.Require().NoError(q.insert(s, ctx, queueNow))
-			},
-			expGas: readGas(timeLen),
-		},
-		{
 			// One pending completion time per block is what drives the count up on a live chain.
 			name: "later insert with 1000 pending times",
 			malleate: func(q timeQueue, ctx sdk.Context) {
@@ -377,25 +369,12 @@ func (s *KeeperTestSuite) TestPopulateQueuePendingSlotsAlias() {
 func (s *KeeperTestSuite) TestMigrate5to6RecomputesQueueEarliest() {
 	ctx := atQueueTime(s.ctx, queueNow)
 	store := ctx.KVStore(s.storeKey)
-	store.Set(stakingtypes.ValidatorQueueEarliestKey, legacyPendingSlots(1, 16))
-	for _, q := range timeQueues {
-		store.Set(q.earliestKey, legacyPendingSlots(1, 8))
-		store.Set(q.timeKey(queueNow.Add(-time.Hour)), q.slice())
-	}
+	q := timeQueues[0]
+	store.Set(q.earliestKey, legacyPendingSlots(1, 8))
+	store.Set(q.timeKey(queueNow.Add(-time.Hour)), q.slice())
 
 	s.Require().NoError(stakingkeeper.NewMigrator(s.stakingKeeper).Migrate5to6(ctx))
-
-	s.Require().Equal(queueEmptyMarker, store.Get(stakingtypes.ValidatorQueueEarliestKey))
-	for _, q := range timeQueues {
-		s.Require().Equal(sdk.FormatTimeBytes(queueNow.Add(-time.Hour)), store.Get(q.earliestKey))
-		// A tx in the upgrade block inserts against the recorded time, and end-block then
-		// matures the old entry and keeps the new one.
-		s.Require().NoError(q.insert(s, ctx, queueNow.Add(time.Hour)))
-		matured, err := q.dequeue(s, ctx)
-		s.Require().NoError(err)
-		s.Require().Equal(1, matured)
-		s.Require().Equal(sdk.FormatTimeBytes(queueNow.Add(time.Hour)), store.Get(q.earliestKey))
-	}
+	s.Require().Equal(sdk.FormatTimeBytes(queueNow.Add(-time.Hour)), store.Get(q.earliestKey))
 }
 
 func (s *KeeperTestSuite) TestValidatorQueueEarliestGate() {

@@ -188,22 +188,23 @@ Add `"params"` to `Deleted` as well if your app still had the `x/params` store m
 
 #### Staking Queue Earliest-Time Gate (crypto-org-chain fork)
 
-The validator, unbonding and redelegation queues each keep, under keys `0x44`-`0x46`, a time whose queue key sorts at or before the queue's first entry. End-block reads that time and scans a queue only once it is due, starting at that time rather than at the queue start, so blocks before then open no iterator over that queue. Each queue insert reads and may lower that one value, so its gas no longer grows with the number of pending entries.
+The validator, unbonding and redelegation queues each store their earliest entry time under keys `0x44`-`0x46`. End-block skips a queue until that time is due, then scans from it. Inserts read and may lower that value, so their gas no longer grows with the number of pending entries.
 
-No upgrade handler change is required. Staking's 5 to 6 migration replaces the pending-slot lists that fork `release/v0.54.x` kept under the same keys and records each queue's time. A chain whose staking module is already at version 6, such as one on fork `release/v0.53.x`, skips that migration: its first end-block reads the legacy list or the missing key as unknown, scans each queue and records the time. `Keeper.RecomputeQueueEarliest` recomputes the times; the deprecated `PopulateQueuePendingSlots` still compiles and calls it, so existing handlers keep working. On a fork chain that never ran `PopulateQueuePendingSlots`, missed entries that are already due mature at the first end-block after the upgrade, so expect a burst of completions at the upgrade height.
+No upgrade handler change is required:
 
-If the chain ran a binary that doesn't keep these times (for example upstream v0.55.0) after one that did, call `RecomputeQueueEarliest` in the upgrade handler when switching back. The stored times are stale by then: entries queued in between may sort before them, and a queue marked empty before the switch is never scanned, so a later insert records a time after those entries.
+* Staking's 5 to 6 migration replaces fork `release/v0.54.x`'s pending-slot lists and records the times.
+* A chain already at staking version 6 (such as fork `release/v0.53.x`) skips the migration; its first end-block scans each queue and records the times.
+* `PopulateQueuePendingSlots` still compiles and calls `RecomputeQueueEarliest`.
+* On a fork chain that never ran `PopulateQueuePendingSlots`, missed entries that are already due mature at the upgrade height.
 
-* Write queue entries only through `SetUBDQueueTimeSlice`, `SetRedelegationQueueTimeSlice` and `SetUnbondingValidatorsQueue` (or the `Insert*` helpers that call them). Scans start at the stored time, and a queue marked empty is not scanned at all, so an entry written straight to the store before that time, or while the queue is marked empty, is not scanned until `RecomputeQueueEarliest` runs; call it after such a write, including in a store migration.
-* Compared with upstream v0.55.0, each queue insert costs one more read (about 1.1k gas), plus about 2.9k gas when it lowers the stored time, as the first insert into an empty queue does. Txs that set an exact gas limit for `MsgUndelegate` or `MsgBeginRedelegate` should allow for that. Simulated gas can miss the lowering write if the queue changes between simulation and delivery, so `--gas auto` users should keep a gas adjustment above 1.0.
-* End-block cost:
-  * A block where no maturity queue is due opens no iterator over those queues. End-block's other iterators (validator power index, key rotation queues) are unchanged.
-  * A due unbonding or redelegation scan uses one iterator, as upstream does, but starts at the stored time. It also reads the stored time and writes it at most once. On a fresh database it costs about 40% more than upstream in `BenchmarkQueueEndBlock` (about 40 more allocations); after many matured entries it costs far less, because it skips their deleted keys.
-  * A due validator scan also opens a second iterator to find the first remaining entry, since entries can stay queued (height not reached, or on hold). While a validator stays on hold, each block costs about 1.4 times upstream's.
-* The fork v0.54.x pending-slot API is removed (see the CHANGELOG). The `*QueuePendingSlotsKey` names are gone rather than aliased, because the value under those keys changed format; `ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator` are back.
-* An imported chain records these times at its first end-block, while the exporting chain already holds them, so an app comparing stores across export and import (as simapp's `TestAppImportExport` does) should skip `ValidatorQueueEarliestKey`, `UBDQueueEarliestKey` and `RedelegationQueueEarliestKey`.
-* As in upstream, redelegations mature by `HeaderInfo().Time` and `DequeueAllMatureRedelegationQueue` ignores its `currTime` argument; fork v0.54.x used `currTime`. Both are the block time in `FinalizeBlock`.
-* Queue times outside years 0000-9999 can't come from genesis, whose protobuf timestamps stop at 9999. They need a direct call to the `Set*` queue helpers, or a block time so late that completion falls after year 9999. Inserting one clears the stored time, so the next end-block scans that queue from its start and records it again. While such an entry is the queue's first, every end-block scans that way, as upstream does, plus one lookup of the first entry for the validator queue.
+Things to know:
+
+* Write queue entries only through the keeper's `Set*`/`Insert*` queue helpers. An entry written straight to the store before the stored time, or into a queue marked empty, isn't scanned until `RecomputeQueueEarliest` runs. Call it after such a write, including in a store migration, and when switching back from a binary that doesn't keep these times.
+* Compared with upstream v0.55.0, each queue insert costs one more read (about 1.1k gas), plus about 2.9k gas when it lowers the stored time. Txs with an exact gas limit for `MsgUndelegate` or `MsgBeginRedelegate` should allow for that, and `--gas auto` users should keep a gas adjustment above 1.0.
+* A block where no queue is due opens no maturity-queue iterator. A due scan costs about 40% more than upstream on a fresh database, and far less after many matured entries. While a validator stays on hold, each block costs about 1.4 times upstream's.
+* An imported chain records these times at its first end-block, so an app that compares stores across export and import should skip `0x44`-`0x46`.
+* As in upstream, redelegations mature by `HeaderInfo().Time`; `DequeueAllMatureRedelegationQueue` ignores `currTime`.
+* The fork v0.54.x pending-slot API is removed (see the CHANGELOG).
 
 ### crypto-org-chain Fork Changes
 
