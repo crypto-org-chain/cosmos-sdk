@@ -188,7 +188,7 @@ Add `"params"` to `Deleted` as well if your app still had the `x/params` store m
 
 #### Staking Queue Earliest-Time Gate (crypto-org-chain fork)
 
-The validator, unbonding and redelegation queues each store their earliest entry time under keys `0x44`-`0x46`. End-block skips a queue until that time is due, then scans from it. Inserts read and may lower that value, so their gas no longer grows with the number of pending entries.
+The validator, unbonding and redelegation queues each store a time at or before their earliest entry under keys `0x44`-`0x46`. End-block skips a queue until that time is due, then scans from it. Inserts read and may lower that value, so their gas no longer grows with the number of pending entries.
 
 No upgrade handler change is required:
 
@@ -203,7 +203,7 @@ Things to know:
 * Compared with upstream v0.55.0, each queue insert costs one more read (about 1.1k gas), plus about 2.9k gas when it lowers the stored time. Txs with an exact gas limit for `MsgUndelegate` or `MsgBeginRedelegate` should allow for that, and `--gas auto` users should keep a gas adjustment above 1.0.
 * A block where no queue is due opens no maturity-queue iterator. A due scan costs about 40% more than upstream on a fresh database, and far less after many matured entries. While a validator stays on hold, each block costs about 1.4 times upstream's.
 * An imported chain records these times at its first end-block, so an app that compares stores across export and import should skip `0x44`-`0x46`.
-* As in upstream, redelegations mature by `HeaderInfo().Time`; `DequeueAllMatureRedelegationQueue` ignores `currTime`.
+* As in upstream, redelegations mature by `HeaderInfo().Time`; `DequeueAllMatureRedelegationQueue` ignores `currTime` (fork v0.54.x used it).
 * The fork v0.54.x pending-slot API is removed (see the CHANGELOG).
 
 ### crypto-org-chain Fork Changes
