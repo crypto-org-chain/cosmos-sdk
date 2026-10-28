@@ -322,15 +322,11 @@ that multiple validators exist in the queue at the same location.
 
 #### Queue Earliest Times
 
-Each queue above also keeps a time whose queue key sorts at or before its first
-entry, so `EndBlock` skips scanning a queue until that time is due and then
-starts the scan there; each scan resets it to the first remaining entry. `0x00`
-marks an empty queue. An absent key makes the next `EndBlock` scan the queue
-from its start and record its first remaining entry's time, or `0x00` if none
-remain. A time outside years 0000-9999 leaves the time unknown when it is
-inserted, or while it is the queue's first entry. Such a time needs a direct
-call to the queue setters, or a block time so late that completion falls after
-year 9999.
+Each queue above also stores its earliest entry time, so `EndBlock` skips a
+queue until that time is due and then scans from it; each scan records the first
+remaining entry's time, or `0x00` when none remain. An absent key means unknown:
+the next `EndBlock` scans the queue from its start. Times outside years
+0000-9999 are never stored.
 
 * ValidatorQueueEarliest: `0x44 -> format(time)`, or `0x00` when the queue is empty
 * UnbondingDelegationQueueEarliest: `0x45 -> format(time)`, or `0x00` when the queue is empty
