@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	errorsmod "cosmossdk.io/errors"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -36,6 +38,15 @@ type ExtMempool interface {
 	// RemoveWithReason removes a transaction from the mempool with specific reason
 	// allowing the mempool to handle the removal differently.
 	RemoveWithReason(context.Context, sdk.Tx, RemoveReason) error
+}
+
+// TxLookupMempool is implemented by mempools that can look up a pooled tx by its
+// first signer and nonce.
+type TxLookupMempool interface {
+	Mempool
+
+	// GetTx returns the tx pooled at sender and nonce, if any.
+	GetTx(sender string, nonce uint64) (sdk.Tx, bool)
 }
 
 // UnorderedMempool is implemented by mempools that can list pooled txs
@@ -80,7 +91,11 @@ type Iterator interface {
 var (
 	ErrTxNotFound           = errors.New("tx not found in mempool")
 	ErrMempoolTxMaxCapacity = errors.New("pool reached max tx capacity")
+	// ErrTxReplacement has its own ABCI code so clients can match it; code 1 is what unregistered errors get.
+	ErrTxReplacement = errorsmod.Register(codespace, 2, "tx doesn't fit the replacement rule")
 )
+
+const codespace = "mempool"
 
 // SelectBy is compatible with old interface to avoid breaking api.
 // In v0.52+, this function is removed and SelectBy is merged into Mempool interface.

@@ -189,17 +189,33 @@ func (s *MempoolTestSuite) TestDefaultMempool() {
 	sel := fetchTxs(itr, 13)
 	require.Equal(t, 13, len(sel))
 
-	// a tx which does not implement SigVerifiableTx should not be inserted
-	tx := &sigErrTx{getSigs: func() ([]txsigning.SignatureV2, error) {
-		return nil, fmt.Errorf("error")
-	}}
-	require.Error(t, s.mempool.Insert(ctx, tx))
-	require.Error(t, s.mempool.Remove(tx))
-	tx.getSigs = func() ([]txsigning.SignatureV2, error) {
-		return nil, nil
+	// Both pools reject a tx whose signers can't be read, with the same errors.
+	for name, mp := range map[string]mempool.Mempool{"sender nonce": s.mempool, "priority nonce": mempool.DefaultPriorityMempool()} {
+		s.Run(name, func() {
+			t := s.T()
+			tx := &sigErrTx{getSigs: func() ([]txsigning.SignatureV2, error) {
+				return nil, fmt.Errorf("error")
+			}}
+			require.Error(t, mp.Insert(ctx, tx))
+			require.Error(t, mp.Remove(tx))
+			tx.getSigs = func() ([]txsigning.SignatureV2, error) {
+				return nil, nil
+			}
+			require.EqualError(t, mp.Insert(ctx, tx), "tx must have at least one signer")
+			require.EqualError(t, mp.Remove(tx), "tx must have at least one signer")
+		})
 	}
-	require.Error(t, s.mempool.Insert(ctx, tx))
-	require.Error(t, s.mempool.Remove(tx))
+
+	// The key comes from the first signature only, so a later one may omit its pubkey.
+	s.resetMempool()
+	partial := &sigErrTx{getSigs: func() ([]txsigning.SignatureV2, error) {
+		return []txsigning.SignatureV2{
+			{PubKey: testPubKey{address: txs[0].address}, Sequence: 3},
+			{Sequence: 7},
+		}, nil
+	}}
+	require.NoError(t, s.mempool.Insert(ctx, partial))
+	require.NoError(t, s.mempool.Remove(partial))
 
 	// removing a tx not in the mempool should error
 	s.resetMempool()

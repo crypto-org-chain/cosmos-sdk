@@ -4,7 +4,6 @@ import (
 	"context"
 	crand "crypto/rand" // #nosec // crypto/rand is used for seed generation
 	"encoding/binary"
-	"fmt"
 	"math/rand" // #nosec // math/rand is used for random selection and seeded from crypto/rand
 	"slices"
 	"sync"
@@ -117,30 +116,23 @@ func (snm *SenderNonceMempool) NextSenderTx(sender string) sdk.Tx {
 }
 
 // Insert adds a tx to the mempool. It returns an error if the tx does not have
-// at least one signer. Note, priority is ignored.
+// at least one signer. Note, priority is ignored. A full pool still overwrites a pooled sender and nonce.
 func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
-	snm.mtx.Lock()
-	defer snm.mtx.Unlock()
-	if snm.maxTx > 0 && len(snm.existingTx) >= snm.maxTx {
-		return ErrMempoolTxMaxCapacity
-	}
+	// maxTx and the key don't depend on pool state, so read them unlocked.
 	if snm.maxTx < 0 {
 		return nil
 	}
-
-	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
+	sender, nonce, err := firstSignatureSenderNonce(tx)
 	if err != nil {
 		return err
 	}
-	if len(sigs) == 0 {
-		return fmt.Errorf("tx must have at least one signer")
-	}
 
-	sig := sigs[0]
-	sender := sdk.AccAddress(sig.PubKey.Address()).String()
-	nonce, err := ChooseNonce(sig.Sequence, tx)
-	if err != nil {
-		return err
+	snm.mtx.Lock()
+	defer snm.mtx.Unlock()
+	key := txKey{nonce: nonce, address: sender}
+	// Overwriting a pooled sender and nonce doesn't grow the pool, so a full pool still accepts it.
+	if snm.maxTx > 0 && len(snm.existingTx) >= snm.maxTx && !snm.existingTx[key] {
+		return ErrMempoolTxMaxCapacity
 	}
 
 	senderTxs, found := snm.senders[sender]
@@ -150,8 +142,6 @@ func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 	}
 
 	senderTxs.Set(nonce, tx)
-
-	key := txKey{nonce: nonce, address: sender}
 	snm.existingTx[key] = true
 
 	return nil
@@ -214,25 +204,30 @@ func (snm *SenderNonceMempool) CountTx() int {
 	return len(snm.existingTx)
 }
 
+// firstSignatureSenderNonce keys tx by its first signature only, as this pool always has. The
+// unchecked type assertion stays, since FinalizeBlock's Remove result is part of the block result.
+func firstSignatureSenderNonce(tx sdk.Tx) (sender string, nonce uint64, err error) {
+	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
+	if err != nil {
+		return "", 0, err
+	}
+	var first []SignerData
+	if len(sigs) > 0 {
+		first = []SignerData{NewSignerData(sigs[0].PubKey.Address().Bytes(), sigs[0].Sequence)}
+	}
+	return senderNonce(tx, first)
+}
+
 // Remove removes a tx from the mempool. It returns an error if the tx does not
 // have at least one signer or the tx was not found in the pool.
 func (snm *SenderNonceMempool) Remove(tx sdk.Tx) error {
-	snm.mtx.Lock()
-	defer snm.mtx.Unlock()
-	sigs, err := tx.(signing.SigVerifiableTx).GetSignaturesV2()
+	sender, nonce, err := firstSignatureSenderNonce(tx)
 	if err != nil {
 		return err
-	}
-	if len(sigs) == 0 {
-		return fmt.Errorf("tx must have at least one signer")
 	}
 
-	sig := sigs[0]
-	sender := sdk.AccAddress(sig.PubKey.Address()).String()
-	nonce, err := ChooseNonce(sig.Sequence, tx)
-	if err != nil {
-		return err
-	}
+	snm.mtx.Lock()
+	defer snm.mtx.Unlock()
 
 	senderTxs, found := snm.senders[sender]
 	if !found {
