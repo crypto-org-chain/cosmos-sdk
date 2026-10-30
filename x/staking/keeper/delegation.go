@@ -518,7 +518,7 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
 // currTime, and deletes the timeslices from the queue. Uses the pending-slot index (populated by
-// PopulateQueuePendingSlots); slots are read once and written once (batch update).
+// PopulateQueuePendingSlots); slots are read once and written at most once (batch update).
 // Read phase collects mature timeslices; write phase deletes keys and updates pending slots so that
 // on any error no queue keys are deleted and state remains consistent.
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
@@ -560,6 +560,10 @@ func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time
 		if err = store.Delete(key); err != nil {
 			return matureUnbonds, err
 		}
+	}
+	// Rewriting an unchanged list would store a new copy of it every block.
+	if len(remaining) == len(slots) {
+		return matureUnbonds, nil
 	}
 	return matureUnbonds, k.SetUBDQueuePendingSlots(ctx, remaining)
 }
@@ -844,7 +848,7 @@ func (k Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelegat
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
 // timeslices inclusively previous to currTime, and deletes the timeslices from
 // the queue. Uses the pending-slot index (populated by PopulateQueuePendingSlots);
-// slots are read once and written once (batch update).
+// slots are read once and written at most once (batch update).
 // Read phase collects mature timeslices; write phase deletes keys and updates pending slots so that
 // on any error no queue keys are deleted and state remains consistent.
 func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
@@ -886,6 +890,10 @@ func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime 
 		if err = store.Delete(key); err != nil {
 			return matureRedelegations, err
 		}
+	}
+	// Rewriting an unchanged list would store a new copy of it every block.
+	if len(remaining) == len(slots) {
+		return matureRedelegations, nil
 	}
 	return matureRedelegations, k.SetRedelegationQueuePendingSlots(ctx, remaining)
 }

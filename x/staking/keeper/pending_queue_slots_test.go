@@ -1,8 +1,13 @@
 package keeper_test
 
 import (
+	"bytes"
 	"time"
 
+	"cosmossdk.io/core/header"
+
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -711,4 +716,72 @@ func (s *KeeperTestSuite) TestSetRedelegationQueuePendingSlots_TimeWithNanosecon
 	s.Require().NoError(err)
 	s.Require().Len(retrievedSlots, 1)
 	s.Require().Equal(testTime, retrievedSlots[0]) // Should preserve nanosecond precision
+}
+
+func (s *KeeperTestSuite) TestDequeueRewritesPendingSlotsOnlyWhenSomethingMatures() {
+	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	queues := []struct {
+		name    string
+		key     []byte
+		enqueue func(ctx sdk.Context, t time.Time)
+		dequeue func(ctx sdk.Context) error
+	}{
+		{
+			name: "unbonding",
+			key:  stakingtypes.UBDQueuePendingSlotsKey,
+			enqueue: func(ctx sdk.Context, t time.Time) {
+				s.Require().NoError(s.stakingKeeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{{DelegatorAddress: "del", ValidatorAddress: "val"}}))
+				s.Require().NoError(s.stakingKeeper.AddUBDQueuePendingSlot(ctx, t))
+			},
+			dequeue: func(ctx sdk.Context) error {
+				_, err := s.stakingKeeper.DequeueAllMatureUBDQueue(ctx, now)
+				return err
+			},
+		},
+		{
+			name: "redelegation",
+			key:  stakingtypes.RedelegationQueuePendingSlotsKey,
+			enqueue: func(ctx sdk.Context, t time.Time) {
+				s.Require().NoError(s.stakingKeeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{{DelegatorAddress: "del", ValidatorSrcAddress: "src", ValidatorDstAddress: "dst"}}))
+				s.Require().NoError(s.stakingKeeper.AddRedelegationQueuePendingSlot(ctx, t))
+			},
+			dequeue: func(ctx sdk.Context) error {
+				_, err := s.stakingKeeper.DequeueAllMatureRedelegationQueue(ctx, now)
+				return err
+			},
+		},
+	}
+	testCases := []struct {
+		name      string
+		pending   []time.Time
+		expWrites int
+	}{
+		{"nothing matured", []time.Time{now.Add(time.Hour)}, 0},
+		{"one entry matured", []time.Time{now.Add(-time.Hour), now.Add(time.Hour)}, 1},
+	}
+
+	for _, q := range queues {
+		for _, tc := range testCases {
+			s.Run(q.name+"/"+tc.name, func() {
+				s.SetupTest()
+				ctx := s.ctx.WithBlockTime(now).WithHeaderInfo(header.Info{Time: now})
+				for _, t := range tc.pending {
+					q.enqueue(ctx, t)
+				}
+
+				cms, ok := ctx.MultiStore().(storetypes.CommitMultiStore)
+				s.Require().True(ok)
+				cms.AddListeners([]storetypes.StoreKey{s.storeKey})
+				cms.PopStateCache()
+				s.Require().NoError(q.dequeue(ctx))
+				writes := 0
+				for _, pair := range cms.PopStateCache() {
+					if bytes.Equal(pair.Key, q.key) {
+						writes++
+					}
+				}
+				s.Require().Equal(tc.expWrites, writes)
+			})
+		}
+	}
 }
