@@ -151,7 +151,7 @@ func ExportGenesisFileWithTime(genFile string, appGenesis *types.AppGenesis, gen
 
 Two module consensus-version bumps ship in this release and run automatically via `RunMigrations` in your upgrade handler:
 
-* `x/staking` 5 → 6: adds the `key_rotation_fee` param, defaulting to `1000000` of the bond denom ([#26485](https://github.com/cosmos/cosmos-sdk/pull/26485)). `Params.Validate` requires the fee denom to equal `bond_denom` ([#26613](https://github.com/cosmos/cosmos-sdk/pull/26613)).
+* `x/staking` 5 → 6: adds the `key_rotation_fee` param, defaulting to `1000000` of the bond denom ([#26485](https://github.com/cosmos/cosmos-sdk/pull/26485)). `Params.Validate` requires the fee denom to equal `bond_denom` ([#26613](https://github.com/cosmos/cosmos-sdk/pull/26613)). On this fork it also records each maturity queue's earliest entry time (see [Staking Queue Earliest-Time Gate](#staking-queue-earliest-time-gate-crypto-org-chain-fork)).
 * `x/auth` 6 → 7: adds the `SigVerifyCostMlDsa65` param with its default value ([#26472](https://github.com/cosmos/cosmos-sdk/pull/26472)).
 
 #### Reference Upgrade Handler
@@ -165,10 +165,6 @@ func (app SimApp) RegisterUpgradeHandlers() {
     app.UpgradeKeeper.SetUpgradeHandler(
         UpgradeName,
         func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-            // crypto-org-chain fork: see Staking Queue Pending-Slot Index below.
-            if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
-                return nil, err
-            }
             return app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
         },
     )
@@ -190,15 +186,25 @@ func (app SimApp) RegisterUpgradeHandlers() {
 
 Add `"params"` to `Deleted` as well if your app still had the `x/params` store mounted.
 
-#### Staking Queue Pending-Slot Index (crypto-org-chain fork)
+#### Staking Queue Earliest-Time Gate (crypto-org-chain fork)
 
-End-block maturity of unbonding validators, unbonding delegations and redelegations reads a pending-slot index instead of iterating the queues. Queue entries written before the index existed are invisible to end-block and never mature. If the chain did not already run it on the fork's `release/v0.54.x`, call it from the upgrade handler, as the reference handler in `simapp/upgrades.go` does; it rebuilds the index from a full queue scan, so running it again is safe:
+The validator, unbonding and redelegation queues each store a time at or before their earliest entry under keys `0x44`-`0x46`. End-block skips a queue until that time is due, then scans from it. Inserts read and may lower that value, so their gas no longer grows with the number of pending entries.
 
-```go
-if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
-    return nil, err
-}
-```
+No upgrade handler change is required:
+
+* Staking's 5 to 6 migration replaces fork `release/v0.54.x`'s pending-slot lists and records the times.
+* A chain already at staking version 6 (such as fork `release/v0.53.x`) skips the migration; its first end-block scans each queue and records the times.
+* `PopulateQueuePendingSlots` still compiles and calls `RecomputeQueueEarliest`.
+* On a fork chain that never ran `PopulateQueuePendingSlots`, missed entries that are already due mature at the upgrade height.
+
+Things to know:
+
+* Write queue entries only through the keeper's `Set*`/`Insert*` queue helpers. An entry written straight to the store before the stored time, or into a queue marked empty, isn't scanned until `RecomputeQueueEarliest` runs. Call it after such a write, including in a store migration, and when switching back from a binary that doesn't keep these times.
+* Compared with upstream v0.55.0, each queue insert costs one more read (about 1.1k gas), plus about 2.9k gas when it lowers the stored time. Txs with an exact gas limit for `MsgUndelegate` or `MsgBeginRedelegate` should allow for that, and `--gas auto` users should keep a gas adjustment above 1.0.
+* A block where no queue is due opens no maturity-queue iterator. A due scan costs about 40% more than upstream on a fresh database, and far less after many matured entries. While a validator stays on hold, each block costs about 1.4 times upstream's.
+* An imported chain records these times at its first end-block, so an app that compares stores across export and import should skip `0x44`-`0x46`.
+* As in upstream, redelegations mature by `HeaderInfo().Time`; `DequeueAllMatureRedelegationQueue` ignores `currTime` (fork v0.54.x used it).
+* The fork v0.54.x pending-slot API is removed (see the CHANGELOG).
 
 ### crypto-org-chain Fork Changes
 
@@ -213,7 +219,7 @@ Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
 * `p2p`: when the experimental libp2p transport is on (`p2p.libp2p.enabled = true`, off by default), each reactor queues at most `max_queue_size` messages (`[p2p.libp2p.scaler]` in `config.toml`, default `200000`, `0` means unlimited). A full queue evicts the oldest message from the lowest occupied priority level below the new message's, or rejects the new message if no lower level holds any; both count in the `messages_reactor_dropped` metric. The cap counts messages, not bytes. Existing `config.toml` files without the key get the default.
 * `mempool`: with `mempool.type = "app"`, a `CheckTx` whose app client call errors now answers with code `1` (`CodeTypeInternal`); upstream v0.40.0 never answers, so the broadcast waits until it times out. A nil response is handled the same way.
 * `x/staking`: an error from the `AfterUnbondingInitiated` hook now fails `MsgUndelegate` and `MsgBeginRedelegate` instead of being logged and ignored. Apps whose staking hooks can return an error must expect those txs to fail.
-* `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)).
+* `x/staking`: end-block scans a maturity queue only once its stored earliest time is due (see [Staking Queue Earliest-Time Gate](#staking-queue-earliest-time-gate-crypto-org-chain-fork)).
 * `baseapp`: `CheckTx` inserts into the mempool before writing the AnteHandler state, so a custom `Mempool.Insert` or `TxPriority` that reads state from `ctx` sees pre-ante state. The SDK mempools take the nonce from the tx signature and are unaffected.
 * `server`: the default gRPC `max-send-msg-size` drops from ~2GB to 10MB. An `app.toml` that sets `max-send-msg-size` keeps its value (generated files do); one that omits the key gets 10MB. Raise `grpc.max-send-msg-size` if queries return larger responses. **RPC and archive operators of ethermint-based chains such as Cronos:** JSON-RPC `debug_traceTransaction`, `debug_traceBlock*` and large paginated queries go through the app's gRPC server and can exceed 10MB. They fail with `ResourceExhausted` on nodes initialised with `init` and on any `app.toml` that omits the key, so set `max-send-msg-size` explicitly on those nodes.
 

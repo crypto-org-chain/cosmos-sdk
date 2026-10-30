@@ -41,15 +41,19 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Breaking Changes
 
 * (server) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (port of upstream [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585), closed unmerged). An `app.toml` that omits `max-send-msg-size` now gets 10MB, so larger gRPC responses fail; generated files set the key and keep their value.
-* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) Remove `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator`, and make `DequeueAllMatureRedelegationQueue` honor its `currTime` argument instead of `HeaderInfo().Time`.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Remove the fork v0.54.x pending-slot API: the `Keeper` methods `Get`/`Set`/`Add{Validator,UBD,Redelegation}QueuePendingSlot(s)` and `RemoveValidatorQueuePendingSlot`, `types.TimeHeightQueueSlot`, and `ErrPendingQueueSlotMissingCount`/`ErrPendingQueueSlotInsufficientCapacity`. Those errors had codes 46/47, which v0.55 gives to key rotation's `ErrConsensusPubKeyAlreadyUsedForValidator`/`ErrConsensusPubKeyInRotationHistory`.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Rename `types.{Validator,UBD,Redelegation}QueuePendingSlotsKey` to `*QueueEarliestKey`: same bytes, new value format.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `DequeueAllMatureRedelegationQueue` again matures by `HeaderInfo().Time` and ignores `currTime`, as in upstream.
 
 ### State Machine Breaking
 
 * (x/staking) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Propagate `AfterUnbondingInitiated` hook errors from unbonding delegation and redelegation entries instead of logging and swallowing them, matching the validator unbonding path (port of upstream [#26589](https://github.com/cosmos/cosmos-sdk/pull/26589), closed unmerged).
-* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Index pending validator, unbonding and redelegation queue slots so end-block skips queue iteration (port of upstream [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023), closed unmerged). Chains populate the index by calling `Keeper.PopulateQueuePendingSlots` from their upgrade handler; no consensus version migration is registered. The index's error codes move from 46/47 (fork v0.54.x) to 49/50, since v0.55 key rotation took 46-48.
+* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) End-block scans the validator, unbonding and redelegation queues only once each queue's stored earliest entry time is due, starting at that time (reworks the port of upstream [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023), closed unmerged). The fork v0.54.x pending-slot list made every undelegate and redelegate read and rewrite all pending slots, about 264 gas per slot, and was rewritten every block. Inserts now read one fixed-size value: about 1.1k gas more than upstream v0.55.0 per insert, or about 4k when the insert lowers the stored time. Staking's 5 to 6 migration replaces the legacy lists and records the times, so no upgrade handler call is required.
 
 ### Features
 
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Add `Keeper.RecomputeQueueEarliest`, `types.ValidatorQueueTimePrefix` and `types.ValidatorQueueKeyTimeBytes`.
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) Restore `Keeper.ValidatorQueueIterator`, `UBDQueueIterator` and `RedelegationQueueIterator`, which fork v0.54.x removed.
 * (mempool) [#1850](https://github.com/crypto-org-chain/cosmos-sdk/pull/1850) Add `UnorderedTxs` to `PriorityNonceMempool`.
 
 ### Improvements
@@ -59,6 +63,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `types.ParseValidatorQueueKey` returns an error instead of panicking on a key too short for its prefix, time or height; keys it read before parse the same.
 * (store) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (port of upstream [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586), closed unmerged).
 * (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport of [#1808](https://github.com/crypto-org-chain/cosmos-sdk/pull/1808) from `release/v0.53.x`).
 * (baseapp) [#1849](https://github.com/crypto-org-chain/cosmos-sdk/pull/1849) Close the query multistore when a gRPC query handler panics out of gas.
@@ -66,6 +71,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport of [#1760](https://github.com/crypto-org-chain/cosmos-sdk/pull/1760) from `release/v0.53.x`).
 
 ### Deprecated
+
+* (x/staking) [#1889](https://github.com/crypto-org-chain/cosmos-sdk/pull/1889) `Keeper.PopulateQueuePendingSlots` is deprecated; use `Keeper.RecomputeQueueEarliest`.
 
 ## [v0.55.0](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.55.0) - 2026-07-27
 

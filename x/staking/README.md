@@ -313,12 +313,24 @@ https://github.com/cosmos/cosmos-sdk/blob/v0.47.0-rc1/proto/cosmos/staking/v1bet
 For the purpose of tracking progress of unbonding validators the validator
 queue is kept.
 
-* ValidatorQueueTime: `0x43 | format(time) -> []sdk.ValAddress`
+* ValidatorQueueTime: `0x43 | len(format(time)) (8 bytes) | format(time) | height (8 bytes) -> []sdk.ValAddress`
 
 The stored object by each key is an array of validator operator addresses from
 which the validator object can be accessed. Typically it is expected that only
 a single validator record will be associated with a given timestamp however it is possible
 that multiple validators exist in the queue at the same location.
+
+#### Queue Earliest Times
+
+Each queue above also stores a time at or before its earliest entry, so
+`EndBlock` skips a queue until that time is due and then scans from it; each scan records the first
+remaining entry's time, or `0x00` when none remain. An absent key means unknown:
+the next `EndBlock` scans the queue from its start. Times outside years
+0000-9999 are never stored.
+
+* ValidatorQueueEarliest: `0x44 -> format(time)`, or `0x00` when the queue is empty
+* UnbondingDelegationQueueEarliest: `0x45 -> format(time)`, or `0x00` when the queue is empty
+* RedelegationQueueEarliest: `0x46 -> format(time)`, or `0x00` when the queue is empty
 
 ### HistoricalInfo
 
@@ -774,7 +786,8 @@ Within staking, certain state-transitions are not instantaneous but take place
 over a duration of time (typically the unbonding period). When these
 transitions are mature certain operations must take place in order to complete
 the state operation. This is achieved through the use of queues which are
-checked/processed at the end of each block.
+checked/processed at the end of each block, once their earliest time is due; see
+[Queue Earliest Times](#queue-earliest-times).
 
 #### Unbonding Validators
 
@@ -785,13 +798,12 @@ delegated to this validator). At this point the validator is said to be an
 "unbonding validator", whereby it will mature to become an "unbonded validator"
 after the unbonding period has passed.
 
-Each block the validator queue is to be checked for mature unbonding validators
-(namely with a completion time <= current time and completion height <= current
-block height). At this point any mature validators which do not have any
-delegations remaining are deleted from state. For all other mature unbonding
-validators that still have remaining delegations, the `validator.Status` is
-switched from `types.Unbonding` to
-`types.Unbonded`.
+Once its earliest time is due, each block checks the validator queue for mature
+unbonding validators (namely with a completion time <= current time and
+completion height <= current block height). At this point any mature validators
+which do not have any delegations remaining are deleted from state. For all
+other mature unbonding validators that still have remaining delegations, the
+`validator.Status` is switched from `types.Unbonding` to `types.Unbonded`.
 
 Unbonding operations can be put on hold by external modules via the `PutUnbondingOnHold(unbondingId)` method.
  As a result, an unbonding operation (e.g., an unbonding delegation) that is on hold, cannot complete

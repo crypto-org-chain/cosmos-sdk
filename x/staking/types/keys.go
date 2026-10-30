@@ -51,9 +51,14 @@ var (
 	RedelegationQueueKey = []byte{0x42} // prefix for the timestamps in redelegations queue
 	ValidatorQueueKey    = []byte{0x43} // prefix for the timestamps in validator queue
 
-	ValidatorQueuePendingSlotsKey    = []byte{0x44} // single key: pending validator queue slots
-	UBDQueuePendingSlotsKey          = []byte{0x45} // single key: pending UBD queue times
-	RedelegationQueuePendingSlotsKey = []byte{0x46} // single key: pending redelegation queue times
+	// ValidatorQueueEarliestKey and the two keys after it each hold a time at or before the first
+	// entry of their queue, or 0x00 when it is empty; end-block scans a queue only once that time is
+	// due, starting there. An absent key means unknown: the next end-block scans from the queue
+	// start. Write queue entries only through the keeper's queue setters, which keep these times, or
+	// call Keeper.RecomputeQueueEarliest after a direct write.
+	ValidatorQueueEarliestKey    = []byte{0x44} // earliest time in the validator queue
+	UBDQueueEarliestKey          = []byte{0x45} // earliest time in the unbonding queue
+	RedelegationQueueEarliestKey = []byte{0x46} // earliest time in the redelegations queue
 
 	HistoricalInfoKey   = []byte{0x50} // prefix for the historical info
 	ValidatorUpdatesKey = []byte{0x61} // prefix for the end block validator updates key
@@ -146,12 +151,6 @@ const (
 	// until the rotation applies.
 	ConsAddrLockPendingFrom ConsAddrLockType = 0x03
 )
-
-// TimeHeightQueueSlot is a (time, height) slot in the validator unbonding queue.
-type TimeHeightQueueSlot struct {
-	Time   time.Time
-	Height int64
-}
 
 // UnbondingType defines the type of unbonding operation
 type UnbondingType int
@@ -260,45 +259,66 @@ func ParseValidatorPowerRankKey(key []byte) (operAddr []byte) {
 // GetValidatorQueueKey returns the prefix key used for getting a set of unbonding
 // validators whose unbonding completion occurs at the given time and height.
 func GetValidatorQueueKey(timestamp time.Time, height int64) []byte {
-	heightBz := sdk.Uint64ToBigEndian(uint64(height))
 	timeBz := sdk.FormatTimeBytes(timestamp)
-	timeBzL := len(timeBz)
-	prefixL := len(ValidatorQueueKey)
+	bz := appendValidatorQueueTimePrefix(make([]byte, 0, len(ValidatorQueueKey)+8+len(timeBz)+8), timeBz)
+	return append(bz, sdk.Uint64ToBigEndian(uint64(height))...)
+}
 
-	bz := make([]byte, prefixL+8+timeBzL+8)
+// ValidatorQueueTimePrefix returns the start of every key GetValidatorQueueKey creates for the
+// formatted time timeBz, which sorts before all of them.
+func ValidatorQueueTimePrefix(timeBz []byte) []byte {
+	return appendValidatorQueueTimePrefix(make([]byte, 0, len(ValidatorQueueKey)+8+len(timeBz)), timeBz)
+}
 
-	// copy the prefix
-	copy(bz[:prefixL], ValidatorQueueKey)
-
-	// copy the encoded time bytes length
-	copy(bz[prefixL:prefixL+8], sdk.Uint64ToBigEndian(uint64(timeBzL)))
-
-	// copy the encoded time bytes
-	copy(bz[prefixL+8:prefixL+8+timeBzL], timeBz)
-
-	// copy the encoded height
-	copy(bz[prefixL+8+timeBzL:], heightBz)
-
-	return bz
+func appendValidatorQueueTimePrefix(bz, timeBz []byte) []byte {
+	bz = append(bz, ValidatorQueueKey...)
+	bz = append(bz, sdk.Uint64ToBigEndian(uint64(len(timeBz)))...)
+	return append(bz, timeBz...)
 }
 
 // ParseValidatorQueueKey returns the encoded time and height from a key created
 // from GetValidatorQueueKey.
 func ParseValidatorQueueKey(bz []byte) (time.Time, int64, error) {
 	prefixL := len(ValidatorQueueKey)
-	if prefix := bz[:prefixL]; !bytes.Equal(prefix, ValidatorQueueKey) {
-		return time.Time{}, 0, fmt.Errorf("invalid prefix; expected: %X, got: %X", ValidatorQueueKey, prefix)
+	if !bytes.HasPrefix(bz, ValidatorQueueKey) {
+		return time.Time{}, 0, fmt.Errorf("invalid prefix; expected: %X, got: %X", ValidatorQueueKey, bz[:min(len(bz), prefixL)])
 	}
 
-	timeBzL := sdk.BigEndianToUint64(bz[prefixL : prefixL+8])
-	ts, err := sdk.ParseTimeBytes(bz[prefixL+8 : prefixL+8+int(timeBzL)])
+	timeBz := ValidatorQueueKeyTimeBytes(bz)
+	if timeBz == nil {
+		return time.Time{}, 0, fmt.Errorf("invalid validator queue key: %d bytes is too short for its time", len(bz))
+	}
+	ts, err := sdk.ParseTimeBytes(timeBz)
 	if err != nil {
 		return time.Time{}, 0, err
 	}
 
-	height := sdk.BigEndianToUint64(bz[prefixL+8+int(timeBzL):])
+	// As before, a missing height reads as 0 and bytes past the first 8 are ignored; only a partial
+	// height, which used to panic, is rejected.
+	heightBz := bz[prefixL+8+len(timeBz):]
+	if len(heightBz) > 0 && len(heightBz) < 8 {
+		return time.Time{}, 0, fmt.Errorf("invalid validator queue key: partial height of %d bytes", len(heightBz))
+	}
+	height := sdk.BigEndianToUint64(heightBz)
 
 	return ts, int64(height), nil
+}
+
+// ValidatorQueueKeyTimeBytes returns the formatted time inside a key created by
+// GetValidatorQueueKey, or nil if the key lacks the validator queue prefix or is too short for its
+// length field or for the time length that field declares. The result shares bz's memory, without
+// spare capacity, so appending to it can't overwrite the height.
+func ValidatorQueueKeyTimeBytes(bz []byte) []byte {
+	start := len(ValidatorQueueKey) + 8
+	if len(bz) < start || !bytes.HasPrefix(bz, ValidatorQueueKey) {
+		return nil
+	}
+	timeBzL := sdk.BigEndianToUint64(bz[len(ValidatorQueueKey):start])
+	if timeBzL > uint64(len(bz)-start) {
+		return nil
+	}
+	end := start + int(timeBzL)
+	return bz[start:end:end]
 }
 
 // GetDelegationKey creates the key for delegator bond with validator
