@@ -185,6 +185,16 @@ func (app SimApp) RegisterUpgradeHandlers() {
 
 Add `"params"` to `Deleted` as well if your app still had the `x/params` store mounted.
 
+#### Staking Queue Pending-Slot Index (crypto-org-chain fork)
+
+End-block maturity of unbonding validators, unbonding delegations and redelegations reads a pending-slot index instead of iterating the queues. Queue entries written before the index existed are invisible to end-block and never mature. If the chain did not already run it on the fork's `release/v0.54.x`, call it from the upgrade handler; it rebuilds the index from a full queue scan, so running it again is safe:
+
+```go
+if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
+    return nil, err
+}
+```
+
 ## Upgrading from v0.53.x
 
 Skipping v0.54 and upgrading directly from `v0.53.x` to `v0.55.x` is supported as a single coordinated upgrade: one binary swap, one upgrade handler, one halt height. Work through the [v0.53.x → v0.54.x upgrade reference](https://github.com/cosmos/cosmos-sdk/blob/release/v0.54.x/UPGRADING.md) first — all of its required changes still apply — then apply this guide on top. The v0.54 hop's highlights, so you know what you're signing up for:
