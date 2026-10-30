@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   detect-proto-changes:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     outputs:
       sdk_proto_diff: ${{ steps.sdk_proto_diff.outputs.diff }}
       poa_proto_diff: ${{ steps.poa_proto_diff.outputs.diff }}
@@ -39,7 +39,7 @@ jobs:
   lint:
     needs: detect-proto-changes
     if: needs.detect-proto-changes.outputs.sdk_proto_diff == 'true'
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
@@ -51,7 +51,7 @@ jobs:
   break-check:
     needs: detect-proto-changes
     if: needs.detect-proto-changes.outputs.sdk_proto_diff == 'true'
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: bufbuild/buf-setup-action@v1.50.0
@@ -63,7 +63,7 @@ jobs:
   lint-poa:
     needs: detect-proto-changes
     if: needs.detect-proto-changes.outputs.poa_proto_diff == 'true'
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
@@ -75,7 +75,7 @@ jobs:
   break-check-poa:
     needs: detect-proto-changes
     if: needs.detect-proto-changes.outputs.poa_proto_diff == 'true'
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: bufbuild/buf-setup-action@v1.50.0

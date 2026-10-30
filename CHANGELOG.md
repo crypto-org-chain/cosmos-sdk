@@ -40,11 +40,30 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Breaking Changes
 
+* (server) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Lower the default gRPC `MaxSendMsgSize` from ~2GB to 10MB, matching `MaxRecvMsgSize` (port of upstream [#26585](https://github.com/cosmos/cosmos-sdk/pull/26585), closed unmerged). An `app.toml` that omits `max-send-msg-size` now gets 10MB, so larger gRPC responses fail; generated files set the key and keep their value.
+* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) Remove `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator`, and make `DequeueAllMatureRedelegationQueue` honor its `currTime` argument instead of `HeaderInfo().Time`.
+
+### State Machine Breaking
+
+* (x/staking) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Propagate `AfterUnbondingInitiated` hook errors from unbonding delegation and redelegation entries instead of logging and swallowing them, matching the validator unbonding path (port of upstream [#26589](https://github.com/cosmos/cosmos-sdk/pull/26589), closed unmerged).
+* (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Index pending validator, unbonding and redelegation queue slots so end-block skips queue iteration (port of upstream [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023), closed unmerged). Chains populate the index by calling `Keeper.PopulateQueuePendingSlots` from their upgrade handler; no consensus version migration is registered. The index's error codes move from 46/47 (fork v0.54.x) to 49/50, since v0.55 key rotation took 46-48.
+
 ### Features
+
+* (mempool) [#1850](https://github.com/crypto-org-chain/cosmos-sdk/pull/1850) Add `UnorderedTxs` to `PriorityNonceMempool`.
 
 ### Improvements
 
+* (deps) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bump Go to 1.26.10 (stdlib advisories fixed through Go 1.26.10, e.g. GO-2026-6809 in `crypto/x509`, GO-2026-6617 and GO-2026-5026) and patch the vulnerable dependencies govulncheck reports: `golang.org/x/net` v0.60.0 (GO-2026-6603, -6610, -6611, -6612, -6617), `google.golang.org/grpc` v1.83.2 (GO-2026-6443, -6348), OpenTelemetry v1.45.0 / v0.21.0 (GO-2026-6505, -6508, -6615), `pion/dtls/v3` v3.1.4 (GO-2026-6165) and `pion/stun/v3` v3.1.5 (GO-2026-6163).
+* (deps) [cometbft#71](https://github.com/crypto-org-chain/cometbft/pull/71) Point CometBFT at the `crypto-org-chain/cometbft` fork in every module that requires it, pinned to the head of cometbft#71 (`5e839872ea38`): v0.40.0 plus the fork's AppMempool ABCI handling fix and the lp2p per-reactor queue cap.
+
 ### Bug Fixes
+
+* (store) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (port of upstream [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586), closed unmerged).
+* (baseapp) [#1816](https://github.com/crypto-org-chain/cosmos-sdk/pull/1816) Close multistore opened for historical queries (backport of [#1808](https://github.com/crypto-org-chain/cosmos-sdk/pull/1808) from `release/v0.53.x`).
+* (baseapp) [#1849](https://github.com/crypto-org-chain/cosmos-sdk/pull/1849) Close the query multistore when a gRPC query handler panics out of gas.
+* (baseapp) [#1818](https://github.com/crypto-org-chain/cosmos-sdk/pull/1818) Insert into the mempool before committing the AnteHandler state in `CheckTx`, so a failed `mempool.Insert` (e.g. pool at capacity) no longer advances the sender's nonce in `checkState` for a tx that never entered the pool ([#26521](https://github.com/cosmos/cosmos-sdk/issues/26521)).
+* (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport of [#1760](https://github.com/crypto-org-chain/cosmos-sdk/pull/1760) from `release/v0.53.x`).
 
 ### Deprecated
 
