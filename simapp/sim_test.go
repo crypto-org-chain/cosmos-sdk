@@ -110,6 +110,8 @@ func TestAppImportExport(t *testing.T) {
 		skipPrefixes := map[string][][]byte{
 			stakingtypes.StoreKey: {
 				stakingtypes.UnbondingQueueKey, stakingtypes.RedelegationQueueKey, stakingtypes.ValidatorQueueKey,
+				// Derived from the queues above; an imported chain rebuilds them at its first end-block.
+				stakingtypes.UBDQueueEarliestKey, stakingtypes.RedelegationQueueEarliestKey, stakingtypes.ValidatorQueueEarliestKey,
 				stakingtypes.HistoricalInfoKey, stakingtypes.UnbondingIDKey, stakingtypes.UnbondingIndexKey,
 				stakingtypes.UnbondingTypeKey,
 				stakingtypes.ValidatorUpdatesKey, // todo (Alex): double check why there is a diff with test-sim-import-export
