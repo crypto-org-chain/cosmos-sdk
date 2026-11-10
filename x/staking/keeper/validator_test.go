@@ -446,3 +446,41 @@ func (s *KeeperTestSuite) TestUnbondingValidator() {
 	require.NoError(err)
 	require.Equal(stakingtypes.Unbonded, validator.Status)
 }
+
+func (s *KeeperTestSuite) TestUnbondAllMatureValidatorsNeedsTimeAndHeight() {
+	testCases := []struct {
+		name         string
+		timeOffset   time.Duration // block time relative to the validator's unbonding time
+		heightOffset int64         // block height relative to the validator's unbonding height
+		expStatus    stakingtypes.BondStatus
+	}{
+		{name: "time reached, height not", heightOffset: -1, expStatus: stakingtypes.Unbonding},
+		{name: "height reached, time not", timeOffset: -time.Nanosecond, expStatus: stakingtypes.Unbonding},
+		{name: "both reached", expStatus: stakingtypes.Unbonded},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			ctx, keeper := s.ctx, s.stakingKeeper
+			unbondingTime := ctx.BlockTime().Add(time.Hour)
+			unbondingHeight := ctx.BlockHeight() + 10
+
+			valAddr := sdk.ValAddress(PKs[0].Address().Bytes())
+			validator := testutil.NewValidator(s.T(), valAddr, PKs[0])
+			validator, _ = validator.AddTokensFromDel(keeper.TokensFromConsensusPower(ctx, 10))
+			validator.Status = stakingtypes.Unbonding
+			validator.UnbondingTime = unbondingTime
+			validator.UnbondingHeight = unbondingHeight
+			s.Require().NoError(keeper.SetValidator(ctx, validator))
+			s.Require().NoError(keeper.SetUnbondingValidatorsQueue(ctx, unbondingTime, unbondingHeight, []string{valAddr.String()}))
+
+			ctx = ctx.WithBlockTime(unbondingTime.Add(tc.timeOffset)).WithBlockHeight(unbondingHeight + tc.heightOffset)
+			s.Require().NoError(keeper.UnbondAllMatureValidators(ctx))
+
+			got, err := keeper.GetValidator(ctx, valAddr)
+			s.Require().NoError(err)
+			s.Require().Equal(tc.expStatus, got.Status)
+		})
+	}
+}
