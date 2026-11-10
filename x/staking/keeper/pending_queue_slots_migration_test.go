@@ -149,7 +149,11 @@ func (s *PendingQueueSlotsMigrationTestSuite) TestPopulate_AllQueues() {
 		s.Require().NoError(err)
 	}
 
-	// Upgrade handlers may run it on a chain that already populated the index; a rerun must not duplicate slots.
+	// Upgrade handlers may run it on a chain that already has an index; it must rebuild it, dropping stale slots and adding no duplicates.
+	stale := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	s.Require().NoError(s.stakingKeeper.AddValidatorQueuePendingSlot(s.ctx, stale, 1))
+	s.Require().NoError(s.stakingKeeper.AddUBDQueuePendingSlot(s.ctx, stale))
+	s.Require().NoError(s.stakingKeeper.AddRedelegationQueuePendingSlot(s.ctx, stale))
 	for range 2 {
 		s.Require().NoError(s.populate())
 	}

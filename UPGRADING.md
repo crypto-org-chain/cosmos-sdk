@@ -192,7 +192,7 @@ Add `"params"` to `Deleted` as well if your app still had the `x/params` store m
 
 #### Staking Queue Pending-Slot Index (crypto-org-chain fork)
 
-End-block maturity of unbonding validators, unbonding delegations and redelegations reads a pending-slot index instead of iterating the queues. Queue entries written before the index existed are invisible to end-block and never mature. If the chain did not already run it on the fork's `release/v0.54.x`, call it from the upgrade handler, as the reference handler in `simapp/upgrades.go` does; it rebuilds the index from a full queue scan, so running it again is safe:
+End-block maturity of unbonding validators, unbonding delegations and redelegations reads a pending-slot index instead of iterating the queues. Queue entries written before the index existed are invisible to end-block and never mature. Call `Keeper.PopulateQueuePendingSlots` from the upgrade handler, as the reference handler in `simapp/upgrades.go` does. Call it even if the chain already ran it on the fork's `release/v0.54.x`: it rebuilds the index from a full queue scan, so running it again is safe.
 
 ```go
 if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
@@ -200,9 +200,10 @@ if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
 }
 ```
 
-The index has two limits:
+The index has three limits:
 
-* Gas grows with the number of pending slots. `MsgUndelegate` and `MsgBeginRedelegate` read and rewrite their queue's whole slot list, about 264 gas per pending slot: roughly 270k extra gas at 1,000 slots and 2.6M at 10,000. Each distinct completion time is one slot and stays until it matures, so a queue can gain a slot in every block.
+* Gas grows with the number of pending slots. `MsgUndelegate` and `MsgBeginRedelegate` read and rewrite their queue's whole slot list. With the default KV gas config that is about 264 gas per pending slot: roughly 270k extra gas at 1,000 slots and 2.6M at 10,000. Each distinct completion time is one slot and stays until that time passes, even if the unbonding is canceled, so a queue can gain a slot in every block.
+* End-block cost grows the same way. It reads all three lists every block and rewrites a list when one of its slots matures. On an in-memory store with 100,000 slots in one list, that took about 1 ms per block, and about 6 ms when a slot matured.
 * Slot times must fit `UnixNano` (years 1678 to 2262). An entry whose completion time is outside that range never matures, and no error is returned. Tests that leave the block time at its zero value hit this and need a real block time to see entries mature.
 
 ### crypto-org-chain Fork Changes
@@ -210,7 +211,7 @@ The index has two limits:
 Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:
 
 * `x/staking`: an error from the `AfterUnbondingInitiated` hook now fails `MsgUndelegate` and `MsgBeginRedelegate` instead of being logged and ignored. Apps whose staking hooks can return an error must expect those txs to fail.
-* `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)).
+* `x/staking`: `Keeper.ValidatorQueueIterator`, `Keeper.UBDQueueIterator` and `Keeper.RedelegationQueueIterator` are removed; end-block reads the pending-slot index (see [Staking Queue Pending-Slot Index](#staking-queue-pending-slot-index-crypto-org-chain-fork)). `DequeueAllMatureRedelegationQueue` now honors its `currTime` argument instead of `HeaderInfo().Time`. Write the three queues only through the keeper's setters, which keep the index in sync.
 * `baseapp`: `CheckTx` inserts into the mempool before writing the AnteHandler state, so a custom `Mempool.Insert` or `TxPriority` that reads state from `ctx` sees pre-ante state. The SDK mempools take the nonce from the tx signature and are unaffected.
 * `server`: the default gRPC `max-send-msg-size` drops from ~2GB to 10MB. An `app.toml` that sets `max-send-msg-size` keeps its value (generated files do); one that omits the key gets 10MB. Raise `grpc.max-send-msg-size` if queries return larger responses. **RPC and archive operators of ethermint-based chains such as Cronos:** JSON-RPC `debug_traceTransaction`, `debug_traceBlock*` and large paginated queries go through the app's gRPC server and can exceed 10MB. They fail with `ResourceExhausted` on nodes initialised with `init` and on any `app.toml` that omits the key, so set `max-send-msg-size` explicitly on those nodes.
 
