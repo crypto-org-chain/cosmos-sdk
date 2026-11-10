@@ -200,6 +200,11 @@ if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
 }
 ```
 
+The index has two limits:
+
+* Gas grows with the number of pending slots. `MsgUndelegate` and `MsgBeginRedelegate` read and rewrite their queue's whole slot list, about 264 gas per pending slot: roughly 270k extra gas at 1,000 slots and 2.6M at 10,000. Each distinct completion time is one slot and stays until it matures, so a queue can gain a slot in every block.
+* Slot times must fit `UnixNano` (years 1678 to 2262). An entry whose completion time is outside that range never matures, and no error is returned. Tests that leave the block time at its zero value hit this and need a real block time to see entries mature.
+
 ### crypto-org-chain Fork Changes
 
 Behavior on the fork's `release/v0.55.x` that differs from upstream v0.55.0:

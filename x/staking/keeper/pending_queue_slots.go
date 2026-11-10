@@ -79,6 +79,7 @@ func populateTimeQueuePending(
 
 // Binary encoding constants for pending slot lists.
 // Layout: [countBytes] (uint32) then for each slot: [timeBytes][heightBytes] (validator) or [timeBytes] (UBD/redelegation).
+// Times are stored as UnixNano (years 1678-2262); a slot outside that range decodes to a different time and its queue entry never matures.
 const (
 	countBytes              = 4 // bytes for slot count (uint32 big-endian)
 	timeSlotSizeBytes       = 8 // uint64 bytes per slot for time-only queues  (UBD, redelegation)
@@ -167,6 +168,7 @@ func (k Keeper) SetValidatorQueuePendingSlots(ctx context.Context, slots []types
 }
 
 // AddValidatorQueuePendingSlot adds (time, height) to the pending list if not already present.
+// It reads and rewrites the whole list, so the caller's gas grows with the number of pending slots.
 func (k Keeper) AddValidatorQueuePendingSlot(ctx context.Context, endTime time.Time, endHeight int64) error {
 	slots, err := k.GetValidatorQueuePendingSlots(ctx)
 	if err != nil {
@@ -248,6 +250,7 @@ func (k Keeper) setTimeQueuePendingSlots(ctx context.Context, key []byte, slots 
 }
 
 // addTimeQueuePendingSlot adds a time slot to the pending list if not already present.
+// It reads and rewrites the whole list, so the caller's gas grows with the number of pending slots.
 func (k Keeper) addTimeQueuePendingSlot(ctx context.Context, key []byte, completionTime time.Time) error {
 	slots, err := k.getTimeQueuePendingSlots(ctx, key)
 	if err != nil {
