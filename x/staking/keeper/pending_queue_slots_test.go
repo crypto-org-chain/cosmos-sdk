@@ -945,3 +945,73 @@ func (s *KeeperTestSuite) TestEndBlockRejectsMalformedPendingSlots() {
 		}
 	}
 }
+
+func (s *KeeperTestSuite) TestQueueTimesOutsideUnixNanoNeverMature() {
+	queues := []struct {
+		name     string
+		enqueue  func(ctx sdk.Context, t time.Time) error
+		endBlock func(ctx sdk.Context) error
+		hasEntry func(ctx sdk.Context, t time.Time) bool
+	}{
+		{
+			name: "validator",
+			enqueue: func(ctx sdk.Context, t time.Time) error {
+				// Not a known validator, so maturing it would fail end-block.
+				return s.stakingKeeper.SetUnbondingValidatorsQueue(ctx, t, 1, []string{"unknown"})
+			},
+			endBlock: func(ctx sdk.Context) error { return s.stakingKeeper.UnbondAllMatureValidators(ctx) },
+			hasEntry: func(ctx sdk.Context, t time.Time) bool {
+				return ctx.KVStore(s.storeKey).Has(stakingtypes.GetValidatorQueueKey(t, 1))
+			},
+		},
+		{
+			name: "unbonding",
+			enqueue: func(ctx sdk.Context, t time.Time) error {
+				return s.stakingKeeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{{DelegatorAddress: "del", ValidatorAddress: "val"}})
+			},
+			endBlock: func(ctx sdk.Context) error {
+				_, err := s.stakingKeeper.DequeueAllMatureUBDQueue(ctx, ctx.BlockTime())
+				return err
+			},
+			hasEntry: func(ctx sdk.Context, t time.Time) bool {
+				return ctx.KVStore(s.storeKey).Has(stakingtypes.GetUnbondingDelegationTimeKey(t))
+			},
+		},
+		{
+			name: "redelegation",
+			enqueue: func(ctx sdk.Context, t time.Time) error {
+				return s.stakingKeeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{{DelegatorAddress: "del", ValidatorSrcAddress: "src", ValidatorDstAddress: "dst"}})
+			},
+			endBlock: func(ctx sdk.Context) error {
+				_, err := s.stakingKeeper.DequeueAllMatureRedelegationQueue(ctx, ctx.BlockTime())
+				return err
+			},
+			hasEntry: func(ctx sdk.Context, t time.Time) bool {
+				return ctx.KVStore(s.storeKey).Has(stakingtypes.GetRedelegationTimeKey(t))
+			},
+		},
+	}
+	testCases := []struct {
+		name       string
+		completion time.Time
+	}{
+		{name: "after year 2262", completion: time.Date(2300, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{name: "before year 1678", completion: time.Date(1600, 1, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	for _, q := range queues {
+		for _, tc := range testCases {
+			s.Run(q.name+"/"+tc.name, func() {
+				s.SetupTest()
+				s.Require().NoError(q.enqueue(s.ctx, tc.completion))
+
+				// The slot decodes to another time inside 1678-2262; the last block is past it either way.
+				for _, blockTime := range []time.Time{tc.completion.Add(time.Hour), time.Date(2400, 1, 1, 0, 0, 0, 0, time.UTC)} {
+					ctx := s.ctx.WithBlockTime(blockTime).WithHeaderInfo(header.Info{Time: blockTime}).WithBlockHeight(2)
+					s.Require().NoError(q.endBlock(ctx))
+					s.Require().True(q.hasEntry(ctx, tc.completion), "entry matured at block time %s", blockTime)
+				}
+			})
+		}
+	}
+}

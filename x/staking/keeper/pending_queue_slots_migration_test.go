@@ -102,6 +102,12 @@ func (s *PendingQueueSlotsMigrationTestSuite) populate() error {
 }
 
 func (s *PendingQueueSlotsMigrationTestSuite) TestPopulate_NoEntries() {
+	// Slots left over from an earlier run must not outlive the queue entries they pointed to.
+	stale := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	s.Require().NoError(s.stakingKeeper.AddValidatorQueuePendingSlot(s.ctx, stale, 1))
+	s.Require().NoError(s.stakingKeeper.AddUBDQueuePendingSlot(s.ctx, stale))
+	s.Require().NoError(s.stakingKeeper.AddRedelegationQueuePendingSlot(s.ctx, stale))
+
 	err := s.populate()
 	s.Require().NoError(err)
 
