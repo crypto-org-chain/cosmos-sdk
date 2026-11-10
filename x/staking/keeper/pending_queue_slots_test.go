@@ -742,6 +742,7 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 	queues := []struct {
 		name     string
 		key      []byte
+		entryKey func(t time.Time) []byte
 		enqueue  func(ctx sdk.Context, t time.Time) error
 		hasEntry func(ctx sdk.Context, t time.Time) (bool, error)
 		addSlot  func(ctx sdk.Context, t time.Time) error
@@ -749,8 +750,9 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 		dequeue  func(ctx sdk.Context) (delegators []string, err error)
 	}{
 		{
-			name: "unbonding",
-			key:  stakingtypes.UBDQueuePendingSlotsKey,
+			name:     "unbonding",
+			key:      stakingtypes.UBDQueuePendingSlotsKey,
+			entryKey: stakingtypes.GetUnbondingDelegationTimeKey,
 			enqueue: func(ctx sdk.Context, t time.Time) error {
 				return s.stakingKeeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{{DelegatorAddress: delegator(t), ValidatorAddress: "val"}})
 			},
@@ -773,8 +775,9 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 			},
 		},
 		{
-			name: "redelegation",
-			key:  stakingtypes.RedelegationQueuePendingSlotsKey,
+			name:     "redelegation",
+			key:      stakingtypes.RedelegationQueuePendingSlotsKey,
+			entryKey: stakingtypes.GetRedelegationTimeKey,
 			enqueue: func(ctx sdk.Context, t time.Time) error {
 				return s.stakingKeeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{{DelegatorAddress: delegator(t), ValidatorSrcAddress: "src", ValidatorDstAddress: "dst"}})
 			},
@@ -799,17 +802,21 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 	}
 	past, future := now.Add(-time.Hour), now.Add(time.Hour)
 	testCases := []struct {
-		name       string
-		pending    []time.Time
-		stale      []time.Time // slots whose queue entry is already gone
-		expMatured []time.Time
-		expWrites  int
+		name         string
+		pending      []time.Time
+		stale        []time.Time // slots whose queue entry is already gone
+		corrupt      []time.Time // slots whose queue entry cannot be decoded
+		expMatured   []time.Time
+		expRemaining []time.Time
+		expWrites    int
+		expErr       bool
 	}{
-		{name: "nothing matured", pending: []time.Time{future}, expWrites: 0},
-		{name: "one entry matured", pending: []time.Time{past, future}, expMatured: []time.Time{past}, expWrites: 1},
-		{name: "entry at the current time matured", pending: []time.Time{now, future}, expMatured: []time.Time{now}, expWrites: 1},
-		{name: "entries matured in time order", pending: []time.Time{now, future, past}, expMatured: []time.Time{past, now}, expWrites: 1},
-		{name: "stale slot dropped", pending: []time.Time{future}, stale: []time.Time{past}, expWrites: 1},
+		{name: "nothing matured", pending: []time.Time{future}, expRemaining: []time.Time{future}, expWrites: 0},
+		{name: "one entry matured", pending: []time.Time{past, future}, expMatured: []time.Time{past}, expRemaining: []time.Time{future}, expWrites: 1},
+		{name: "entry at the current time matured", pending: []time.Time{now, future}, expMatured: []time.Time{now}, expRemaining: []time.Time{future}, expWrites: 1},
+		{name: "entries matured in time order", pending: []time.Time{now, future, past}, expMatured: []time.Time{past, now}, expRemaining: []time.Time{future}, expWrites: 1},
+		{name: "stale slot dropped", pending: []time.Time{future}, stale: []time.Time{past}, expRemaining: []time.Time{future}, expWrites: 1},
+		{name: "decode error leaves the store untouched", pending: []time.Time{past}, corrupt: []time.Time{now}, expRemaining: []time.Time{past, now}, expWrites: 0, expErr: true},
 	}
 
 	for _, q := range queues {
@@ -825,13 +832,21 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 				for _, t := range tc.stale {
 					s.Require().NoError(q.addSlot(ctx, t))
 				}
+				for _, t := range tc.corrupt {
+					s.Require().NoError(q.addSlot(ctx, t))
+					ctx.KVStore(s.storeKey).Set(q.entryKey(t), []byte{0xff})
+				}
 
 				cms, ok := ctx.MultiStore().(storetypes.CommitMultiStore)
 				s.Require().True(ok)
 				cms.AddListeners([]storetypes.StoreKey{s.storeKey})
 				cms.PopStateCache()
 				matured, err := q.dequeue(ctx)
-				s.Require().NoError(err)
+				if tc.expErr {
+					s.Require().Error(err)
+				} else {
+					s.Require().NoError(err)
+				}
 				var expDelegators []string
 				for _, t := range tc.expMatured {
 					expDelegators = append(expDelegators, delegator(t))
@@ -847,12 +862,12 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 
 				remaining, err := q.slots(ctx)
 				s.Require().NoError(err)
-				s.Require().Equal([]time.Time{future}, remaining)
+				s.Require().Equal(tc.expRemaining, remaining)
 
 				for _, t := range tc.pending {
 					has, err := q.hasEntry(ctx, t)
 					s.Require().NoError(err)
-					s.Require().Equal(t.After(now), has, "queue entry at %s", t)
+					s.Require().Equal(tc.expErr || t.After(now), has, "queue entry at %s", t)
 				}
 			})
 		}
