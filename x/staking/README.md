@@ -331,7 +331,8 @@ the slots that hold an entry, and end-block looks up only the mature ones.
 
 `count` is a 4-byte big-endian integer; times and heights are 8-byte big-endian.
 Each list is sorted and holds no duplicates. The keeper's queue setters keep the
-lists in sync, so a queue entry written straight to the store never matures.
+lists in sync. A queue entry written straight to the store, at a time with no
+slot, never matures.
 
 ### HistoricalInfo
 
