@@ -2,6 +2,7 @@ package mempool_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -13,6 +14,7 @@ import (
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/require"
 
+	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/log/v2"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -840,6 +842,179 @@ func TestPriorityNonceMempool_NextSenderTx(t *testing.T) {
 	require.Equal(t, txs[0], tx)
 }
 
+func TestPriorityNonceMempool_GetTx(t *testing.T) {
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), 2)
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+	accA := accounts[0].Address
+	accB := accounts[1].Address
+	a1 := testTx{priority: 20, nonce: 1, address: accA}
+	a3 := testTx{priority: 15, nonce: 3, address: accA}
+	a3Higher := testTx{priority: 30, nonce: 3, address: accA}
+	a3Lower := testTx{priority: 10, nonce: 3, address: accA}
+	timeout := time.Now().Add(time.Hour)
+	unordered := testTx{priority: 5, address: accB, unordered: true, timeout: &timeout}
+
+	testCases := []struct {
+		name     string
+		insert   []testTx
+		rejected []testTx // inserted after insert, each refused by TxReplacement
+		remove   []testTx
+		sender   string
+		nonce    uint64
+		expTx    sdk.Tx
+	}{
+		{name: "pooled", insert: []testTx{a1, a3}, sender: accA.String(), nonce: 1, expTx: a1},
+		{name: "replaced", insert: []testTx{a1, a3, a3Higher}, sender: accA.String(), nonce: 3, expTx: a3Higher},
+		{name: "rejected replacement keeps the original", insert: []testTx{a3}, rejected: []testTx{a3Lower}, sender: accA.String(), nonce: 3, expTx: a3},
+		{name: "nonce gap", insert: []testTx{a1, a3}, sender: accA.String(), nonce: 2},
+		{name: "unknown sender", insert: []testTx{a1}, sender: accB.String(), nonce: 1},
+		{name: "removed", insert: []testTx{a1, a3}, remove: []testTx{a1}, sender: accA.String(), nonce: 1},
+		{name: "sender's only tx removed", insert: []testTx{a1}, remove: []testTx{a1}, sender: accA.String(), nonce: 1},
+		{name: "unordered tx by its timeout", insert: []testTx{unordered}, sender: accB.String(), nonce: uint64(timeout.UnixNano()), expTx: unordered},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mp := mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+				TxPriority:      mempool.NewDefaultTxPriority(),
+				TxReplacement:   func(op, np int64, _, _ sdk.Tx) bool { return np > op },
+				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
+			})
+			for _, tx := range tc.insert {
+				require.NoError(t, mp.Insert(ctx.WithPriority(tx.priority), tx))
+			}
+			for _, tx := range tc.rejected {
+				require.ErrorIs(t, mp.Insert(ctx.WithPriority(tx.priority), tx), mempool.ErrTxReplacement)
+			}
+			for _, tx := range tc.remove {
+				require.NoError(t, mp.Remove(tx))
+			}
+
+			tx, ok := mp.GetTx(tc.sender, tc.nonce)
+			require.Equal(t, tc.expTx != nil, ok)
+			require.Equal(t, tc.expTx, tx)
+		})
+	}
+}
+
+func BenchmarkPriorityNonceMempool_GetTx(b *testing.B) {
+	const senders, txsPerSender = 5000, 4
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), senders)
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+	mp := mempool.DefaultPriorityMempool()
+	addrs := make([]string, senders)
+	for i, acc := range accounts {
+		addrs[i] = acc.Address.String()
+		for n := range txsPerSender {
+			require.NoError(b, mp.Insert(ctx, testTx{id: i*txsPerSender + n, nonce: uint64(n), address: acc.Address}))
+		}
+	}
+
+	for _, bc := range []struct {
+		name  string
+		nonce uint64
+	}{
+		{"hit", txsPerSender - 1},
+		{"miss", txsPerSender},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			lookups, misses := 0, 0
+			for ; b.Loop(); lookups++ {
+				if _, ok := mp.GetTx(addrs[lookups%senders], bc.nonce); !ok {
+					misses++
+				}
+			}
+			if bc.nonce < txsPerSender {
+				require.Zero(b, misses)
+			} else {
+				require.Equal(b, lookups, misses)
+			}
+		})
+	}
+
+	// A hit contending for the lock with replacements at nonce 0, as CheckTx's lookup does with Insert.
+	b.Run("hit under concurrent replacement", func(b *testing.B) {
+		stop, done := make(chan struct{}), make(chan struct{})
+		go func() {
+			defer close(done)
+			for i := 1; ; i++ {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				tx := testTx{id: senders*txsPerSender + i, priority: int64(i), address: accounts[i%senders].Address}
+				_ = mp.Insert(ctx.WithPriority(tx.priority), tx)
+			}
+		}()
+		misses := 0
+		for i := 0; b.Loop(); i++ {
+			if _, ok := mp.GetTx(addrs[i%senders], txsPerSender-1); !ok {
+				misses++
+			}
+		}
+		close(stop)
+		<-done
+		require.Zero(b, misses)
+	})
+}
+
+func BenchmarkPriorityNonceMempool_Insert(b *testing.B) {
+	const senders = 5000
+	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), senders)
+	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
+	// Each case starts with nonce 0 pooled for every sender, so a full pool stays full.
+	newPool := func(b *testing.B, maxTx int) *mempool.PriorityNonceMempool[int64] {
+		b.Helper()
+		mp := mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+			TxPriority: mempool.NewDefaultTxPriority(),
+			MaxTx:      maxTx,
+		})
+		for i, acc := range accounts {
+			require.NoError(b, mp.Insert(ctx, testTx{id: i, address: acc.Address}))
+		}
+		return mp
+	}
+	insert := func(mp *mempool.PriorityNonceMempool[int64], i int, nonce uint64) error {
+		tx := testTx{id: senders + i, priority: int64(i), nonce: nonce, address: accounts[i%senders].Address}
+		return mp.Insert(ctx.WithPriority(tx.priority), tx)
+	}
+
+	b.Run("replacement", func(b *testing.B) {
+		mp := newPool(b, 0)
+		failed := 0
+		for i := 1; b.Loop(); i++ {
+			if insert(mp, i, 0) != nil {
+				failed++
+			}
+		}
+		require.Zero(b, failed)
+	})
+
+	b.Run("new nonce at capacity", func(b *testing.B) {
+		mp := newPool(b, senders)
+		unexpected := 0
+		for i := 1; b.Loop(); i++ {
+			if !errors.Is(insert(mp, i, 1), mempool.ErrMempoolTxMaxCapacity) {
+				unexpected++
+			}
+		}
+		require.Zero(b, unexpected)
+	})
+
+	b.Run("parallel replacement", func(b *testing.B) {
+		mp := newPool(b, 0)
+		var next, failed atomic.Int64
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				if insert(mp, int(next.Add(1)), 0) != nil {
+					failed.Add(1)
+				}
+			}
+		})
+		require.Zero(b, failed.Load())
+	})
+}
+
 func TestPriorityNonceMempool_UnorderedTxsSnapshot(t *testing.T) {
 	accounts := simtypes.RandomAccounts(rand.New(rand.NewSource(0)), 3)
 	ctx := sdk.NewContext(nil, cmtproto.Header{}, false, log.NewNopLogger())
@@ -871,14 +1046,15 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 	const iterations = 1000
 
 	var (
-		wg       sync.WaitGroup
-		panicVal atomic.Value
-		stopCh   = make(chan struct{})
+		wg, writers sync.WaitGroup
+		panicVal    atomic.Value
+		stopCh      = make(chan struct{})
+		insertErrs  = make(chan error, 2)
 	)
 
-	wg.Add(1)
+	writers.Add(1)
 	go func() {
-		defer wg.Done()
+		defer writers.Done()
 		for i := 0; i < iterations; i++ {
 			tx := testTx{
 				id:       i,
@@ -887,9 +1063,28 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 				address:  account,
 			}
 			if err := mp.Insert(ctx.WithPriority(tx.priority), tx); err != nil {
-				panic(err)
+				insertErrs <- err
+				return
 			}
 		}
+	}()
+
+	// Replace a pooled nonce concurrently, so GetTx races with the replacement path too.
+	writers.Add(1)
+	go func() {
+		defer writers.Done()
+		for i := 0; i < iterations; i++ {
+			tx := testTx{id: iterations + i, priority: int64(i + 10), nonce: 1, address: account}
+			if err := mp.Insert(ctx.WithPriority(tx.priority), tx); err != nil {
+				insertErrs <- err
+				return
+			}
+		}
+	}()
+
+	// The reader runs until both writers finish, so it also overlaps the replacement goroutine.
+	go func() {
+		writers.Wait()
 		close(stopCh)
 	}()
 
@@ -908,15 +1103,20 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 						}
 					}()
 					_ = mp.NextSenderTx(account.String())
+					_, _ = mp.GetTx(account.String(), 1)
 				}()
 			}
 		}
 	}()
 
 	wg.Wait()
+	close(insertErrs)
+	for err := range insertErrs {
+		require.NoError(t, err)
+	}
 
 	if v := panicVal.Load(); v != nil {
-		t.Fatalf("NextSenderTx panicked under concurrent access: %v", v)
+		t.Fatalf("NextSenderTx or GetTx panicked under concurrent access: %v", v)
 	}
 }
 
@@ -979,6 +1179,49 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 			require.Equal(t, 3, mp.CountTx())
 		}
 	}
+	// a full pool still replaces a pooled tx
+	replacement := testTx{priority: 30, nonce: 1, address: sa}
+	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement))
+	require.Equal(t, 3, mp.CountTx())
+	pooled, ok := mp.GetTx(sa.String(), 1)
+	require.True(t, ok)
+	require.Equal(t, replacement, pooled)
+	selected := fetchTxs(mp.Select(ctx, nil), 10)
+	require.Len(t, selected, 3)
+	require.Contains(t, selected, sdk.Tx(replacement))
+	require.NotContains(t, selected, sdk.Tx(txs[0]))
+
+	// a full pool applies the replacement rule, not the capacity error
+	mp = mempool.NewPriorityMempool(
+		mempool.PriorityNonceMempoolConfig[int64]{
+			TxPriority:      mempool.NewDefaultTxPriority(),
+			MaxTx:           1,
+			TxReplacement:   func(op, np int64, _, _ sdk.Tx) bool { return np > op },
+			SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
+		},
+	)
+	require.NoError(t, mp.Insert(ctx.WithPriority(txs[0].priority), txs[0]))
+	lower := testTx{priority: 10, nonce: 1, address: sa}
+	err := mp.Insert(ctx.WithPriority(lower.priority), lower)
+	require.ErrorIs(t, err, mempool.ErrTxReplacement)
+	require.NotErrorIs(t, err, mempool.ErrMempoolTxMaxCapacity)
+	// Clients match these literals, so a change to them is breaking.
+	codespace, code, log := errorsmod.ABCIInfo(err, false)
+	require.Equal(t, "mempool", codespace)
+	require.Equal(t, uint32(2), code)
+	require.Equal(t, fmt.Sprintf("oldPriority: %d, newPriority: 10: tx doesn't fit the replacement rule", txs[0].priority), log)
+	pooled, ok = mp.GetTx(sa.String(), 1)
+	require.True(t, ok)
+	require.Equal(t, txs[0], pooled)
+	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement))
+	require.Equal(t, 1, mp.CountTx())
+	pooled, ok = mp.GetTx(sa.String(), 1)
+	require.True(t, ok)
+	require.Equal(t, replacement, pooled)
+
+	// a full pool returns a malformed tx's own error, not the retryable capacity error
+	malformed := testTx{nonce: 1, address: sb, unordered: true} // an unordered tx can't carry a sequence
+	require.EqualError(t, mp.Insert(ctx, malformed), "unordered txs must not have sequence set")
 
 	// disabled
 	mp = mempool.NewPriorityMempool(
@@ -1051,12 +1294,12 @@ func TestNextSenderTx_TxReplacement(t *testing.T) {
 	checkNextSenderTx(sa.String(), txs[0])
 
 	c = ctx.WithPriority(txs[1].priority)
-	require.Error(t, mp.Insert(c, txs[1]))
+	require.ErrorIs(t, mp.Insert(c, txs[1]), mempool.ErrTxReplacement)
 	require.Equal(t, 1, mp.CountTx())
 	checkNextSenderTx(sa.String(), txs[0])
 
 	c = ctx.WithPriority(txs[2].priority)
-	require.Error(t, mp.Insert(c, txs[2]))
+	require.ErrorIs(t, mp.Insert(c, txs[2]), mempool.ErrTxReplacement)
 	require.Equal(t, 1, mp.CountTx())
 	checkNextSenderTx(sa.String(), txs[0])
 

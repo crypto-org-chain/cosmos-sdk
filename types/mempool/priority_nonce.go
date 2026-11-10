@@ -8,12 +8,15 @@ import (
 
 	"github.com/huandu/skiplist"
 
+	errorsmod "cosmossdk.io/errors"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 var (
 	_ ExtMempool       = (*PriorityNonceMempool[int64])(nil)
 	_ UnorderedMempool = (*PriorityNonceMempool[int64])(nil)
+	_ TxLookupMempool  = (*PriorityNonceMempool[int64])(nil)
 	_ Iterator         = (*PriorityNonceIterator[int64])(nil)
 )
 
@@ -29,19 +32,20 @@ type (
 
 		// TxReplacement is a callback to be called when a duplicated transaction nonce
 		// is detected during mempool insert. An application can define a transaction
-		// replacement rule based on tx priority or certain transaction fields.
+		// replacement rule based on tx priority or certain transaction fields. It runs under the
+		// mempool lock; returning false makes Insert return ErrTxReplacement.
 		TxReplacement func(op, np C, oTx, nTx sdk.Tx) bool
 
 		// MaxTx sets the maximum number of transactions allowed in the mempool with
 		// the semantics:
 		// - if MaxTx == 0, there is no cap on the number of transactions in the mempool
-		// - if MaxTx > 0, the mempool will cap the number of transactions it stores,
-		//   and will prioritize transactions by their priority and sender-nonce
-		//   (sequence number) when evicting transactions.
+		// - if MaxTx > 0, a full mempool rejects a new sender-nonce but still lets a pooled
+		//   one be replaced
 		// - if MaxTx < 0, `Insert` is a no-op.
 		MaxTx int
 
-		// SignerExtractor is an implementation which retrieves signer data from an sdk.Tx
+		// SignerExtractor is an implementation which retrieves signer data from an sdk.Tx.
+		// Insert and Remove call it unlocked, so it must be safe for concurrent use.
 		SignerExtractor SignerExtractionAdapter
 	}
 
@@ -198,40 +202,51 @@ func (mp *PriorityNonceMempool[C]) NextSenderTx(sender string) sdk.Tx {
 	return cursor.Value.(sdk.Tx)
 }
 
+// GetTx returns the tx pooled at sender (the first signer's String()) and nonce (see ChooseNonce)
+// in O(log n) time. The result is a snapshot of this node's pool.
+// It takes the mempool lock, so don't call it from TxReplacement or a SelectBy callback.
+func (mp *PriorityNonceMempool[C]) GetTx(sender string, nonce uint64) (sdk.Tx, bool) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+	senderIndex, ok := mp.senderIndices[sender]
+	if !ok {
+		return nil, false
+	}
+
+	elem := senderIndex.Get(txMeta[C]{nonce: nonce, sender: sender})
+	if elem == nil {
+		return nil, false
+	}
+	return elem.Value.(sdk.Tx), true
+}
+
 // Insert attempts to insert a Tx into the app-side mempool in O(log n) time,
 // returning an error if unsuccessful. Sender and nonce are derived from the
 // transaction's first signature.
 //
-// Transactions are unique by sender and nonce. Inserting a duplicate tx is an
-// O(log n) no-op.
-//
-// Inserting a duplicate tx with a different priority overwrites the existing tx,
-// changing the total order of the mempool.
+// Transactions are unique by sender and nonce. A tx for a pooled sender and nonce
+// replaces the pooled tx, unless TxReplacement returns false (ErrTxReplacement).
 func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error {
-	mp.mtx.Lock()
-	defer mp.mtx.Unlock()
-	if mp.cfg.MaxTx > 0 && mp.priorityIndex.Len() >= mp.cfg.MaxTx {
-		return ErrMempoolTxMaxCapacity
-	} else if mp.cfg.MaxTx < 0 {
+	if mp.cfg.MaxTx < 0 {
 		return nil
 	}
 
-	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
+	// The config is immutable, so derive the key before locking, as Remove does.
+	sender, nonce, err := mp.txSenderNonce(tx)
 	if err != nil {
 		return err
 	}
-	if len(sigs) == 0 {
-		return fmt.Errorf("tx must have at least one signer")
+
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+	sk := txMeta[C]{nonce: nonce, sender: sender}
+	oldScore, txExists := mp.scores[sk]
+	// A replacement doesn't grow the pool, so a full pool still applies the replacement rule.
+	if !txExists && mp.cfg.MaxTx > 0 && mp.priorityIndex.Len() >= mp.cfg.MaxTx {
+		return ErrMempoolTxMaxCapacity
 	}
 
-	sig := sigs[0]
-	sender := sig.Signer.String()
 	priority := mp.cfg.TxPriority.GetTxPriority(ctx, tx)
-	nonce, err := ChooseNonce(sig.Sequence, tx)
-	if err != nil {
-		return err
-	}
-
 	key := txMeta[C]{nonce: nonce, priority: priority, sender: sender}
 
 	senderIndex, ok := mp.senderIndices[sender]
@@ -249,18 +264,11 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	// re-insert it to avoid having the same tx with different priorityIndex indexed
 	// twice in the mempool.
 	//
-	// This O(log n) remove operation is rare and only happens when a tx's priority
-	// changes.
-	sk := txMeta[C]{nonce: nonce, sender: sender}
-	if oldScore, txExists := mp.scores[sk]; txExists {
+	// This O(log n) remove operation happens on every accepted replacement.
+	if txExists {
 		if mp.cfg.TxReplacement != nil && !mp.cfg.TxReplacement(oldScore.priority, priority, senderIndex.Get(key).Value.(sdk.Tx), tx) {
-			return fmt.Errorf(
-				"tx doesn't fit the replacement rule, oldPriority: %v, newPriority: %v, oldTx: %v, newTx: %v",
-				oldScore.priority,
-				priority,
-				senderIndex.Get(key).Value.(sdk.Tx),
-				tx,
-			)
+			// errorsmod keeps the ABCI code; fmt's %w would make it internal.
+			return errorsmod.Wrapf(ErrTxReplacement, "oldPriority: %v, newPriority: %v", oldScore.priority, priority)
 		}
 
 		oldKey := txMeta[C]{nonce: nonce, sender: sender, priority: oldScore.priority, weight: oldScore.weight}
@@ -464,20 +472,19 @@ func (mp *PriorityNonceMempool[C]) UnorderedTxs(_ context.Context) []sdk.Tx {
 	return txs
 }
 
+// txSenderNonce is senderNonce over the configured SignerExtractor's signers.
+func (mp *PriorityNonceMempool[C]) txSenderNonce(tx sdk.Tx) (sender string, nonce uint64, err error) {
+	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
+	if err != nil {
+		return "", 0, err
+	}
+	return senderNonce(tx, sigs)
+}
+
 // Remove removes a transaction from the mempool in O(log n) time, returning an
 // error if unsuccessful.
 func (mp *PriorityNonceMempool[C]) Remove(tx sdk.Tx) error {
-	sigs, err := mp.cfg.SignerExtractor.GetSigners(tx)
-	if err != nil {
-		return err
-	}
-	if len(sigs) == 0 {
-		return fmt.Errorf("attempted to remove a tx with no signatures")
-	}
-
-	sig := sigs[0]
-	sender := sig.Signer.String()
-	nonce, err := ChooseNonce(sig.Sequence, tx)
+	sender, nonce, err := mp.txSenderNonce(tx)
 	if err != nil {
 		return err
 	}

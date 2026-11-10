@@ -24,3 +24,15 @@ func ChooseNonce(seq uint64, tx sdk.Tx) (uint64, error) {
 	// otherwise, use the sequence as normal.
 	return seq, nil
 }
+
+// senderNonce returns tx's pool key: its first signer and that signer's nonce.
+func senderNonce(tx sdk.Tx, sigs []SignerData) (sender string, nonce uint64, err error) {
+	if len(sigs) == 0 {
+		return "", 0, errors.New("tx must have at least one signer")
+	}
+	nonce, err = ChooseNonce(sigs[0].Sequence, tx)
+	if err != nil {
+		return "", 0, err
+	}
+	return sigs[0].Signer.String(), nonce, nil
+}
