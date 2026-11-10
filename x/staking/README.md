@@ -320,6 +320,19 @@ which the validator object can be accessed. Typically it is expected that only
 a single validator record will be associated with a given timestamp however it is possible
 that multiple validators exist in the queue at the same location.
 
+#### Pending-Slot Index (crypto-org-chain fork)
+
+End-block does not iterate the three queues above. Each queue has one key listing
+the slots that hold an entry, and end-block looks up only the mature ones.
+
+* ValidatorQueuePendingSlots: `0x44 -> count | (UnixNano(time) | height)...`
+* UBDQueuePendingSlots: `0x45 -> count | UnixNano(time)...`
+* RedelegationQueuePendingSlots: `0x46 -> count | UnixNano(time)...`
+
+`count` is a 4-byte big-endian integer; times and heights are 8-byte big-endian.
+Each list is sorted and holds no duplicates. The keeper's queue setters keep the
+lists in sync, so a queue entry written straight to the store never matures.
+
 ### HistoricalInfo
 
 HistoricalInfo objects are stored and pruned at each block such that the staking keeper persists

@@ -551,8 +551,8 @@ func (k Keeper) DeleteValidatorQueue(ctx context.Context, val types.Validator) e
 }
 
 // UnbondAllMatureValidators unbonds all the mature unbonding validators that
-// have finished their unbonding period. Uses the pending-slot index (populated by
-// PopulateQueuePendingSlots); no iterator is used in end-block.
+// have finished their unbonding period. It reads the pending-slot index (populated by
+// PopulateQueuePendingSlots) instead of iterating the queue.
 func (k Keeper) UnbondAllMatureValidators(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	blockTime := sdkCtx.BlockTime()

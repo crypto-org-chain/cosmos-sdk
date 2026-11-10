@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"time"
 
 	"cosmossdk.io/core/header"
@@ -803,6 +804,78 @@ func (s *KeeperTestSuite) TestDequeueRewritesPendingSlotsOnlyWhenSomethingMature
 				remaining, err := q.slots(ctx)
 				s.Require().NoError(err)
 				s.Require().Equal([]time.Time{future}, remaining)
+			})
+		}
+	}
+}
+
+func (s *KeeperTestSuite) TestEndBlockRejectsMalformedPendingSlots() {
+	queues := []struct {
+		name     string
+		key      []byte
+		slotSize int
+		endBlock func(ctx sdk.Context) error
+	}{
+		{
+			name:     "validator",
+			key:      stakingtypes.ValidatorQueuePendingSlotsKey,
+			slotSize: 16,
+			endBlock: func(ctx sdk.Context) error { return s.stakingKeeper.UnbondAllMatureValidators(ctx) },
+		},
+		{
+			name:     "unbonding",
+			key:      stakingtypes.UBDQueuePendingSlotsKey,
+			slotSize: 8,
+			endBlock: func(ctx sdk.Context) error {
+				_, err := s.stakingKeeper.DequeueAllMatureUBDQueue(ctx, ctx.BlockTime())
+				return err
+			},
+		},
+		{
+			name:     "redelegation",
+			key:      stakingtypes.RedelegationQueuePendingSlotsKey,
+			slotSize: 8,
+			endBlock: func(ctx sdk.Context) error {
+				_, err := s.stakingKeeper.DequeueAllMatureRedelegationQueue(ctx, ctx.BlockTime())
+				return err
+			},
+		},
+	}
+	testCases := []struct {
+		name   string
+		value  func(slotSize int) []byte
+		expErr error
+	}{
+		{
+			name:   "shorter than the count",
+			value:  func(int) []byte { return []byte{0, 0, 1} },
+			expErr: stakingtypes.ErrPendingQueueSlotMissingCount,
+		},
+		{
+			name: "count exceeds the stored slots",
+			value: func(slotSize int) []byte {
+				return append(binary.BigEndian.AppendUint32(nil, 2), make([]byte, slotSize)...)
+			},
+			expErr: stakingtypes.ErrPendingQueueSlotInsufficientCapacity,
+		},
+		{
+			name:  "zero count",
+			value: func(int) []byte { return binary.BigEndian.AppendUint32(nil, 0) },
+		},
+	}
+
+	for _, q := range queues {
+		for _, tc := range testCases {
+			s.Run(q.name+"/"+tc.name, func() {
+				s.SetupTest()
+				s.ctx.KVStore(s.storeKey).Set(q.key, tc.value(q.slotSize))
+
+				err := q.endBlock(s.ctx)
+				if tc.expErr != nil {
+					s.Require().ErrorIs(err, tc.expErr)
+					return
+				}
+				s.Require().NoError(err)
 			})
 		}
 	}

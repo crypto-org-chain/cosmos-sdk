@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,7 @@ import (
 
 	"cosmossdk.io/math"
 
+	"github.com/cosmos/cosmos-sdk/codec/address"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
@@ -137,6 +139,62 @@ func TestInitGenesis(t *testing.T) {
 	}
 
 	assert.DeepEqual(t, abcivals, vals)
+}
+
+func TestInitGenesisRebuildsQueuePendingSlots(t *testing.T) {
+	f, addrs := bootstrapGenesisTest(t, 3)
+
+	params, err := f.stakingKeeper.GetParams(f.sdkCtx)
+	assert.NilError(t, err)
+	valTokens := f.stakingKeeper.TokensFromConsensusPower(f.sdkCtx, 1)
+	valCodec, accCodec := address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos")
+
+	newValidator := func(i int, status types.BondStatus) types.Validator {
+		pk, err := codectypes.NewAnyWithValue(PKs[i])
+		assert.NilError(t, err)
+		return types.Validator{
+			OperatorAddress: sdk.ValAddress(addrs[i]).String(),
+			ConsensusPubkey: pk,
+			Status:          status,
+			Tokens:          valTokens,
+			DelegatorShares: math.LegacyNewDecFromInt(valTokens),
+			Description:     types.NewDescription("hoop", "", "", "", ""),
+		}
+	}
+	valMaturity := f.sdkCtx.BlockTime().Add(time.Hour)
+	ubdMaturity := valMaturity.Add(time.Hour)
+	redMaturity := ubdMaturity.Add(time.Hour)
+	const unbondingHeight = int64(7)
+
+	bonded := newValidator(0, types.Bonded)
+	unbonding := newValidator(1, types.Unbonding)
+	// Jailed keeps it out of the power index, so InitGenesis does not bond it again and drop its slot.
+	unbonding.Jailed = true
+	unbonding.UnbondingTime = valMaturity
+	unbonding.UnbondingHeight = unbondingHeight
+
+	genesisState := types.NewGenesisState(params, []types.Validator{bonded, unbonding}, nil)
+	genesisState.UnbondingDelegations = []types.UnbondingDelegation{
+		types.NewUnbondingDelegation(addrs[2], sdk.ValAddress(addrs[0]), 1, ubdMaturity, valTokens, 0, valCodec, accCodec),
+	}
+	genesisState.Redelegations = []types.Redelegation{
+		types.NewRedelegation(addrs[2], sdk.ValAddress(addrs[0]), sdk.ValAddress(addrs[1]), 1, redMaturity, valTokens, math.LegacyNewDecFromInt(valTokens), 0, valCodec, accCodec),
+	}
+	fundStakingPoolsForGenesis(t, f, genesisState)
+
+	f.stakingKeeper.InitGenesis(f.sdkCtx, genesisState)
+
+	valSlots, err := f.stakingKeeper.GetValidatorQueuePendingSlots(f.sdkCtx)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, []types.TimeHeightQueueSlot{{Time: valMaturity, Height: unbondingHeight}}, valSlots)
+
+	ubdSlots, err := f.stakingKeeper.GetUBDQueuePendingSlots(f.sdkCtx)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, []time.Time{ubdMaturity}, ubdSlots)
+
+	redSlots, err := f.stakingKeeper.GetRedelegationQueuePendingSlots(f.sdkCtx)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, []time.Time{redMaturity}, redSlots)
 }
 
 func TestInitGenesis_PoolsBalanceMismatch(t *testing.T) {

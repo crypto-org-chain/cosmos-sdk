@@ -517,10 +517,9 @@ func (k Keeper) InsertUBDQueue(ctx context.Context, ubd types.UnbondingDelegatio
 }
 
 // DequeueAllMatureUBDQueue returns a concatenated list of all the timeslices inclusively previous to
-// currTime, and deletes the timeslices from the queue. Uses the pending-slot index (populated by
-// PopulateQueuePendingSlots); slots are read once and written at most once (batch update).
-// Read phase collects mature timeslices; write phase deletes keys and updates pending slots so that
-// on any error no queue keys are deleted and state remains consistent.
+// currTime, and deletes the timeslices from the queue. It reads the pending-slot index (populated by
+// PopulateQueuePendingSlots) instead of iterating the queue.
+// Every mature timeslice is read before any is deleted, so a read or decode error leaves the store untouched.
 func (k Keeper) DequeueAllMatureUBDQueue(ctx context.Context, currTime time.Time) (matureUnbonds []types.DVPair, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 
@@ -847,10 +846,9 @@ func (k Keeper) InsertRedelegationQueue(ctx context.Context, red types.Redelegat
 
 // DequeueAllMatureRedelegationQueue returns a concatenated list of all the
 // timeslices inclusively previous to currTime, and deletes the timeslices from
-// the queue. Uses the pending-slot index (populated by PopulateQueuePendingSlots);
-// slots are read once and written at most once (batch update).
-// Read phase collects mature timeslices; write phase deletes keys and updates pending slots so that
-// on any error no queue keys are deleted and state remains consistent.
+// the queue. It reads the pending-slot index (populated by PopulateQueuePendingSlots)
+// instead of iterating the queue.
+// Every mature timeslice is read before any is deleted, so a read or decode error leaves the store untouched.
 func (k Keeper) DequeueAllMatureRedelegationQueue(ctx context.Context, currTime time.Time) (matureRedelegations []types.DVVTriplet, err error) {
 	store := k.storeService.OpenKVStore(ctx)
 

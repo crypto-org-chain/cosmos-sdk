@@ -110,7 +110,7 @@ func TestAppImportExport(t *testing.T) {
 		skipPrefixes := map[string][][]byte{
 			stakingtypes.StoreKey: {
 				stakingtypes.UnbondingQueueKey, stakingtypes.RedelegationQueueKey, stakingtypes.ValidatorQueueKey,
-				// A cancelled unbonding leaves its timeslice and slot behind, which a genesis import does not rebuild.
+				// A canceled unbonding leaves its timeslice and slot behind, which a genesis import does not rebuild.
 				stakingtypes.UBDQueuePendingSlotsKey, stakingtypes.RedelegationQueuePendingSlotsKey, stakingtypes.ValidatorQueuePendingSlotsKey,
 				stakingtypes.HistoricalInfoKey, stakingtypes.UnbondingIDKey, stakingtypes.UnbondingIndexKey,
 				stakingtypes.UnbondingTypeKey,
