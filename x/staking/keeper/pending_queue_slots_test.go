@@ -723,15 +723,22 @@ func (s *KeeperTestSuite) TestDequeueRewritesPendingSlotsOnlyWhenSomethingMature
 	queues := []struct {
 		name    string
 		key     []byte
-		enqueue func(ctx sdk.Context, t time.Time)
+		enqueue func(ctx sdk.Context, t time.Time) error
+		addSlot func(ctx sdk.Context, t time.Time) error
+		slots   func(ctx sdk.Context) ([]time.Time, error)
 		dequeue func(ctx sdk.Context) error
 	}{
 		{
 			name: "unbonding",
 			key:  stakingtypes.UBDQueuePendingSlotsKey,
-			enqueue: func(ctx sdk.Context, t time.Time) {
-				s.Require().NoError(s.stakingKeeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{{DelegatorAddress: "del", ValidatorAddress: "val"}}))
-				s.Require().NoError(s.stakingKeeper.AddUBDQueuePendingSlot(ctx, t))
+			enqueue: func(ctx sdk.Context, t time.Time) error {
+				return s.stakingKeeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{{DelegatorAddress: "del", ValidatorAddress: "val"}})
+			},
+			addSlot: func(ctx sdk.Context, t time.Time) error {
+				return s.stakingKeeper.AddUBDQueuePendingSlot(ctx, t)
+			},
+			slots: func(ctx sdk.Context) ([]time.Time, error) {
+				return s.stakingKeeper.GetUBDQueuePendingSlots(ctx)
 			},
 			dequeue: func(ctx sdk.Context) error {
 				_, err := s.stakingKeeper.DequeueAllMatureUBDQueue(ctx, now)
@@ -741,9 +748,14 @@ func (s *KeeperTestSuite) TestDequeueRewritesPendingSlotsOnlyWhenSomethingMature
 		{
 			name: "redelegation",
 			key:  stakingtypes.RedelegationQueuePendingSlotsKey,
-			enqueue: func(ctx sdk.Context, t time.Time) {
-				s.Require().NoError(s.stakingKeeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{{DelegatorAddress: "del", ValidatorSrcAddress: "src", ValidatorDstAddress: "dst"}}))
-				s.Require().NoError(s.stakingKeeper.AddRedelegationQueuePendingSlot(ctx, t))
+			enqueue: func(ctx sdk.Context, t time.Time) error {
+				return s.stakingKeeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{{DelegatorAddress: "del", ValidatorSrcAddress: "src", ValidatorDstAddress: "dst"}})
+			},
+			addSlot: func(ctx sdk.Context, t time.Time) error {
+				return s.stakingKeeper.AddRedelegationQueuePendingSlot(ctx, t)
+			},
+			slots: func(ctx sdk.Context) ([]time.Time, error) {
+				return s.stakingKeeper.GetRedelegationQueuePendingSlots(ctx)
 			},
 			dequeue: func(ctx sdk.Context) error {
 				_, err := s.stakingKeeper.DequeueAllMatureRedelegationQueue(ctx, now)
@@ -751,13 +763,16 @@ func (s *KeeperTestSuite) TestDequeueRewritesPendingSlotsOnlyWhenSomethingMature
 			},
 		},
 	}
+	past, future := now.Add(-time.Hour), now.Add(time.Hour)
 	testCases := []struct {
 		name      string
 		pending   []time.Time
+		stale     []time.Time // slots whose queue entry is already gone
 		expWrites int
 	}{
-		{"nothing matured", []time.Time{now.Add(time.Hour)}, 0},
-		{"one entry matured", []time.Time{now.Add(-time.Hour), now.Add(time.Hour)}, 1},
+		{name: "nothing matured", pending: []time.Time{future}, expWrites: 0},
+		{name: "one entry matured", pending: []time.Time{past, future}, expWrites: 1},
+		{name: "stale slot dropped", pending: []time.Time{future}, stale: []time.Time{past}, expWrites: 1},
 	}
 
 	for _, q := range queues {
@@ -766,7 +781,10 @@ func (s *KeeperTestSuite) TestDequeueRewritesPendingSlotsOnlyWhenSomethingMature
 				s.SetupTest()
 				ctx := s.ctx.WithBlockTime(now).WithHeaderInfo(header.Info{Time: now})
 				for _, t := range tc.pending {
-					q.enqueue(ctx, t)
+					s.Require().NoError(q.enqueue(ctx, t))
+				}
+				for _, t := range tc.stale {
+					s.Require().NoError(q.addSlot(ctx, t))
 				}
 
 				cms, ok := ctx.MultiStore().(storetypes.CommitMultiStore)
@@ -781,6 +799,10 @@ func (s *KeeperTestSuite) TestDequeueRewritesPendingSlotsOnlyWhenSomethingMature
 					}
 				}
 				s.Require().Equal(tc.expWrites, writes)
+
+				remaining, err := q.slots(ctx)
+				s.Require().NoError(err)
+				s.Require().Equal([]time.Time{future}, remaining)
 			})
 		}
 	}
