@@ -334,6 +334,22 @@ func (s *KeeperTestSuite) TestRemoveValidatorQueuePendingSlot_MiddleEntry() {
 	s.Require().Equal(testHeight3, slots[1].Height)
 }
 
+func (s *KeeperTestSuite) TestRemoveValidatorQueuePendingSlot_SharedTimeOrHeight() {
+	testTime1 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	testTime2 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+	sameTime := stakingtypes.TimeHeightQueueSlot{Time: testTime1, Height: 200}
+	sameHeight := stakingtypes.TimeHeightQueueSlot{Time: testTime2, Height: 100}
+	s.Require().NoError(s.stakingKeeper.SetValidatorQueuePendingSlots(s.ctx, []stakingtypes.TimeHeightQueueSlot{
+		{Time: testTime1, Height: 100}, sameTime, sameHeight,
+	}))
+
+	s.Require().NoError(s.stakingKeeper.RemoveValidatorQueuePendingSlot(s.ctx, testTime1, 100))
+
+	slots, err := s.stakingKeeper.GetValidatorQueuePendingSlots(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Equal([]stakingtypes.TimeHeightQueueSlot{sameTime, sameHeight}, slots)
+}
+
 func (s *KeeperTestSuite) TestRemoveValidatorQueuePendingSlot_AllEntries() {
 	// Add two slots
 	testTime1 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -721,6 +737,8 @@ func (s *KeeperTestSuite) TestSetRedelegationQueuePendingSlots_TimeWithNanosecon
 
 func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Each entry's delegator is its completion time, so the dequeued entries can be told apart.
+	delegator := func(t time.Time) string { return t.Format(time.RFC3339) }
 	queues := []struct {
 		name     string
 		key      []byte
@@ -728,13 +746,13 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 		hasEntry func(ctx sdk.Context, t time.Time) (bool, error)
 		addSlot  func(ctx sdk.Context, t time.Time) error
 		slots    func(ctx sdk.Context) ([]time.Time, error)
-		dequeue  func(ctx sdk.Context) error
+		dequeue  func(ctx sdk.Context) (delegators []string, err error)
 	}{
 		{
 			name: "unbonding",
 			key:  stakingtypes.UBDQueuePendingSlotsKey,
 			enqueue: func(ctx sdk.Context, t time.Time) error {
-				return s.stakingKeeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{{DelegatorAddress: "del", ValidatorAddress: "val"}})
+				return s.stakingKeeper.SetUBDQueueTimeSlice(ctx, t, []stakingtypes.DVPair{{DelegatorAddress: delegator(t), ValidatorAddress: "val"}})
 			},
 			hasEntry: func(ctx sdk.Context, t time.Time) (bool, error) {
 				pairs, err := s.stakingKeeper.GetUBDQueueTimeSlice(ctx, t)
@@ -746,16 +764,19 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 			slots: func(ctx sdk.Context) ([]time.Time, error) {
 				return s.stakingKeeper.GetUBDQueuePendingSlots(ctx)
 			},
-			dequeue: func(ctx sdk.Context) error {
-				_, err := s.stakingKeeper.DequeueAllMatureUBDQueue(ctx, now)
-				return err
+			dequeue: func(ctx sdk.Context) (delegators []string, err error) {
+				pairs, err := s.stakingKeeper.DequeueAllMatureUBDQueue(ctx, now)
+				for _, pair := range pairs {
+					delegators = append(delegators, pair.DelegatorAddress)
+				}
+				return delegators, err
 			},
 		},
 		{
 			name: "redelegation",
 			key:  stakingtypes.RedelegationQueuePendingSlotsKey,
 			enqueue: func(ctx sdk.Context, t time.Time) error {
-				return s.stakingKeeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{{DelegatorAddress: "del", ValidatorSrcAddress: "src", ValidatorDstAddress: "dst"}})
+				return s.stakingKeeper.SetRedelegationQueueTimeSlice(ctx, t, []stakingtypes.DVVTriplet{{DelegatorAddress: delegator(t), ValidatorSrcAddress: "src", ValidatorDstAddress: "dst"}})
 			},
 			hasEntry: func(ctx sdk.Context, t time.Time) (bool, error) {
 				triplets, err := s.stakingKeeper.GetRedelegationQueueTimeSlice(ctx, t)
@@ -767,22 +788,27 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 			slots: func(ctx sdk.Context) ([]time.Time, error) {
 				return s.stakingKeeper.GetRedelegationQueuePendingSlots(ctx)
 			},
-			dequeue: func(ctx sdk.Context) error {
-				_, err := s.stakingKeeper.DequeueAllMatureRedelegationQueue(ctx, now)
-				return err
+			dequeue: func(ctx sdk.Context) (delegators []string, err error) {
+				triplets, err := s.stakingKeeper.DequeueAllMatureRedelegationQueue(ctx, now)
+				for _, triplet := range triplets {
+					delegators = append(delegators, triplet.DelegatorAddress)
+				}
+				return delegators, err
 			},
 		},
 	}
 	past, future := now.Add(-time.Hour), now.Add(time.Hour)
 	testCases := []struct {
-		name      string
-		pending   []time.Time
-		stale     []time.Time // slots whose queue entry is already gone
-		expWrites int
+		name       string
+		pending    []time.Time
+		stale      []time.Time // slots whose queue entry is already gone
+		expMatured []time.Time
+		expWrites  int
 	}{
 		{name: "nothing matured", pending: []time.Time{future}, expWrites: 0},
-		{name: "one entry matured", pending: []time.Time{past, future}, expWrites: 1},
-		{name: "entry at the current time matured", pending: []time.Time{now, future}, expWrites: 1},
+		{name: "one entry matured", pending: []time.Time{past, future}, expMatured: []time.Time{past}, expWrites: 1},
+		{name: "entry at the current time matured", pending: []time.Time{now, future}, expMatured: []time.Time{now}, expWrites: 1},
+		{name: "entries matured in time order", pending: []time.Time{now, future, past}, expMatured: []time.Time{past, now}, expWrites: 1},
 		{name: "stale slot dropped", pending: []time.Time{future}, stale: []time.Time{past}, expWrites: 1},
 	}
 
@@ -804,7 +830,13 @@ func (s *KeeperTestSuite) TestDequeueAllMatureQueues() {
 				s.Require().True(ok)
 				cms.AddListeners([]storetypes.StoreKey{s.storeKey})
 				cms.PopStateCache()
-				s.Require().NoError(q.dequeue(ctx))
+				matured, err := q.dequeue(ctx)
+				s.Require().NoError(err)
+				var expDelegators []string
+				for _, t := range tc.expMatured {
+					expDelegators = append(expDelegators, delegator(t))
+				}
+				s.Require().Equal(expDelegators, matured)
 				writes := 0
 				for _, pair := range cms.PopStateCache() {
 					if bytes.Equal(pair.Key, q.key) {
