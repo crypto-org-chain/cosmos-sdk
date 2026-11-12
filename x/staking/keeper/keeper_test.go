@@ -36,6 +36,7 @@ type KeeperTestSuite struct {
 	suite.Suite
 
 	ctx           sdk.Context
+	storeKey      *storetypes.KVStoreKey
 	stakingKeeper *stakingkeeper.Keeper
 	bankKeeper    *stakingtestutil.MockBankKeeper
 	accountKeeper *stakingtestutil.MockAccountKeeper
@@ -72,6 +73,7 @@ func (s *KeeperTestSuite) SetupTest() {
 	require.NoError(keeper.SetParams(ctx, stakingtypes.DefaultParams()))
 
 	s.ctx = ctx
+	s.storeKey = key
 	s.stakingKeeper = keeper
 	s.bankKeeper = bankKeeper
 	s.accountKeeper = accountKeeper

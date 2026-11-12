@@ -110,6 +110,8 @@ func TestAppImportExport(t *testing.T) {
 		skipPrefixes := map[string][][]byte{
 			stakingtypes.StoreKey: {
 				stakingtypes.UnbondingQueueKey, stakingtypes.RedelegationQueueKey, stakingtypes.ValidatorQueueKey,
+				// The indexes follow the three queues skipped above, and a canceled unbonding leaves a slot a genesis import does not rebuild.
+				stakingtypes.UBDQueuePendingSlotsKey, stakingtypes.RedelegationQueuePendingSlotsKey, stakingtypes.ValidatorQueuePendingSlotsKey,
 				stakingtypes.HistoricalInfoKey, stakingtypes.UnbondingIDKey, stakingtypes.UnbondingIndexKey,
 				stakingtypes.UnbondingTypeKey,
 				stakingtypes.ValidatorUpdatesKey, // todo (Alex): double check why there is a diff with test-sim-import-export
