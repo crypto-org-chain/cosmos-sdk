@@ -45,6 +45,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### State Machine Breaking
 
+* (x/feegrant) [#26944](https://github.com/cosmos/cosmos-sdk/pull/26944) Add a v2 → v3 store migration that rewrites fee allowance expiry queue entries stored with an empty value to an encoded `true`, and write an encoded `true` in the v1 → v2 migration. The standalone `cosmossdk.io/x/feegrant` module and the v1 → v2 migration wrote empty values, which the keeper cannot decode, so `RemoveExpiredAllowances` returned an error from the `EndBlocker` once such an entry expired.
 * (x/staking) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Propagate `AfterUnbondingInitiated` hook errors from unbonding delegation and redelegation entries instead of logging and swallowing them, matching the validator unbonding path (port of upstream [#26589](https://github.com/cosmos/cosmos-sdk/pull/26589), closed unmerged).
 * (x/staking) [#1812](https://github.com/crypto-org-chain/cosmos-sdk/pull/1812) [#1814](https://github.com/crypto-org-chain/cosmos-sdk/pull/1814) Index pending validator, unbonding and redelegation queue slots so end-block no longer iterates those three queues (port of upstream [#26023](https://github.com/cosmos/cosmos-sdk/pull/26023), closed unmerged). Chains populate the index by calling `Keeper.PopulateQueuePendingSlots` from their upgrade handler; no consensus version migration is registered. The index's error codes move from 46/47 (fork v0.54.x) to 49/50, since v0.55 key rotation took 46-48.
 
