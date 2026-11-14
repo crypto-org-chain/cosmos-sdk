@@ -4,12 +4,14 @@ package systemtests
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	systest "github.com/cosmos/cosmos-sdk/tools/systemtests"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -19,31 +21,110 @@ import (
 const (
 	testSeed            = "scene learn remember glide apple expand quality spawn property shoe lamp carry upset blossom draft reject aim file trash miss script joy only measure"
 	upgradeHeight int64 = 22
-	upgradeName         = "v054-to-v055" // must match UpgradeName in simapp/upgrades.go
 )
+
+// upgradeSource describes a legacy release that TestChainUpgrade upgrades from.
+type upgradeSource struct {
+	// binaryDir is the directory under binaries/ that holds the legacy simd.
+	binaryDir string
+	// upgradeName must match a handler registered in simapp/upgrades.go.
+	upgradeName string
+	// hasMaxSupply reports whether the legacy x/mint params include max_supply.
+	hasMaxSupply bool
+	// hasKeyRotationFee reports whether the legacy x/staking params include key_rotation_fee.
+	hasKeyRotationFee bool
+}
+
+// upgradeSources lists the supported upgrade paths to v0.55.x. v0.53 is the
+// default; set SYSTEMTEST_UPGRADE_FROM to run another.
+var upgradeSources = map[string]upgradeSource{
+	"v0.53":   {binaryDir: "v0.53", upgradeName: "v053-to-v055"},
+	"v0.54":   {binaryDir: "v0.54", upgradeName: "v054-to-v055", hasMaxSupply: true},
+	"v0.55.0": {binaryDir: "v0.55.0", upgradeName: "v055-to-v0551", hasMaxSupply: true, hasKeyRotationFee: true},
+}
+
+func currentUpgradeSource(t *testing.T) upgradeSource {
+	t.Helper()
+	from := os.Getenv("SYSTEMTEST_UPGRADE_FROM")
+	if from == "" {
+		from = "v0.53"
+	}
+	src, ok := upgradeSources[from]
+	require.True(t, ok, "unknown SYSTEMTEST_UPGRADE_FROM %q", from)
+	return src
+}
 
 func TestChainUpgrade(t *testing.T) {
 	// Scenario:
-	// start a legacy chain with some state
+	// start a legacy chain with some state, including a fee grant, an
+	// unbonding delegation and a redelegation that all mature after the upgrade
 	// when a chain upgrade proposal is executed
-	// then the chain upgrades successfully
+	// then the chain upgrades successfully, keeps producing blocks past the
+	// fee grant expiry and completes the unbonding and redelegation
+	src := currentUpgradeSource(t)
 	systest.Sut.StopChain()
 
 	currentBranchBinary := systest.Sut.ExecBinary()
 	currentInitializer := systest.Sut.TestnetInitializer()
 
-	legacyBinary := systest.WorkDir + "/binaries/v0.54/simd"
+	legacyBinary := systest.WorkDir + "/binaries/" + src.binaryDir + "/simd"
 	systest.Sut.SetExecBinary(legacyBinary)
 	systest.Sut.SetTestnetInitializer(systest.InitializerWithBinary(legacyBinary, systest.Sut))
 	systest.Sut.SetupChain()
-	require.True(t, gjson.Get(systest.Sut.ReadGenesisJSON(t), "app_state.mint.params.max_supply").Exists())
+	require.Equal(t, src.hasMaxSupply, gjson.Get(systest.Sut.ReadGenesisJSON(t), "app_state.mint.params.max_supply").Exists())
 
 	votingPeriod := 5 * time.Second // enough time to vote
-	systest.Sut.ModifyGenesisJSON(t, systest.SetGovVotingPeriod(t, votingPeriod))
+	// long enough for entries created before the upgrade to mature only after it
+	unbondingTime := time.Duration(upgradeHeight+20)*systest.Sut.BlockTime() + 30*time.Second
+	systest.Sut.ModifyGenesisJSON(t,
+		systest.SetGovVotingPeriod(t, votingPeriod),
+		func(genesis []byte) []byte {
+			state, err := sjson.SetBytes(genesis, "app_state.staking.params.unbonding_time", fmt.Sprintf("%ds", int64(unbondingTime.Seconds())))
+			require.NoError(t, err)
+			return state
+		},
+	)
 
 	systest.Sut.StartChain(t, fmt.Sprintf("--halt-height=%d", upgradeHeight+1))
 
 	cli := systest.NewCLIWrapper(t, systest.Sut, systest.Verbose)
+
+	// Create a fee grant that expires after the upgrade. Grants created by the
+	// standalone x/feegrant module (v0.53.x) store an empty expiry queue value,
+	// which the v2 to v3 store migration rewrites. Without it, the EndBlocker
+	// fails and the chain halts when the grant expires.
+	granter := cli.GetKeyAddr("node0")
+	grantee := cli.AddKey("feegrantee")
+	blocksToUpgrade := upgradeHeight - systest.Sut.CurrentHeight()
+	grantExpiry := time.Now().Add(time.Duration(blocksToUpgrade+20)*systest.Sut.BlockTime() + 30*time.Second).UTC()
+	rsp := cli.RunAndWait("tx", "feegrant", "grant", granter, grantee,
+		"--spend-limit=1000stake",
+		"--expiration="+grantExpiry.Format(time.RFC3339),
+		"--from=node0",
+	)
+	systest.RequireTxSuccess(t, rsp)
+
+	// The legacy binary queues these without the fork's pending-slot index, so
+	// they only mature if the upgrade handler rebuilds it.
+	srcVal := gjson.Get(cli.CustomQuery("q", "staking", "delegations", granter), "delegation_responses.0.delegation.validator_address").String()
+	require.NotEmpty(t, srcVal)
+	var dstVal string
+	for _, v := range gjson.Get(cli.CustomQuery("q", "staking", "validators"), "validators.#.operator_address").Array() {
+		if v.String() != srcVal {
+			dstVal = v.String()
+			break
+		}
+	}
+	require.NotEmpty(t, dstVal)
+	rsp = cli.RunAndWait("tx", "staking", "unbond", srcVal, "1000stake", "--from=node0", "--fees=1stake")
+	systest.RequireTxSuccess(t, rsp)
+	rsp = cli.RunAndWait("tx", "staking", "redelegate", srcVal, dstVal, "1000stake", "--from=node0", "--fees=1stake", "--gas=300000")
+	systest.RequireTxSuccess(t, rsp)
+	ubdRaw := cli.CustomQuery("q", "staking", "unbonding-delegation", granter, srcVal)
+	ubdCompletion := parseCompletionTime(t, gjson.Get(ubdRaw, "unbond.entries.0.completion_time").String())
+	redRaw := cli.CustomQuery("q", "staking", "redelegation", granter, srcVal, dstVal)
+	redCompletion := parseCompletionTime(t, gjson.Get(redRaw, "redelegation_responses.0.entries.0.redelegation_entry.completion_time").String())
+
 	govAddr := sdk.AccAddress(address.Module("gov")).String()
 	// submit upgrade proposal
 	proposal := fmt.Sprintf(`
@@ -62,7 +143,7 @@ func TestChainUpgrade(t *testing.T) {
  "deposit": "100000000stake",
  "title": "my upgrade",
  "summary": "testing"
-}`, govAddr, upgradeName, upgradeHeight)
+}`, govAddr, src.upgradeName, upgradeHeight)
 	proposalID := cli.SubmitAndVoteGovProposal(proposal)
 	t.Logf("current_height: %d\n", systest.Sut.CurrentHeight())
 	raw := cli.CustomQuery("q", "gov", "proposal", proposalID)
@@ -75,7 +156,7 @@ func TestChainUpgrade(t *testing.T) {
 	require.Equal(t, "PROPOSAL_STATUS_PASSED", proposalStatus, raw)
 
 	legacyStakingParamsRaw := cli.CustomQuery("q", "staking", "params")
-	require.False(t,
+	require.Equal(t, src.hasKeyRotationFee,
 		gjson.Get(legacyStakingParamsRaw, "params.key_rotation_fee").Exists(),
 		legacyStakingParamsRaw,
 	)
@@ -114,4 +195,28 @@ func TestChainUpgrade(t *testing.T) {
 	cli = systest.NewCLIWrapper(t, systest.Sut, systest.Verbose)
 	got := cli.Run("tx", "distribution", "fund-community-pool", "100stake", "--from=node0")
 	systest.RequireTxSuccess(t, got)
+
+	// the chain must keep producing blocks past the fee grant expiry, and the
+	// EndBlocker must have removed the expired grant
+	require.True(t, time.Now().Before(grantExpiry), "fee grant expired before the upgrade; raise its expiry")
+	require.True(t, time.Now().Before(ubdCompletion), "unbonding matured before the upgrade; raise the unbonding time")
+	time.Sleep(time.Until(grantExpiry))
+	systest.Sut.AwaitNBlocks(t, 3)
+	rsp = cli.WithRunErrorsIgnored().CustomQuery("q", "feegrant", "grant", granter, grantee)
+	require.Contains(t, rsp, "not found", rsp)
+
+	// the redelegation was created after the unbonding, so it matures last
+	time.Sleep(time.Until(redCompletion))
+	systest.Sut.AwaitNBlocks(t, 3)
+	rsp = cli.WithRunErrorsIgnored().CustomQuery("q", "staking", "unbonding-delegation", granter, srcVal)
+	require.Contains(t, rsp, "not found", rsp)
+	rsp = cli.WithRunErrorsIgnored().CustomQuery("q", "staking", "redelegation", granter, srcVal, dstVal)
+	require.Contains(t, rsp, "not found", rsp)
+}
+
+func parseCompletionTime(t *testing.T, raw string) time.Time {
+	t.Helper()
+	completion, err := time.Parse(time.RFC3339Nano, raw)
+	require.NoError(t, err, raw)
+	return completion
 }
