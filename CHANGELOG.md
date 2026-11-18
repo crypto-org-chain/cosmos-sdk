@@ -54,9 +54,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
-* (deps) [#1897](https://github.com/crypto-org-chain/cosmos-sdk/pull/1897) Bump `github.com/klauspost/compress` to v1.20.2 (GO-2026-6865).
-* (deps) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bump Go to 1.26.10 (stdlib advisories fixed through Go 1.26.10, e.g. GO-2026-6809 in `crypto/x509`, GO-2026-6617 and GO-2026-5026) and patch the vulnerable dependencies govulncheck reports: `golang.org/x/net` v0.60.0 (GO-2026-6603, -6610, -6611, -6612, -6617), `google.golang.org/grpc` v1.83.2 (GO-2026-6443, -6348), OpenTelemetry v1.45.0 / v0.21.0 (GO-2026-6505, -6508, -6615), `pion/dtls/v3` v3.1.4 (GO-2026-6165) and `pion/stun/v3` v3.1.5 (GO-2026-6163).
-
 ### Bug Fixes
 
 * (store) [#1888](https://github.com/crypto-org-chain/cosmos-sdk/pull/1888) Bound decompressed snapshot chunk size to prevent decompression-bomb DoS during state-sync restore (port of upstream [#26586](https://github.com/cosmos/cosmos-sdk/pull/26586), closed unmerged).
@@ -66,6 +63,18 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (simulation) [#1817](https://github.com/crypto-org-chain/cosmos-sdk/pull/1817) Disable `SimWriteState` for ethermint compatibility (backport of [#1760](https://github.com/crypto-org-chain/cosmos-sdk/pull/1760) from `release/v0.53.x`).
 
 ### Deprecated
+
+## [v0.55.1](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.55.1) - 2026-11-13
+
+### State Machine Breaking
+
+* (x/feegrant) [#26944](https://github.com/cosmos/cosmos-sdk/pull/26944) Add a v2 → v3 store migration that rewrites fee allowance expiry queue entries stored with an empty value to an encoded `true`, and write an encoded `true` in the v1 → v2 migration. The standalone `cosmossdk.io/x/feegrant` module and the v1 → v2 migration wrote empty values, which the keeper cannot decode, so `RemoveExpiredAllowances` returned an error from the `EndBlocker` once such an entry expired.
+
+### Improvements
+
+* (deps) [#26968](https://github.com/cosmos/cosmos-sdk/pull/26968) Bump cosmos/iavl to v1.2.9, which validates malformed snapshot input during import.
+* (deps) [#26969](https://github.com/cosmos/cosmos-sdk/pull/26969) Bump Go to 1.26.11 and patch vulnerable dependencies (klauspost/compress, grpc, golang.org/x, pion, otel).
+* (telemetry) [#26979](https://github.com/cosmos/cosmos-sdk/pull/26979) Use `otel.GetLoggerProvider` and `otel.SetLoggerProvider` in place of the deprecated `go.opentelemetry.io/otel/log/global` package (backport of the telemetry change in #26897).
 
 ## [v0.55.0](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.55.0) - 2026-07-27
 
