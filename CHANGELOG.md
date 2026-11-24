@@ -54,6 +54,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (x/staking) [#1907](https://github.com/crypto-org-chain/cosmos-sdk/pull/1907) fire AfterRedelegationCompleted for held redelegation entries
+
 ### Deprecated
 
 ## [v0.55.1](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.55.1) - 2026-11-13

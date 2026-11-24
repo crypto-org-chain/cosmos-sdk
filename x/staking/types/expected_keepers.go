@@ -111,10 +111,10 @@ type StakingHooks interface {
 	AfterDelegationModified(ctx context.Context, delAddr sdk.AccAddress, valAddr sdk.ValAddress) error
 	BeforeValidatorSlashed(ctx context.Context, valAddr sdk.ValAddress, fraction math.LegacyDec) error
 	AfterUnbondingInitiated(ctx context.Context, id uint64) error
-	// An error aborts the slash, which halts the chain when the slash runs in BeginBlock.
-	BeforeRedelegationSlashed(ctx context.Context, unbondingID uint64, sharesToUnbond math.LegacyDec) error // Must be called before a redelegation entry is slashed (pre-Unbond)
-	// Runs after the completion is written: the end blocker ignores an error, UnbondingCanComplete returns it.
-	AfterRedelegationCompleted(ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, unbondingIds []uint64) error // Must be called when redelegation entries complete
+	// Called before a redelegation entry's destination shares are unbonded for a slash. An error aborts the slash, which halts the chain when the slash runs in BeginBlock.
+	BeforeRedelegationSlashed(ctx context.Context, unbondingID uint64, sharesToUnbond math.LegacyDec) error
+	// Called after redelegation entries complete and their state is written: the end blocker ignores an error, UnbondingCanComplete returns it.
+	AfterRedelegationCompleted(ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, unbondingIds []uint64) error
 }
 
 // StakingHooksWrapper is a wrapper for modules to inject StakingHooks using depinject.
