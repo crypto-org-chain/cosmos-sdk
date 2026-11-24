@@ -847,6 +847,12 @@ following hooks can registered with staking:
     * called when a validator is about to be slashed
 * `AfterUnbondingInitiated(Context, uint64) error`
     * called when an unbonding operation (validator unbonding, unbonding delegation, redelegation) was initiated
+* `BeforeRedelegationSlashed(Context, uint64, math.LegacyDec) error`
+    * called before a redelegation entry's shares are unbonded from the destination validator for a slash, with the entry's unbonding id and the shares to unbond
+    * an error aborts the slash; a slash runs in `BeginBlock`, so the error halts the chain
+* `AfterRedelegationCompleted(Context, AccAddress, ValAddress, ValAddress, []uint64) error`
+    * called after redelegation entries complete and are removed, with their unbonding ids: in the end blocker, or when `UnbondingCanComplete` releases a mature entry that was on hold
+    * the hook runs after the completion is written: the end blocker ignores an error and keeps the completion; `UnbondingCanComplete` returns the error, and the completion is kept unless its caller reverts
 
 
 ## Events

@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/mock/gomock"
 
+	"cosmossdk.io/core/header"
 	"cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/codec/address"
@@ -1252,8 +1253,12 @@ func (s *KeeperTestSuite) TestAfterRedelegationCompletedHook() {
 	matureTime, immatureTime := blockTime.Add(-time.Second), blockTime.Add(time.Second)
 	hookErr := errors.New("hook failed")
 
-	endBlock := func(ctx sdk.Context, keeper *stakingkeeper.Keeper) error {
+	complete := func(ctx sdk.Context, keeper *stakingkeeper.Keeper) error {
 		_, err := keeper.CompleteRedelegation(ctx, delAddr, valSrcAddr, valDstAddr)
+		return err
+	}
+	endBlock := func(ctx sdk.Context, keeper *stakingkeeper.Keeper) error {
+		_, err := keeper.BlockValidatorUpdates(ctx)
 		return err
 	}
 	release := func(ctx sdk.Context, keeper *stakingkeeper.Keeper) error {
@@ -1266,22 +1271,26 @@ func (s *KeeperTestSuite) TestAfterRedelegationCompletedHook() {
 		onHold         bool
 		complete       func(sdk.Context, *stakingkeeper.Keeper) error
 		hookErr        error
+		expErr         error
 		expCompleted   bool
 	}{
-		{name: "mature entry completes", completionTime: matureTime, complete: endBlock, expCompleted: true},
-		{name: "immature entry stays", completionTime: immatureTime, complete: endBlock},
-		{name: "held entry is skipped", completionTime: matureTime, onHold: true, complete: endBlock},
+		{name: "mature entry completes", completionTime: matureTime, complete: complete, expCompleted: true},
+		{name: "immature entry stays", completionTime: immatureTime, complete: complete},
+		{name: "held entry is skipped", completionTime: matureTime, onHold: true, complete: complete},
 		{name: "held mature entry completes on release", completionTime: matureTime, onHold: true, complete: release, expCompleted: true},
 		{name: "held immature entry stays on release", completionTime: immatureTime, onHold: true, complete: release},
-		{name: "hook error on completion", completionTime: matureTime, complete: endBlock, hookErr: hookErr, expCompleted: true},
-		{name: "hook error on release", completionTime: matureTime, onHold: true, complete: release, hookErr: hookErr, expCompleted: true},
+		{name: "hook error on completion", completionTime: matureTime, complete: complete, hookErr: hookErr, expErr: hookErr, expCompleted: true},
+		{name: "hook error on release", completionTime: matureTime, onHold: true, complete: release, hookErr: hookErr, expErr: hookErr, expCompleted: true},
+		{name: "end blocker completes a mature entry", completionTime: matureTime, complete: endBlock, expCompleted: true},
+		{name: "end blocker ignores a hook error", completionTime: matureTime, complete: endBlock, hookErr: hookErr, expCompleted: true},
 	}
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
 			s.SetupTest()
-			ctx, keeper := s.ctx.WithBlockTime(blockTime), s.stakingKeeper
-			require := s.Require()
+			// The end blocker dequeues by header info time but matures entries by block time.
+			ctx := s.ctx.WithBlockTime(blockTime).WithHeaderInfo(header.Info{Time: blockTime})
+			keeper, require := s.stakingKeeper, s.Require()
 
 			hooks := testutil.NewMockStakingHooks(gomock.NewController(s.T()))
 			if tc.expCompleted {
@@ -1298,13 +1307,14 @@ func (s *KeeperTestSuite) TestAfterRedelegationCompletedHook() {
 			)
 			require.NoError(keeper.SetRedelegation(ctx, red))
 			require.NoError(keeper.SetRedelegationByUnbondingID(ctx, red, unbondingID))
+			require.NoError(keeper.InsertRedelegationQueue(ctx, red, tc.completionTime))
 			if tc.onHold {
 				require.NoError(keeper.PutUnbondingOnHold(ctx, unbondingID))
 			}
 
 			err := tc.complete(ctx, keeper)
-			if tc.hookErr != nil {
-				require.ErrorIs(err, tc.hookErr)
+			if tc.expErr != nil {
+				require.ErrorIs(err, tc.expErr)
 			} else {
 				require.NoError(err)
 			}
