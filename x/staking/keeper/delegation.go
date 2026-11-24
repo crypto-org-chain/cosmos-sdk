@@ -1223,7 +1223,8 @@ func (k Keeper) CompleteUnbonding(ctx context.Context, delAddr sdk.AccAddress, v
 }
 
 // BeginRedelegation begins unbonding / redelegation and creates a redelegation
-// record.
+// record. The unbonding id is 0 when the redelegation completes at once and no
+// entry is created.
 func (k Keeper) BeginRedelegation(
 	ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, sharesAmount math.LegacyDec,
 ) (completionTime time.Time, unbondingID uint64, err error) {

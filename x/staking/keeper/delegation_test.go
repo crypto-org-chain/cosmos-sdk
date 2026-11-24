@@ -832,10 +832,22 @@ func (s *KeeperTestSuite) TestRedelegationMaxEntries() {
 
 	// redelegations should pass
 	var completionTime time.Time
+	unbondingIDs := make([]uint64, 0, maxEntries)
 	for i := uint32(0); i < maxEntries; i++ {
-		var err error
-		completionTime, _, err = keeper.BeginRedelegation(ctx, val0AccAddr, addrVals[0], addrVals[1], math.LegacyNewDec(1))
+		var (
+			err         error
+			unbondingID uint64
+		)
+		completionTime, unbondingID, err = keeper.BeginRedelegation(ctx, val0AccAddr, addrVals[0], addrVals[1], math.LegacyNewDec(1))
 		require.NoError(err)
+		unbondingIDs = append(unbondingIDs, unbondingID)
+	}
+
+	red, err := keeper.GetRedelegation(ctx, val0AccAddr, addrVals[0], addrVals[1])
+	require.NoError(err)
+	require.Len(red.Entries, len(unbondingIDs))
+	for i, entry := range red.Entries {
+		require.Equal(unbondingIDs[i], entry.UnbondingId)
 	}
 
 	// an additional redelegation should fail due to max entries
@@ -1047,8 +1059,10 @@ func (s *KeeperTestSuite) TestRedelegateFromUnbondedValidator() {
 	// redelegate some of the delegation's shares
 	redelegationTokens := keeper.TokensFromConsensusPower(ctx, 6)
 	s.bankKeeper.EXPECT().SendCoinsFromModuleToModule(gomock.Any(), stakingtypes.NotBondedPoolName, stakingtypes.BondedPoolName, gomock.Any())
-	_, _, err = keeper.BeginRedelegation(ctx, addrDels[1], addrVals[0], addrVals[1], math.LegacyNewDecFromInt(redelegationTokens))
+	_, unbondingID, err := keeper.BeginRedelegation(ctx, addrDels[1], addrVals[0], addrVals[1], math.LegacyNewDecFromInt(redelegationTokens))
 	require.NoError(err)
+	// redelegating from an unbonded validator completes at once, so no entry is created
+	require.Zero(unbondingID)
 
 	// no red should have been found
 	red, err := keeper.GetRedelegation(ctx, addrDels[0], addrVals[0], addrVals[1])

@@ -72,6 +72,16 @@ func (s *IntegrationTestSuite) SetupTest() {
 	s.msgServer = keeper.NewMsgServerImpl(s.mintKeeper)
 }
 
+func (s *IntegrationTestSuite) TestGetParams() {
+	params := types.DefaultParams()
+	params.BlocksPerYear++
+	s.Require().NoError(s.mintKeeper.Params.Set(s.ctx, params))
+
+	got, err := s.mintKeeper.GetParams(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Equal(params, got)
+}
+
 func (s *IntegrationTestSuite) TestAliasFunctions() {
 	stakingTokenSupply := math.NewIntFromUint64(100000000000)
 	s.stakingKeeper.EXPECT().StakingTokenSupply(s.ctx).Return(stakingTokenSupply, nil)

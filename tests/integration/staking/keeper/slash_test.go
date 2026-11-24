@@ -1,11 +1,14 @@
 package keeper_test
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"gotest.tools/v3/assert"
 
 	"cosmossdk.io/math"
@@ -175,6 +178,91 @@ func TestSlashRedelegation(t *testing.T) {
 	// pool bonded tokens should decrease
 	burnedCoins := sdk.NewCoins(sdk.NewCoin(bondDenom, slashAmount))
 	assert.DeepEqual(t, balances.Sub(burnedCoins...), f.bankKeeper.GetAllBalances(f.sdkCtx, bondedPool.GetAddress()))
+}
+
+func TestBeforeRedelegationSlashedHook(t *testing.T) {
+	const unbondingID = uint64(7)
+	fraction := math.LegacyNewDecWithPrec(5, 1)
+	initialShares := math.LegacyNewDec(10)
+	hookErr := errors.New("hook failed")
+
+	testCases := []struct {
+		name             string
+		infractionHeight int64
+		hookErr          error
+		expHookCalled    bool
+		expSlashAmount   math.Int
+		expShares        math.LegacyDec
+	}{
+		{
+			name:           "slashes the destination delegation",
+			expHookCalled:  true,
+			expSlashAmount: math.NewInt(5),
+			expShares:      math.LegacyNewDec(5),
+		},
+		{
+			name:           "hook error aborts the slash",
+			hookErr:        hookErr,
+			expHookCalled:  true,
+			expSlashAmount: math.ZeroInt(),
+			expShares:      initialShares,
+		},
+		{
+			name:             "stake did not contribute to the infraction",
+			infractionHeight: 1,
+			expSlashAmount:   math.ZeroInt(),
+			expShares:        initialShares,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, addrDels, addrVals := bootstrapSlashTest(t, 10)
+			ctx := f.sdkCtx.WithBlockHeader(cmtproto.Header{Time: time.Unix(0, 0)})
+
+			bondDenom, err := f.stakingKeeper.BondDenom(ctx)
+			require.NoError(t, err)
+			bondedPool := f.stakingKeeper.GetBondedPool(ctx)
+			require.NoError(t, banktestutil.FundModuleAccount(ctx, f.bankKeeper, bondedPool.GetName(), sdk.NewCoins(sdk.NewInt64Coin(bondDenom, 15))))
+			f.accountKeeper.SetModuleAccount(ctx, bondedPool)
+
+			rd := types.NewRedelegation(addrDels[0], addrVals[0], addrVals[1], 0,
+				time.Unix(5, 0), math.NewInt(10), initialShares, unbondingID, address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
+			require.NoError(t, f.stakingKeeper.SetRedelegation(ctx, rd))
+			require.NoError(t, f.stakingKeeper.SetDelegation(ctx, types.NewDelegation(addrDels[0].String(), addrVals[1].String(), initialShares)))
+
+			hooks := testutil.NewMockStakingHooks(gomock.NewController(t))
+			hooks.EXPECT().BeforeDelegationSharesModified(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			hooks.EXPECT().AfterDelegationModified(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			if tc.expHookCalled {
+				hooks.EXPECT().BeforeRedelegationSlashed(gomock.Any(), unbondingID, gomock.Any()).DoAndReturn(
+					func(ctx context.Context, _ uint64, sharesToUnbond math.LegacyDec) error {
+						require.True(t, sharesToUnbond.Equal(fraction.Mul(initialShares)))
+						// The hook must see the delegation before it is unbonded.
+						del, err := f.stakingKeeper.GetDelegation(ctx, addrDels[0], addrVals[1])
+						require.NoError(t, err)
+						require.True(t, del.Shares.Equal(initialShares))
+						return tc.hookErr
+					},
+				)
+			}
+			f.stakingKeeper.SetHooks(hooks)
+
+			srcValidator, err := f.stakingKeeper.GetValidator(ctx, addrVals[0])
+			require.NoError(t, err)
+			slashAmount, err := f.stakingKeeper.SlashRedelegation(ctx, srcValidator, rd, tc.infractionHeight, fraction)
+			if tc.hookErr != nil {
+				require.ErrorIs(t, err, tc.hookErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.True(t, slashAmount.Equal(tc.expSlashAmount))
+
+			del, err := f.stakingKeeper.GetDelegation(ctx, addrDels[0], addrVals[1])
+			require.NoError(t, err)
+			require.True(t, del.Shares.Equal(tc.expShares))
+		})
+	}
 }
 
 // test slash at a negative height
