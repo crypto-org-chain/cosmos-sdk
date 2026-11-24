@@ -58,6 +58,27 @@ func (mgr *Manager) GetState(mode sdk.ExecMode) *State {
 	mgr.stateMut.RLock()
 	defer mgr.stateMut.RUnlock()
 
+	return mgr.stateFor(mode)
+}
+
+// PinState returns the state for mode and a func the caller must call once it
+// is done reading; the state's store stays open until then, even if the state
+// is replaced in between.
+func (mgr *Manager) PinState(mode sdk.ExecMode) (*State, func()) {
+	mgr.stateMut.RLock()
+	defer mgr.stateMut.RUnlock()
+
+	st := mgr.stateFor(mode)
+	if st == nil || st.release == nil {
+		return st, func() {}
+	}
+	// The Manager's own pin is only dropped under the write lock, so the count
+	// cannot have reached zero here.
+	st.pins.Add(1)
+	return st, st.unpin
+}
+
+func (mgr *Manager) stateFor(mode sdk.ExecMode) *State {
 	switch mode {
 	case sdk.ExecModeFinalize:
 		return mgr.finalizeBlockState
@@ -76,6 +97,9 @@ func (mgr *Manager) GetState(mode sdk.ExecMode) *State {
 // SetState sets the BaseApp's state for the corresponding mode with a branched
 // multi-store (i.e. a CacheMultiStore) and a new Context with the same
 // multi-store branch, and provided header.
+//
+// Check state branches the last committed version instead of the live stores:
+// it is read without a lock while FinalizeBlock writes the next block into them.
 func (mgr *Manager) SetState(
 	mode sdk.ExecMode,
 	unbranchedStore storetypes.CommitMultiStore,
@@ -83,7 +107,15 @@ func (mgr *Manager) SetState(
 	logger log.Logger,
 	streamingManager storetypes.StreamingManager,
 ) {
-	ms := unbranchedStore.CacheMultiStore()
+	var (
+		ms      storetypes.CacheMultiStore
+		release func()
+	)
+	if mode == sdk.ExecModeCheck {
+		ms, release = branchCommitted(unbranchedStore, logger)
+	} else {
+		ms = unbranchedStore.CacheMultiStore()
+	}
 	headerInfo := header.Info{
 		Height:  h.Height,
 		Time:    h.Time,
@@ -96,6 +128,15 @@ func (mgr *Manager) SetState(
 			WithHeaderInfo(headerInfo),
 		ms,
 	)
+	baseState.release = release
+
+	// Unpinned after the lock is released: closing a store must not block readers.
+	var retired *State
+	defer func() {
+		if retired != nil {
+			retired.unpin()
+		}
+	}()
 
 	mgr.stateMut.Lock()
 	defer mgr.stateMut.Unlock()
@@ -103,6 +144,7 @@ func (mgr *Manager) SetState(
 	switch mode {
 	case sdk.ExecModeCheck:
 		baseState.SetContext(baseState.Context().WithIsCheckTx(true).WithMinGasPrices(mgr.gasConfig.MinGasPrices))
+		retired = mgr.checkState
 		mgr.checkState = baseState
 
 	case sdk.ExecModePrepareProposal:
@@ -127,11 +169,20 @@ func (mgr *Manager) SetState(
 }
 
 func (mgr *Manager) ClearState(mode sdk.ExecMode) {
+	// Unpinned after the lock is released: closing a store must not block readers.
+	var retired *State
+	defer func() {
+		if retired != nil {
+			retired.unpin()
+		}
+	}()
+
 	mgr.stateMut.Lock()
 	defer mgr.stateMut.Unlock()
 
 	switch mode {
 	case sdk.ExecModeCheck:
+		retired = mgr.checkState
 		mgr.checkState = nil
 
 	case sdk.ExecModePrepareProposal:

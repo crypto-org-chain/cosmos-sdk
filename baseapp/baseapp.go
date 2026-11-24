@@ -608,10 +608,13 @@ func (app *BaseApp) getBlockGasMeter(ctx sdk.Context) storetypes.GasMeter {
 }
 
 func (app *BaseApp) getContextForTx(mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {
+	return app.contextForTx(app.stateManager.GetState(mode), mode, txBytes, txIndex)
+}
+
+func (app *BaseApp) contextForTx(modeState *state.State, mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 
-	modeState := app.stateManager.GetState(mode)
 	if modeState == nil {
 		panic(fmt.Sprintf("state is nil for mode %v", mode))
 	}
@@ -776,7 +779,12 @@ func (app *BaseApp) endBlock() (sdk.EndBlock, error) {
 // both txbytes and the decoded tx are passed to runTx to avoid the state machine encoding the tx and decoding the transaction twice
 // passing the decoded tx to runTX is optional, it will be decoded if the tx is nil
 func (app *BaseApp) RunTx(mode sdk.ExecMode, txBytes []byte, tx sdk.Tx, txIndex int, txMultiStore storetypes.MultiStore, incarnationCache map[string]any) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
-	ctx := app.getContextForTx(mode, txBytes, txIndex)
+	// Pinned for the whole run: Commit may replace check state while a lock-free
+	// CheckTx or Simulate is still reading it.
+	modeState, unpin := app.stateManager.PinState(mode)
+	defer unpin()
+
+	ctx := app.contextForTx(modeState, mode, txBytes, txIndex)
 	ctx, span := ctx.StartSpan(tracer, "runTx")
 	defer span.End()
 
@@ -1166,6 +1174,9 @@ func (app *BaseApp) StreamingManager() storetypes.StreamingManager {
 // Close is called in start cmd to gracefully cleanup resources.
 func (app *BaseApp) Close() error {
 	var errs []error
+
+	// Check state may hold a store branch that must be released before the DB closes.
+	app.stateManager.ClearState(execModeCheck)
 
 	// Close app.db (opened by cosmos-sdk/server/start.go call to openDB)
 	if app.db != nil {
