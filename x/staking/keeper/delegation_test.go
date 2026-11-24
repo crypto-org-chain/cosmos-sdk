@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"errors"
 	"time"
 
 	"go.uber.org/mock/gomock"
@@ -1240,4 +1241,81 @@ func (s *KeeperTestSuite) TestSetUnbondingDelegationEntry() {
 	// unbondingID == 1 was skipped because the entry was merged with the existing entry with unbondingID == 0
 	// unbondingID comes from a global counter -> gaps in unbondingIDs are OK as long as every unbondingID is unique
 	require.Equal(uint64(2), resUnbonding.Entries[1].UnbondingId)
+}
+
+func (s *KeeperTestSuite) TestAfterRedelegationCompletedHook() {
+	delAddrs, valAddrs := createValAddrs(2)
+	delAddr, valSrcAddr, valDstAddr := delAddrs[0], valAddrs[0], valAddrs[1]
+
+	const unbondingID = uint64(7)
+	blockTime := time.Unix(10, 0).UTC()
+	matureTime, immatureTime := blockTime.Add(-time.Second), blockTime.Add(time.Second)
+	hookErr := errors.New("hook failed")
+
+	endBlock := func(ctx sdk.Context, keeper *stakingkeeper.Keeper) error {
+		_, err := keeper.CompleteRedelegation(ctx, delAddr, valSrcAddr, valDstAddr)
+		return err
+	}
+	release := func(ctx sdk.Context, keeper *stakingkeeper.Keeper) error {
+		return keeper.UnbondingCanComplete(ctx, unbondingID)
+	}
+
+	testCases := []struct {
+		name           string
+		completionTime time.Time
+		onHold         bool
+		complete       func(sdk.Context, *stakingkeeper.Keeper) error
+		hookErr        error
+		expCompleted   bool
+	}{
+		{name: "mature entry completes", completionTime: matureTime, complete: endBlock, expCompleted: true},
+		{name: "immature entry stays", completionTime: immatureTime, complete: endBlock},
+		{name: "held entry is skipped", completionTime: matureTime, onHold: true, complete: endBlock},
+		{name: "held mature entry completes on release", completionTime: matureTime, onHold: true, complete: release, expCompleted: true},
+		{name: "held immature entry stays on release", completionTime: immatureTime, onHold: true, complete: release},
+		{name: "hook error on completion", completionTime: matureTime, complete: endBlock, hookErr: hookErr, expCompleted: true},
+		{name: "hook error on release", completionTime: matureTime, onHold: true, complete: release, hookErr: hookErr, expCompleted: true},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			ctx, keeper := s.ctx.WithBlockTime(blockTime), s.stakingKeeper
+			require := s.Require()
+
+			hooks := testutil.NewMockStakingHooks(gomock.NewController(s.T()))
+			if tc.expCompleted {
+				hooks.EXPECT().
+					AfterRedelegationCompleted(gomock.Any(), delAddr, valSrcAddr, valDstAddr, []uint64{unbondingID}).
+					Return(tc.hookErr)
+			}
+			keeper.SetHooks(hooks)
+
+			red := stakingtypes.NewRedelegation(
+				delAddr, valSrcAddr, valDstAddr, 0, tc.completionTime,
+				math.NewInt(10), math.LegacyNewDec(10), unbondingID,
+				address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"),
+			)
+			require.NoError(keeper.SetRedelegation(ctx, red))
+			require.NoError(keeper.SetRedelegationByUnbondingID(ctx, red, unbondingID))
+			if tc.onHold {
+				require.NoError(keeper.PutUnbondingOnHold(ctx, unbondingID))
+			}
+
+			err := tc.complete(ctx, keeper)
+			if tc.hookErr != nil {
+				require.ErrorIs(err, tc.hookErr)
+			} else {
+				require.NoError(err)
+			}
+
+			// The hook runs after the entry is removed, so a hook error does not restore it.
+			_, err = keeper.GetRedelegation(ctx, delAddr, valSrcAddr, valDstAddr)
+			if tc.expCompleted {
+				require.ErrorIs(err, stakingtypes.ErrNoRedelegation)
+			} else {
+				require.NoError(err)
+			}
+		})
+	}
 }

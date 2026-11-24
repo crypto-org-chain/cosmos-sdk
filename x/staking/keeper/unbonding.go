@@ -373,11 +373,9 @@ func (k Keeper) redelegationEntryCanComplete(ctx context.Context, id uint64) err
 	red.Entries[i].UnbondingOnHoldRefCount--
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	if !red.Entries[i].OnHold() && red.Entries[i].IsMature(sdkCtx.BlockHeader().Time) {
-		// If matured, complete it.
-		// Remove entry
+	completed := !red.Entries[i].OnHold() && red.Entries[i].IsMature(sdkCtx.BlockHeader().Time)
+	if completed {
 		red.RemoveEntry(int64(i))
-		// Remove from the Unbonding index
 		if err = k.DeleteUnbondingIndex(ctx, id); err != nil {
 			return err
 		}
@@ -385,10 +383,29 @@ func (k Keeper) redelegationEntryCanComplete(ctx context.Context, id uint64) err
 
 	// set the redelegation or remove it if there are no more entries
 	if len(red.Entries) == 0 {
-		return k.RemoveRedelegation(ctx, red)
+		err = k.RemoveRedelegation(ctx, red)
+	} else {
+		err = k.SetRedelegation(ctx, red)
+	}
+	if err != nil || !completed {
+		return err
 	}
 
-	return k.SetRedelegation(ctx, red)
+	delAddr, err := k.authKeeper.AddressCodec().StringToBytes(red.DelegatorAddress)
+	if err != nil {
+		return err
+	}
+	valSrcAddr, err := k.validatorAddressCodec.StringToBytes(red.ValidatorSrcAddress)
+	if err != nil {
+		return err
+	}
+	valDstAddr, err := k.validatorAddressCodec.StringToBytes(red.ValidatorDstAddress)
+	if err != nil {
+		return err
+	}
+
+	// The end blocker skips entries on hold, so this is the only place a held entry completes.
+	return k.Hooks().AfterRedelegationCompleted(ctx, delAddr, valSrcAddr, valDstAddr, []uint64{id})
 }
 
 func (k Keeper) validatorUnbondingCanComplete(ctx context.Context, id uint64) error {
