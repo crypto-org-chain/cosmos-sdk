@@ -171,13 +171,13 @@ func (s *MempoolTestSuite) TestMaxTx() {
 
 	// a full pool still overwrites a pooled sender and nonce
 	overwrite := testTx{nonce: 0, address: accounts[0].Address, priority: tx.priority + 1}
-	require.NoError(t, mp.Insert(ctx, overwrite))
+	require.NoError(t, mp.Insert(ctx, overwrite, mempool.InsertOption{}))
 	require.Equal(t, 1, mp.CountTx())
-	require.Equal(t, sdk.Tx(overwrite), mp.Select(ctx, nil).Tx())
+	require.Equal(t, sdk.Tx(overwrite), mp.Select(ctx, nil).Tx().Tx)
 
 	// a full pool returns a malformed tx's own error, not the retryable capacity error
 	malformed := testTx{nonce: 1, address: accounts[0].Address, unordered: true} // an unordered tx can't carry a sequence
-	require.EqualError(t, mp.Insert(ctx, malformed), "unordered txs must not have sequence set")
+	require.EqualError(t, mp.Insert(ctx, malformed, mempool.InsertOption{}), "unordered txs must not have sequence set")
 }
 
 func (s *MempoolTestSuite) TestTxRejectedWithUnorderedAndSequence() {

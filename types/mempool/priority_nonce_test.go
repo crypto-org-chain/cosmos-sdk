@@ -880,10 +880,10 @@ func TestPriorityNonceMempool_GetTx(t *testing.T) {
 				SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
 			})
 			for _, tx := range tc.insert {
-				require.NoError(t, mp.Insert(ctx.WithPriority(tx.priority), tx))
+				require.NoError(t, mp.Insert(ctx.WithPriority(tx.priority), tx, mempool.InsertOption{}))
 			}
 			for _, tx := range tc.rejected {
-				require.ErrorIs(t, mp.Insert(ctx.WithPriority(tx.priority), tx), mempool.ErrTxReplacement)
+				require.ErrorIs(t, mp.Insert(ctx.WithPriority(tx.priority), tx, mempool.InsertOption{}), mempool.ErrTxReplacement)
 			}
 			for _, tx := range tc.remove {
 				require.NoError(t, mp.Remove(tx))
@@ -905,7 +905,7 @@ func BenchmarkPriorityNonceMempool_GetTx(b *testing.B) {
 	for i, acc := range accounts {
 		addrs[i] = acc.Address.String()
 		for n := range txsPerSender {
-			require.NoError(b, mp.Insert(ctx, testTx{id: i*txsPerSender + n, nonce: uint64(n), address: acc.Address}))
+			require.NoError(b, mp.Insert(ctx, testTx{id: i*txsPerSender + n, nonce: uint64(n), address: acc.Address}, mempool.InsertOption{}))
 		}
 	}
 
@@ -943,7 +943,7 @@ func BenchmarkPriorityNonceMempool_GetTx(b *testing.B) {
 				default:
 				}
 				tx := testTx{id: senders*txsPerSender + i, priority: int64(i), address: accounts[i%senders].Address}
-				_ = mp.Insert(ctx.WithPriority(tx.priority), tx)
+				_ = mp.Insert(ctx.WithPriority(tx.priority), tx, mempool.InsertOption{})
 			}
 		}()
 		misses := 0
@@ -1086,7 +1086,7 @@ func TestNextSenderTx_ConcurrentAccess(t *testing.T) {
 		defer writers.Done()
 		for i := 0; i < iterations; i++ {
 			tx := testTx{id: iterations + i, priority: int64(i + 10), nonce: 1, address: account}
-			if err := mp.Insert(ctx.WithPriority(tx.priority), tx); err != nil {
+			if err := mp.Insert(ctx.WithPriority(tx.priority), tx, mempool.InsertOption{}); err != nil {
 				insertErrs <- err
 				return
 			}
@@ -1192,7 +1192,7 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	}
 	// a full pool still replaces a pooled tx
 	replacement := testTx{priority: 30, nonce: 1, address: sa}
-	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement))
+	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement, mempool.InsertOption{}))
 	require.Equal(t, 3, mp.CountTx())
 	pooled, ok := mp.GetTx(sa.String(), 1)
 	require.True(t, ok)
@@ -1211,9 +1211,9 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 			SignerExtractor: mempool.NewDefaultSignerExtractionAdapter(),
 		},
 	)
-	require.NoError(t, mp.Insert(ctx.WithPriority(txs[0].priority), txs[0]))
+	require.NoError(t, mp.Insert(ctx.WithPriority(txs[0].priority), txs[0], mempool.InsertOption{}))
 	lower := testTx{priority: 10, nonce: 1, address: sa}
-	err := mp.Insert(ctx.WithPriority(lower.priority), lower)
+	err := mp.Insert(ctx.WithPriority(lower.priority), lower, mempool.InsertOption{})
 	require.ErrorIs(t, err, mempool.ErrTxReplacement)
 	require.NotErrorIs(t, err, mempool.ErrMempoolTxMaxCapacity)
 	// Clients match these literals, so a change to them is breaking.
@@ -1224,7 +1224,7 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	pooled, ok = mp.GetTx(sa.String(), 1)
 	require.True(t, ok)
 	require.Equal(t, txs[0], pooled)
-	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement))
+	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement, mempool.InsertOption{}))
 	require.Equal(t, 1, mp.CountTx())
 	pooled, ok = mp.GetTx(sa.String(), 1)
 	require.True(t, ok)
@@ -1232,7 +1232,7 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 
 	// a full pool returns a malformed tx's own error, not the retryable capacity error
 	malformed := testTx{nonce: 1, address: sb, unordered: true} // an unordered tx can't carry a sequence
-	require.EqualError(t, mp.Insert(ctx, malformed), "unordered txs must not have sequence set")
+	require.EqualError(t, mp.Insert(ctx, malformed, mempool.InsertOption{}), "unordered txs must not have sequence set")
 
 	// disabled
 	mp = mempool.NewPriorityMempool(

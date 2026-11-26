@@ -214,7 +214,7 @@ func (s *MempoolTestSuite) TestDefaultMempool() {
 			{Sequence: 7},
 		}, nil
 	}}
-	require.NoError(t, s.mempool.Insert(ctx, partial))
+	require.NoError(t, s.mempool.Insert(ctx, partial, mempool.InsertOption{}))
 	require.NoError(t, s.mempool.Remove(partial))
 
 	// removing a tx not in the mempool should error

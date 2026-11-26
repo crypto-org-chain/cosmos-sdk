@@ -217,7 +217,7 @@ func (mp *PriorityNonceMempool[C]) GetTx(sender string, nonce uint64) (sdk.Tx, b
 	if elem == nil {
 		return nil, false
 	}
-	return elem.Value.(sdk.Tx), true
+	return elem.Value.(PooledTx).Tx, true
 }
 
 // Insert attempts to insert a Tx into the app-side mempool in O(log n) time,
