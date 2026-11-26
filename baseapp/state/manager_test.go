@@ -184,6 +184,45 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 	}
 }
 
+func (s *ManagerSuite) TestOtherModesKeepCheckState() {
+	testCases := []struct {
+		name     string
+		mode     sdk.ExecMode
+		expPanic bool
+	}{
+		{name: "prepare proposal", mode: sdk.ExecModePrepareProposal},
+		{name: "process proposal", mode: sdk.ExecModeProcessProposal},
+		{name: "finalize", mode: sdk.ExecModeFinalize},
+		{name: "recheck is not a state of its own", mode: sdk.ExecModeReCheck, expPanic: true},
+		{name: "simulate is not a state of its own", mode: sdk.ExecModeSimulate, expPanic: true},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.setCheckState()
+			checkState := s.mgr.GetState(sdk.ExecModeCheck)
+
+			set := func() {
+				s.mgr.SetState(tc.mode, s.cms, cmtproto.Header{}, log.NewNopLogger(), storetypes.StreamingManager{})
+			}
+			clear := func() { s.mgr.ClearState(tc.mode) }
+			if tc.expPanic {
+				s.Require().PanicsWithValue(fmt.Sprintf("invalid runTxMode for setState: %d", tc.mode), set)
+				s.Require().PanicsWithValue(fmt.Sprintf("invalid runTxMode for clearState: %d", tc.mode), clear)
+			} else {
+				set()
+				s.Require().NotSame(checkState, s.mgr.GetState(tc.mode))
+				clear()
+				s.Require().Nil(s.mgr.GetState(tc.mode))
+			}
+
+			s.Require().Same(checkState, s.mgr.GetState(sdk.ExecModeCheck))
+			s.Require().Equal([]int32{0}, s.cms.ClosedCounts())
+		})
+	}
+}
+
 func (s *ManagerSuite) TestCheckStateReleaseGuard() {
 	testCases := []struct {
 		name string
