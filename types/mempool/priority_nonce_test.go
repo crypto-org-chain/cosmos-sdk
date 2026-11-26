@@ -1192,11 +1192,18 @@ func TestNextSenderTx_TxLimit(t *testing.T) {
 	}
 	// a full pool still replaces a pooled tx
 	replacement := testTx{priority: 30, nonce: 1, address: sa}
-	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement, mempool.InsertOption{}))
+	require.NoError(t, mp.Insert(ctx.WithPriority(replacement.priority), replacement, mempool.InsertOption{GasWanted: 7}))
 	require.Equal(t, 3, mp.CountTx())
 	pooled, ok := mp.GetTx(sa.String(), 1)
 	require.True(t, ok)
 	require.Equal(t, replacement, pooled)
+	var replacedGas uint64
+	for it := mp.Select(ctx, nil); it != nil; it = it.Next() {
+		if tx := it.Tx().Tx.(testTx); tx.address.Equals(sa) && tx.nonce == 1 {
+			replacedGas = it.Tx().GasWanted
+		}
+	}
+	require.Equal(t, uint64(7), replacedGas)
 	selected := fetchTxs(mp.Select(ctx, nil), 10)
 	require.Len(t, selected, 3)
 	require.Contains(t, selected, sdk.Tx(replacement))
