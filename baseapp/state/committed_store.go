@@ -21,7 +21,7 @@ type committedStore struct {
 	snapshot storetypes.CacheMultiStore
 
 	// Filled lazily, by readers that may run concurrently.
-	resetOnCommit sync.Map
+	privateStores sync.Map
 
 	// Set before the snapshot is closed. Best effort for a reader that did not
 	// pin the state: its next store lookup panics, but a store it already looked
@@ -41,14 +41,11 @@ const (
 // or when it cannot branch that version, it branches the live stores instead;
 // the error says why, and the returned store is usable either way.
 //
-// Limits set by the store, not here:
+// Limits set by the store, not here; docs/upgrade/check-state-committed-version.md has the numbers:
 //   - Reads are isolated from the block in progress only if the store answers
-//     CacheMultiStoreWithVersion(latest) with a snapshot. A store that answers
-//     with its live stores gets no isolation.
-//   - A pin keeps the branch open, not unpruned. On IAVL a reader that is still
-//     running pruning-keep-recent+1 commits later (3 with pruning "everything")
-//     can hit a pruned node; the store panics, and RunTx turns that into an
-//     error once its context is built.
+//     CacheMultiStoreWithVersion(latest) with a snapshot.
+//   - A pin keeps the branch open, not unpruned. A reader that hits a pruned node
+//     makes the store panic, and RunTx turns that into an error once its context is built.
 //   - Memory stores are not versioned and stay live.
 func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storetypes.CacheMultiStore, func(), error) {
 	version := cms.LatestVersion()
@@ -94,11 +91,11 @@ func (s *committedStore) GetStore(key storetypes.StoreKey) storetypes.Store {
 		return s.snapshot.GetStore(key)
 	}
 
-	private, ok := s.resetOnCommit.Load(key)
+	private, ok := s.privateStores.Load(key)
 	if !ok {
 		// Panics for a key that is not mounted, like any other multi-store.
 		s.snapshot.GetStore(key)
-		private, _ = s.resetOnCommit.LoadOrStore(key, empty())
+		private, _ = s.privateStores.LoadOrStore(key, empty())
 	}
 	return private.(storetypes.Store)
 }

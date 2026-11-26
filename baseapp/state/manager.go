@@ -22,7 +22,8 @@ var tracer = otel.Tracer("cosmos-sdk/baseapp")
 type Manager struct {
 	// volatile states:
 	//
-	// - checkState is set on InitChain and reset on Commit
+	// - checkState is set on InitChain, reset on Commit and cleared on Close.
+	// It branches the last committed version.
 	// - finalizeBlockState is set on InitChain and FinalizeBlock and set to nil
 	// on Commit.
 	//
