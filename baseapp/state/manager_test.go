@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -14,10 +15,24 @@ import (
 	"cosmossdk.io/log/v2"
 
 	"github.com/cosmos/cosmos-sdk/baseapp/config"
-	"github.com/cosmos/cosmos-sdk/store/v2/cachemulti"
 	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+)
+
+const (
+	committedValue = "committed"
+	liveValue      = "live"
+	checkValue     = "check"
+)
+
+var (
+	kvKey        = storetypes.NewKVStoreKey("kv")
+	transientKey = storetypes.NewTransientStoreKey("transient")
+	objectKey    = storetypes.NewObjectStoreKey("object")
+	memoryKey    = storetypes.NewMemoryStoreKey("memory")
+
+	testKey = []byte("key")
 )
 
 type closableBranch struct {
@@ -32,38 +47,39 @@ func (b *closableBranch) Close() error {
 	return nil
 }
 
-type fakeCommitMultiStore struct {
+// closableCommitMultiStore makes the versioned branches of a real store
+// closable, like a store that serves them from snapshots it must release.
+type closableCommitMultiStore struct {
 	storetypes.CommitMultiStore
 
-	version   int64
+	// plain hands out the store's own branch, which has nothing to close.
+	plain     bool
 	branchErr error
 
 	mu       sync.Mutex
 	branches []*closableBranch
 }
 
-func (f *fakeCommitMultiStore) LatestVersion() int64 { return f.version }
-
-func (f *fakeCommitMultiStore) CacheMultiStore() storetypes.CacheMultiStore {
-	return cachemulti.NewStore(nil)
-}
-
-func (f *fakeCommitMultiStore) CacheMultiStoreWithVersion(int64) (storetypes.CacheMultiStore, error) {
-	if f.branchErr != nil {
-		return nil, f.branchErr
+func (c *closableCommitMultiStore) CacheMultiStoreWithVersion(version int64) (storetypes.CacheMultiStore, error) {
+	if c.branchErr != nil {
+		return nil, c.branchErr
 	}
-	branch := &closableBranch{MultiStore: cachemulti.NewStore(nil)}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.branches = append(f.branches, branch)
+	snapshot, err := c.CommitMultiStore.CacheMultiStoreWithVersion(version)
+	if err != nil || c.plain {
+		return snapshot, err
+	}
+	branch := &closableBranch{MultiStore: snapshot}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.branches = append(c.branches, branch)
 	return branch, nil
 }
 
-func (f *fakeCommitMultiStore) closedCounts() []int32 {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	counts := make([]int32, len(f.branches))
-	for i, branch := range f.branches {
+func (c *closableCommitMultiStore) closedCounts() []int32 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	counts := make([]int32, len(c.branches))
+	for i, branch := range c.branches {
 		counts[i] = branch.closed.Load()
 	}
 	return counts
@@ -72,21 +88,49 @@ func (f *fakeCommitMultiStore) closedCounts() []int32 {
 type ManagerSuite struct {
 	suite.Suite
 
-	mgr *Manager
-	cms *fakeCommitMultiStore
+	mgr  *Manager
+	cms  *closableCommitMultiStore
+	logs bytes.Buffer
 }
 
 func TestManagerSuite(t *testing.T) {
 	suite.Run(t, new(ManagerSuite))
 }
 
+// SetupTest leaves the store at version 1 with a block in progress on top.
 func (s *ManagerSuite) SetupTest() {
 	s.mgr = NewManager(config.GasConfig{})
-	s.cms = &fakeCommitMultiStore{version: 1}
+	s.logs.Reset()
+	s.openStore()
+	s.cms.GetKVStore(kvKey).Set(testKey, []byte(committedValue))
+	s.cms.Commit()
+	s.writeLive()
+}
+
+func (s *ManagerSuite) openStore() {
+	cms := rootmulti.NewStore(dbm.NewMemDB(), log.NewNopLogger())
+	cms.MountStoreWithDB(kvKey, storetypes.StoreTypeIAVL, nil)
+	cms.MountStoreWithDB(transientKey, storetypes.StoreTypeTransient, nil)
+	cms.MountStoreWithDB(objectKey, storetypes.StoreTypeObject, nil)
+	cms.MountStoreWithDB(memoryKey, storetypes.StoreTypeMemory, nil)
+	s.Require().NoError(cms.LoadLatestVersion())
+	s.cms = &closableCommitMultiStore{CommitMultiStore: cms}
+}
+
+func (s *ManagerSuite) writeLive() {
+	s.cms.GetKVStore(kvKey).Set(testKey, []byte(liveValue))
+	s.cms.GetKVStore(transientKey).Set(testKey, []byte(liveValue))
+	s.cms.GetObjKVStore(objectKey).Set(testKey, liveValue)
+	s.cms.GetKVStore(memoryKey).Set(testKey, []byte(liveValue))
 }
 
 func (s *ManagerSuite) setCheckState() {
-	s.mgr.SetState(sdk.ExecModeCheck, s.cms, cmtproto.Header{}, log.NewNopLogger(), storetypes.StreamingManager{})
+	logger := log.NewLogger(&s.logs, log.ColorOption(false))
+	s.mgr.SetState(sdk.ExecModeCheck, s.cms, cmtproto.Header{}, logger, storetypes.StreamingManager{})
+}
+
+func readKV(ms storetypes.MultiStore, key storetypes.StoreKey) string {
+	return string(ms.GetKVStore(key).Get(testKey))
 }
 
 func (s *ManagerSuite) TestCheckStateBranchLifetime() {
@@ -100,22 +144,37 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 		retire   func()
 		// expBranches is how many closable branches the first check state opened.
 		expBranches int
+		expRead     string
+		expLog      string
 	}{
-		{name: "replaced with no reader", retire: replace, expBranches: 1},
-		{name: "replaced under one reader", readers: 1, retire: replace, expBranches: 1},
-		{name: "replaced under two readers", readers: 2, retire: replace, expBranches: 1},
-		{name: "cleared under a reader", readers: 1, retire: clear, expBranches: 1},
+		{name: "replaced with no reader", retire: replace, expBranches: 1, expRead: committedValue},
+		{name: "replaced under one reader", readers: 1, retire: replace, expBranches: 1, expRead: committedValue},
+		{name: "replaced under two readers", readers: 2, retire: replace, expBranches: 1, expRead: committedValue},
+		{name: "cleared under a reader", readers: 1, retire: clear, expBranches: 1, expRead: committedValue},
 		{
-			name:     "no committed version reads the live stores",
-			malleate: func() { s.cms.version = 0 },
+			name:     "branch with nothing to close stays readable",
+			malleate: func() { s.cms.plain = true },
 			readers:  1,
-			retire:   clear,
+			retire:   replace,
+			expRead:  committedValue,
+		},
+		{
+			name: "no committed version reads the live stores",
+			malleate: func() {
+				s.openStore()
+				s.writeLive()
+			},
+			readers: 1,
+			retire:  clear,
+			expRead: liveValue,
 		},
 		{
 			name:     "branch error falls back to the live stores",
 			malleate: func() { s.cms.branchErr = errors.New("version pruned") },
 			readers:  1,
-			retire:   clear,
+			retire:   replace,
+			expRead:  liveValue,
+			expLog:   "check state cannot branch the committed version and reads the live stores until the next commit",
 		},
 	}
 
@@ -128,12 +187,19 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 
 			s.setCheckState()
 			s.Require().Len(s.cms.branches, tc.expBranches)
+			if tc.expLog == "" {
+				s.Require().Empty(s.logs.String())
+			} else {
+				s.Require().Contains(s.logs.String(), tc.expLog)
+				s.Require().Contains(s.logs.String(), s.cms.branchErr.Error())
+			}
 
+			unpinned := s.mgr.GetState(sdk.ExecModeCheck)
 			unpins := make([]func(), tc.readers)
 			for i := range unpins {
 				var st *State
 				st, unpins[i] = s.mgr.PinState(sdk.ExecModeCheck)
-				s.Require().NotNil(st)
+				s.Require().Same(unpinned, st)
 			}
 
 			tc.retire()
@@ -142,11 +208,110 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 				if tc.expBranches > 0 {
 					s.Require().Zero(s.cms.branches[0].closed.Load(), "closed with %d readers left", len(unpins)-i)
 				}
+				s.Require().Equal(tc.expRead, readKV(unpinned.MultiStore, kvKey), "read with %d readers left", len(unpins)-i)
 				unpin()
 			}
-			if tc.expBranches > 0 {
-				s.Require().Equal(int32(1), s.cms.branches[0].closed.Load())
+
+			if tc.expBranches == 0 {
+				s.Require().Equal(tc.expRead, readKV(unpinned.MultiStore, kvKey))
+				return
 			}
+			s.Require().Equal(int32(1), s.cms.branches[0].closed.Load())
+			s.Require().PanicsWithValue(errReleased, func() { readKV(unpinned.MultiStore, kvKey) })
+		})
+	}
+}
+
+func (s *ManagerSuite) TestCheckStateStores() {
+	checkStore := func() storetypes.MultiStore { return s.mgr.GetState(sdk.ExecModeCheck).MultiStore }
+	// Writes the way a tx does: into a branch of the check state, then flushed.
+	writeTx := func() {
+		branch := checkStore().CacheMultiStore()
+		branch.GetKVStore(transientKey).Set(testKey, []byte(checkValue))
+		branch.GetObjKVStore(objectKey).Set(testKey, checkValue)
+		branch.Write()
+	}
+	nextBlock := func() {
+		s.cms.Commit()
+		s.setCheckState()
+	}
+	readObject := func() any { return checkStore().GetObjKVStore(objectKey).Get(testKey) }
+
+	testCases := []struct {
+		name     string
+		malleate func()
+		read     func() any
+		exp      any
+	}{
+		{
+			name: "kv store reads the committed version",
+			read: func() any { return readKV(checkStore(), kvKey) },
+			exp:  committedValue,
+		},
+		{
+			name: "transient store does not see the block in progress",
+			read: func() any { return readKV(checkStore(), transientKey) },
+			exp:  "",
+		},
+		{
+			name: "object store does not see the block in progress",
+			read: readObject,
+			exp:  nil,
+		},
+		{
+			name: "memory store is not versioned and reads live",
+			read: func() any { return readKV(checkStore(), memoryKey) },
+			exp:  liveValue,
+		},
+		{
+			name:     "transient write is read back",
+			malleate: writeTx,
+			read:     func() any { return readKV(checkStore(), transientKey) },
+			exp:      checkValue,
+		},
+		{
+			name:     "object write is read back",
+			malleate: writeTx,
+			read:     readObject,
+			exp:      checkValue,
+		},
+		{
+			name: "transient write is dropped at the next commit",
+			malleate: func() {
+				writeTx()
+				nextBlock()
+			},
+			read: func() any { return readKV(checkStore(), transientKey) },
+			exp:  "",
+		},
+		{
+			name: "object write is dropped at the next commit",
+			malleate: func() {
+				writeTx()
+				nextBlock()
+			},
+			read: readObject,
+			exp:  nil,
+		},
+		{
+			name:     "check state writes do not reach the live stores",
+			malleate: writeTx,
+			read: func() any {
+				return []any{readKV(s.cms, transientKey), s.cms.GetObjKVStore(objectKey).Get(testKey)}
+			},
+			exp: []any{liveValue, liveValue},
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.setCheckState()
+			if tc.malleate != nil {
+				tc.malleate()
+			}
+
+			s.Require().Equal(tc.exp, tc.read())
 		})
 	}
 }
@@ -158,6 +323,7 @@ func (s *ManagerSuite) TestCheckStateBranchStaysOpenForConcurrentReaders() {
 		wg           sync.WaitGroup
 		stop         = make(chan struct{})
 		readClosed   atomic.Int64
+		misreads     atomic.Int64
 		readsStarted atomic.Int64
 	)
 	for range 8 {
@@ -173,6 +339,9 @@ func (s *ManagerSuite) TestCheckStateBranchStaysOpenForConcurrentReaders() {
 				if st.MultiStore.(*committedStore).snapshot.(*closableBranch).closed.Load() != 0 {
 					readClosed.Add(1)
 				}
+				if readKV(st.MultiStore, kvKey) != committedValue {
+					misreads.Add(1)
+				}
 				unpin()
 			}
 		})
@@ -187,6 +356,7 @@ func (s *ManagerSuite) TestCheckStateBranchStaysOpenForConcurrentReaders() {
 
 	s.Require().NotZero(readsStarted.Load())
 	s.Require().Zero(readClosed.Load(), "a pinned reader saw a closed branch")
+	s.Require().Zero(misreads.Load(), "a pinned reader did not read the committed version")
 	for i, closed := range s.cms.closedCounts() {
 		s.Require().Equal(int32(1), closed, "branch %d", i)
 	}

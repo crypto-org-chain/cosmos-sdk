@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"cosmossdk.io/log/v2"
 
@@ -21,13 +22,28 @@ type committedStore struct {
 
 	// Filled lazily, by readers that may run concurrently.
 	resetOnCommit sync.Map
+
+	// Set before the snapshot is closed, so a reader that did not pin the state
+	// panics on its next store lookup instead of reading a closed snapshot.
+	released atomic.Bool
 }
 
 var _ storetypes.CacheMultiStore = (*committedStore)(nil)
 
-// branchCommitted branches the last committed version of cms. The returned
-// release func is nil when the branch holds no resources. Before the first
-// commit there is no version to read, so it falls back to the live stores.
+const errReleased = "check state store used after it was replaced: pin the state, or read it again after Commit"
+
+// branchCommitted branches the last committed version of cms; release is nil
+// when the branch holds nothing to free. Before the first commit, or when the
+// store cannot branch that version, it branches the live stores instead.
+//
+// Limits set by the store, not here:
+//   - Reads are isolated from the block in progress only if the store answers
+//     CacheMultiStoreWithVersion(latest) with a snapshot. A store that answers
+//     with its live stores gets no isolation.
+//   - A pin keeps the branch open, not unpruned. On IAVL a reader that is still
+//     running pruning-keep-recent+1 commits later (3 with pruning "everything")
+//     can hit a pruned node; the store panics and RunTx returns an error.
+//   - Memory stores are not versioned and stay live.
 func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storetypes.CacheMultiStore, func()) {
 	version := cms.LatestVersion()
 	if version == 0 {
@@ -36,25 +52,32 @@ func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storet
 
 	snapshot, err := cms.CacheMultiStoreWithVersion(version)
 	if err != nil {
-		logger.Error("failed to branch the committed version, falling back to the live stores", "version", version, "err", err)
+		// Not a panic: check state is node-local and the next commit retries.
+		logger.Error("check state cannot branch the committed version and reads the live stores until the next commit", "version", version, "err", err)
 		return cms.CacheMultiStore(), nil
 	}
 
-	var release func()
-	if closer, ok := snapshot.(io.Closer); ok {
-		release = func() {
-			if err := closer.Close(); err != nil {
-				logger.Error("failed to close the committed store branch", "version", version, "err", err)
-			}
-		}
+	store := &committedStore{snapshot: snapshot}
+	closer, ok := snapshot.(io.Closer)
+	if !ok {
+		return store, nil
 	}
 
-	return &committedStore{snapshot: snapshot}, release
+	return store, func() {
+		store.released.Store(true)
+		if err := closer.Close(); err != nil {
+			logger.Error("failed to close the committed store branch", "version", version, "err", err)
+		}
+	}
 }
 
 // GetStore tells the stores that reset on commit apart by key type: a branch
 // of a transient store reports the type of its in-memory backend, not its own.
 func (s *committedStore) GetStore(key storetypes.StoreKey) storetypes.Store {
+	if s.released.Load() {
+		panic(errReleased)
+	}
+
 	var empty func() storetypes.CacheWrap
 	switch key.(type) {
 	case *storetypes.TransientStoreKey:
