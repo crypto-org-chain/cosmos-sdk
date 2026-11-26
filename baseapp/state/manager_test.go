@@ -203,17 +203,18 @@ func (s *ManagerSuite) TestOtherModesKeepCheckState() {
 			s.setCheckState()
 			checkState := s.mgr.GetState(sdk.ExecModeCheck)
 
-			set := func() {
+			setMode := func() {
 				s.mgr.SetState(tc.mode, s.cms, cmtproto.Header{}, log.NewNopLogger(), storetypes.StreamingManager{})
 			}
-			clear := func() { s.mgr.ClearState(tc.mode) }
+			clearMode := func() { s.mgr.ClearState(tc.mode) }
 			if tc.expPanic {
-				s.Require().PanicsWithValue(fmt.Sprintf("invalid runTxMode for setState: %d", tc.mode), set)
-				s.Require().PanicsWithValue(fmt.Sprintf("invalid runTxMode for clearState: %d", tc.mode), clear)
+				s.Require().PanicsWithValue(fmt.Sprintf("invalid runTxMode for setState: %d", tc.mode), setMode)
+				s.Require().PanicsWithValue(fmt.Sprintf("invalid runTxMode for clearState: %d", tc.mode), clearMode)
 			} else {
-				set()
+				setMode()
+				s.Require().NotNil(s.mgr.GetState(tc.mode))
 				s.Require().NotSame(checkState, s.mgr.GetState(tc.mode))
-				clear()
+				clearMode()
 				s.Require().Nil(s.mgr.GetState(tc.mode))
 			}
 
