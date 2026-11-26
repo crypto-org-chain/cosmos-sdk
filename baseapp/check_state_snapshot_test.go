@@ -301,14 +301,26 @@ func (s *CheckStateSnapshotSuite) TestCheckStateBranchIsReleased() {
 	}
 }
 
-func (s *CheckStateSnapshotSuite) TestTxAfterCloseIsRefused() {
+func (s *CheckStateSnapshotSuite) TestTxAfterClose() {
+	runTx := func(mode sdk.ExecMode) func() string {
+		return func() string {
+			_, _, _, err := s.app.RunTx(mode, s.txBytes, nil, -1, nil, nil)
+			return err.Error()
+		}
+	}
+
 	testCases := []struct {
 		name string
 		run  func() string
+		// expPanic is set for the block modes: they have no state between blocks.
+		expPanic bool
 	}{
 		{name: "check tx", run: s.checkTx(abci.CheckTxType_New)},
 		{name: "recheck tx", run: s.checkTx(abci.CheckTxType_Recheck)},
 		{name: "simulate", run: s.simulate},
+		{name: "finalize", run: runTx(sdk.ExecModeFinalize), expPanic: true},
+		{name: "prepare proposal", run: runTx(sdk.ExecModePrepareProposal), expPanic: true},
+		{name: "process proposal", run: runTx(sdk.ExecModeProcessProposal), expPanic: true},
 	}
 
 	for _, tc := range testCases {
@@ -316,7 +328,11 @@ func (s *CheckStateSnapshotSuite) TestTxAfterCloseIsRefused() {
 			s.SetupTest()
 			s.closeApp()
 
-			s.Require().Contains(tc.run(), "state is nil for mode")
+			if tc.expPanic {
+				s.Require().Panics(func() { tc.run() })
+				return
+			}
+			s.Require().Contains(tc.run(), "app is closed")
 		})
 	}
 }

@@ -196,6 +196,8 @@ func (s *ManagerSuite) TestCheckStateReleaseGuard() {
 			},
 			expPanic: true,
 		},
+		// Known limit, see committedStore.released: these read a value only because
+		// the fixture's Close frees nothing.
 		{
 			name: "store looked up before release is not guarded",
 			open: func(ms storetypes.MultiStore) func() string {

@@ -781,8 +781,9 @@ func (app *BaseApp) RunTx(mode sdk.ExecMode, txBytes []byte, tx sdk.Tx, txIndex 
 	defer unpin()
 
 	// Close clears check state: a tx that arrives after it is refused, not a panic.
-	if modeState == nil {
-		return gInfo, nil, nil, errorsmod.Wrapf(sdkerrors.ErrLogic, "state is nil for mode %v", mode)
+	// A block mode without its state is a bug and still panics.
+	if modeState == nil && (mode == execModeCheck || mode == execModeReCheck || mode == execModeSimulate) {
+		return gInfo, nil, nil, errorsmod.Wrapf(sdkerrors.ErrLogic, "app is closed: no check state for mode %v", mode)
 	}
 
 	ctx := app.getContextForTx(modeState, mode, txBytes, txIndex)

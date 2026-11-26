@@ -140,7 +140,8 @@ func (s *committedStore) CacheMultiStoreWithVersion(version int64) (storetypes.C
 	return s.snapshot.CacheMultiStoreWithVersion(version)
 }
 
-// Write panics: the snapshot is immutable, and check state is dropped at Commit.
+// Write panics rather than drop writes silently: nothing writes check state
+// back, and the snapshot under it is immutable.
 func (s *committedStore) Write() {
 	panic(errWrite)
 }
