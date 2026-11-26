@@ -111,9 +111,9 @@ type StakingHooks interface {
 	AfterDelegationModified(ctx context.Context, delAddr sdk.AccAddress, valAddr sdk.ValAddress) error
 	BeforeValidatorSlashed(ctx context.Context, valAddr sdk.ValAddress, fraction math.LegacyDec) error
 	AfterUnbondingInitiated(ctx context.Context, id uint64) error
-	// Called before a redelegation entry's destination shares are unbonded for a slash. An error aborts the slash, which halts the chain when the slash runs in BeginBlock.
+	// Called before a redelegation entry's destination shares are unbonded for a slash; an error aborts the slash.
 	BeforeRedelegationSlashed(ctx context.Context, unbondingID uint64, sharesToUnbond math.LegacyDec) error
-	// Called after redelegation entries complete and their state is written: the end blocker ignores an error, UnbondingCanComplete returns it.
+	// Called after redelegation entries complete; the completion is already written when it runs.
 	AfterRedelegationCompleted(ctx context.Context, delAddr sdk.AccAddress, valSrcAddr, valDstAddr sdk.ValAddress, unbondingIds []uint64) error
 }
 
