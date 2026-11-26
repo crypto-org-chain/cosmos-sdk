@@ -9,13 +9,17 @@ import (
 
 type ClosableBranch struct {
 	storetypes.MultiStore
-	closed atomic.Int32
+	closed  atomic.Int32
+	onClose func()
 }
 
 func (b *ClosableBranch) Write() {}
 
 func (b *ClosableBranch) Close() error {
 	b.closed.Add(1)
+	if b.onClose != nil {
+		b.onClose()
+	}
 	return nil
 }
 
@@ -31,6 +35,8 @@ type ClosableCommitMultiStore struct {
 	// Plain hands out the store's own branch, which has nothing to close.
 	Plain     bool
 	BranchErr error
+	// OnClose runs inside the Close of every branch opened after it is set.
+	OnClose func()
 
 	mu       sync.Mutex
 	branches []*ClosableBranch
@@ -44,7 +50,7 @@ func (c *ClosableCommitMultiStore) CacheMultiStoreWithVersion(version int64) (st
 	if err != nil || c.Plain {
 		return snapshot, err
 	}
-	branch := &ClosableBranch{MultiStore: snapshot}
+	branch := &ClosableBranch{MultiStore: snapshot, onClose: c.OnClose}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.branches = append(c.branches, branch)

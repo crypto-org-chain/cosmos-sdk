@@ -72,8 +72,8 @@ func (mgr *Manager) PinState(mode sdk.ExecMode) (*State, func()) {
 	if st == nil || st.release == nil {
 		return st, func() {}
 	}
-	// The Manager's own pin is only dropped under the write lock, so the count
-	// cannot have reached zero here.
+	// A state is detached under the write lock before the Manager drops its pin,
+	// so a state still reachable here has a pin count of at least 1.
 	st.pins.Add(1)
 	return st, st.unpin
 }
@@ -130,18 +130,16 @@ func (mgr *Manager) SetState(
 	)
 	baseState.release = release
 
-	var retired *State
-	defer unpinRetired(&retired)
+	if mode == sdk.ExecModeCheck {
+		baseState.SetContext(baseState.Context().WithIsCheckTx(true).WithMinGasPrices(mgr.gasConfig.MinGasPrices))
+		mgr.replaceCheckState(baseState)
+		return
+	}
 
 	mgr.stateMut.Lock()
 	defer mgr.stateMut.Unlock()
 
 	switch mode {
-	case sdk.ExecModeCheck:
-		baseState.SetContext(baseState.Context().WithIsCheckTx(true).WithMinGasPrices(mgr.gasConfig.MinGasPrices))
-		retired = mgr.checkState
-		mgr.checkState = baseState
-
 	case sdk.ExecModePrepareProposal:
 		mgr.prepareProposalState = baseState
 
@@ -163,18 +161,29 @@ func (mgr *Manager) SetState(
 	}
 }
 
+// replaceCheckState drops the Manager's pin on the old check state after the
+// unlock: closing a store must not block readers.
+func (mgr *Manager) replaceCheckState(st *State) {
+	mgr.stateMut.Lock()
+	retired := mgr.checkState
+	mgr.checkState = st
+	mgr.stateMut.Unlock()
+
+	if retired != nil {
+		retired.unpin()
+	}
+}
+
 func (mgr *Manager) ClearState(mode sdk.ExecMode) {
-	var retired *State
-	defer unpinRetired(&retired)
+	if mode == sdk.ExecModeCheck {
+		mgr.replaceCheckState(nil)
+		return
+	}
 
 	mgr.stateMut.Lock()
 	defer mgr.stateMut.Unlock()
 
 	switch mode {
-	case sdk.ExecModeCheck:
-		retired = mgr.checkState
-		mgr.checkState = nil
-
 	case sdk.ExecModePrepareProposal:
 		mgr.prepareProposalState = nil
 

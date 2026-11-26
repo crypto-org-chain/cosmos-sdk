@@ -32,8 +32,8 @@ type committedStore struct {
 var _ storetypes.CacheMultiStore = (*committedStore)(nil)
 
 const (
-	errReleased = "check state store used after it was replaced: pin the state, or read it again after Commit"
-	errWrite    = "check state is never written to the stores it branches"
+	releasedPanic = "check state store used after it was replaced: pin the state, or read it again after Commit"
+	writePanic    = "check state is never written to the stores it branches"
 )
 
 // branchCommitted branches the last committed version of cms; release is nil
@@ -80,7 +80,7 @@ func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storet
 // of a transient store reports the type of its in-memory backend, not its own.
 func (s *committedStore) GetStore(key storetypes.StoreKey) storetypes.Store {
 	if s.released.Load() {
-		panic(errReleased)
+		panic(releasedPanic)
 	}
 
 	var empty func() storetypes.CacheWrap
@@ -143,5 +143,5 @@ func (s *committedStore) CacheMultiStoreWithVersion(version int64) (storetypes.C
 // Write panics rather than drop writes silently: nothing writes check state
 // back, and the snapshot under it is immutable.
 func (s *committedStore) Write() {
-	panic(errWrite)
+	panic(writePanic)
 }

@@ -102,6 +102,7 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 		{name: "replaced with no reader", retire: replaceState, expBranches: 1, expRead: committedValue},
 		{name: "replaced under one reader", readers: 1, retire: replaceState, expBranches: 1, expRead: committedValue},
 		{name: "replaced under two readers", readers: 2, retire: replaceState, expBranches: 1, expRead: committedValue},
+		{name: "cleared with no reader", retire: clearState, expBranches: 1, expRead: committedValue},
 		{name: "cleared under a reader", readers: 1, retire: clearState, expBranches: 1, expRead: committedValue},
 		{
 			name:     "branch with nothing to close stays readable",
@@ -136,6 +137,14 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 			if tc.malleate != nil {
 				tc.malleate()
 			}
+			closedUnderLock := false
+			s.cms.OnClose = func() {
+				if !s.mgr.stateMut.TryLock() {
+					closedUnderLock = true
+					return
+				}
+				s.mgr.stateMut.Unlock()
+			}
 
 			s.setCheckState()
 			s.Require().Len(s.cms.ClosedCounts(), tc.expBranches)
@@ -169,7 +178,8 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 				return
 			}
 			s.Require().Equal(int32(1), s.cms.ClosedCounts()[0])
-			s.Require().PanicsWithValue(errReleased, func() { readKV(unpinned.MultiStore, kvKey) })
+			s.Require().False(closedUnderLock, "a store close under the state lock blocks readers")
+			s.Require().PanicsWithValue(releasedPanic, func() { readKV(unpinned.MultiStore, kvKey) })
 		})
 	}
 }
@@ -224,7 +234,7 @@ func (s *ManagerSuite) TestCheckStateReleaseGuard() {
 			s.mgr.ClearState(sdk.ExecModeCheck)
 
 			if tc.expPanic {
-				s.Require().PanicsWithValue(errReleased, func() { read() })
+				s.Require().PanicsWithValue(releasedPanic, func() { read() })
 				return
 			}
 			s.Require().Equal(committedValue, read())
@@ -235,7 +245,7 @@ func (s *ManagerSuite) TestCheckStateReleaseGuard() {
 func (s *ManagerSuite) TestCheckStateWritePanics() {
 	s.setCheckState()
 
-	s.Require().PanicsWithValue(errWrite, s.mgr.GetState(sdk.ExecModeCheck).MultiStore.Write)
+	s.Require().PanicsWithValue(writePanic, s.mgr.GetState(sdk.ExecModeCheck).MultiStore.Write)
 }
 
 func (s *ManagerSuite) TestCheckStateStores() {

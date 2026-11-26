@@ -1177,7 +1177,7 @@ func (app *BaseApp) StreamingManager() storetypes.StreamingManager {
 func (app *BaseApp) Close() error {
 	var errs []error
 
-	// Check state may hold a store branch that must be released before the DB closes.
+	// Check state may hold a store branch: it is released once the last in-flight reader is done.
 	app.stateManager.ClearState(execModeCheck)
 
 	// Close app.db (opened by cosmos-sdk/server/start.go call to openDB)
