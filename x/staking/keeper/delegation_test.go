@@ -1282,7 +1282,7 @@ func (s *KeeperTestSuite) TestAfterRedelegationCompletedHook() {
 	testCases := []struct {
 		name           string
 		completionTime time.Time
-		onHold         bool
+		holds          int
 		complete       func(sdk.Context, *stakingkeeper.Keeper) error
 		hookErr        error
 		expErr         error
@@ -1290,11 +1290,12 @@ func (s *KeeperTestSuite) TestAfterRedelegationCompletedHook() {
 	}{
 		{name: "mature entry completes", completionTime: matureTime, complete: complete, expCompleted: true},
 		{name: "immature entry stays", completionTime: immatureTime, complete: complete},
-		{name: "held entry is skipped", completionTime: matureTime, onHold: true, complete: complete},
-		{name: "held mature entry completes on release", completionTime: matureTime, onHold: true, complete: release, expCompleted: true},
-		{name: "held immature entry stays on release", completionTime: immatureTime, onHold: true, complete: release},
+		{name: "held entry is skipped", completionTime: matureTime, holds: 1, complete: complete},
+		{name: "held mature entry completes on release", completionTime: matureTime, holds: 1, complete: release, expCompleted: true},
+		{name: "held immature entry stays on release", completionTime: immatureTime, holds: 1, complete: release},
+		{name: "twice-held mature entry stays after one release", completionTime: matureTime, holds: 2, complete: release},
 		{name: "hook error on completion", completionTime: matureTime, complete: complete, hookErr: hookErr, expErr: hookErr, expCompleted: true},
-		{name: "hook error on release", completionTime: matureTime, onHold: true, complete: release, hookErr: hookErr, expErr: hookErr, expCompleted: true},
+		{name: "hook error on release", completionTime: matureTime, holds: 1, complete: release, hookErr: hookErr, expErr: hookErr, expCompleted: true},
 		{name: "end blocker completes a mature entry", completionTime: matureTime, complete: endBlock, expCompleted: true},
 		{name: "end blocker ignores a hook error", completionTime: matureTime, complete: endBlock, hookErr: hookErr, expCompleted: true},
 	}
@@ -1322,7 +1323,7 @@ func (s *KeeperTestSuite) TestAfterRedelegationCompletedHook() {
 			require.NoError(keeper.SetRedelegation(ctx, red))
 			require.NoError(keeper.SetRedelegationByUnbondingID(ctx, red, unbondingID))
 			require.NoError(keeper.InsertRedelegationQueue(ctx, red, tc.completionTime))
-			if tc.onHold {
+			for range tc.holds {
 				require.NoError(keeper.PutUnbondingOnHold(ctx, unbondingID))
 			}
 
