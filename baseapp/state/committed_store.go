@@ -41,7 +41,7 @@ const (
 // or when it cannot branch that version, it branches the live stores instead;
 // the error says why, and the returned store is usable either way.
 //
-// Limits set by the store, not here; docs/upgrade/check-state-committed-version.md has the numbers:
+// Limits set by the store, not here:
 //   - Reads are isolated from the block in progress only if the store answers
 //     CacheMultiStoreWithVersion(latest) with a snapshot.
 //   - A pin keeps the branch open, not unpruned. A reader that hits a pruned node
