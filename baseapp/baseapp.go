@@ -631,11 +631,16 @@ func (app *BaseApp) setCheckState(header cmtproto.Header) {
 // The hook runs with check state pinned, so a concurrent Close cannot release the store under it.
 // It is skipped once Close has dropped check state.
 func (app *BaseApp) prepareCheckState() {
+	hook := app.abciHandlers.PrepareCheckStater
+	if hook == nil {
+		return
+	}
+
 	checkState, unpin := app.stateManager.PinState(execModeCheck)
 	defer unpin()
 
 	if checkState != nil {
-		app.abciHandlers.PrepareCheckStater(checkState.Context())
+		hook(checkState.Context())
 	}
 }
 

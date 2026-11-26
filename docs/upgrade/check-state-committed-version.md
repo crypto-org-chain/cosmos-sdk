@@ -7,7 +7,7 @@
 * A check context no longer sees the writes of a block that is not committed yet. This covers `NewContext(true)`, `NewContextLegacy(true, ...)` and `GetContextForCheckTx`. Call `Commit` first if a test or command needs those writes.
 * Transient and object stores start empty in check state. They used to show what the block in progress had written.
 * Memory stores are not versioned, so check state still reads them live.
-* `BaseApp.Close` drops check state. A `CheckTx` or `Simulate` that arrives after it returns an error, and the check context helpers above panic with "app is closed".
+* `BaseApp.Close` drops check state. A `CheckTx` or `Simulate` that arrives after it returns an error, and the check context helpers above panic with "app is closed". A `Commit` that runs after `Close` builds check state again.
 * The `PrepareCheckStater` context stays readable until the hook returns, even if `Close` runs meanwhile. Do not keep it after.
 * Each `Commit` opens the committed version of every IAVL store. With 30 stores this took about 50-70 µs, against about 6 µs for a branch of the live stores.
 

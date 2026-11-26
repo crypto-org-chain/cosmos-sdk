@@ -1119,9 +1119,7 @@ func (app *BaseApp) Commit() (*abci.ResponseCommit, error) {
 
 	app.stateManager.ClearState(execModeFinalize)
 
-	if app.abciHandlers.PrepareCheckStater != nil {
-		app.prepareCheckState()
-	}
+	app.prepareCheckState()
 
 	// The SnapshotIfApplicable method will create the snapshot by starting the goroutine
 	app.snapshotManager.SnapshotIfApplicable(header.Height)
