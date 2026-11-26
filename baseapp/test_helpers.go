@@ -60,7 +60,8 @@ func (app *BaseApp) SimWriteState() {
 	app.stateManager.GetState(execModeFinalize).MultiStore.Write()
 }
 
-// NewContextLegacy returns a new sdk.Context with the provided header
+// NewContextLegacy returns a new sdk.Context with the provided header.
+// A check context reads the last committed version and is not pinned: do not use it across a Commit.
 func (app *BaseApp) NewContextLegacy(isCheckTx bool, header cmtproto.Header) sdk.Context {
 	if isCheckTx {
 		return sdk.NewContext(app.stateManager.GetState(execModeCheck).MultiStore, header, true, app.logger).
@@ -70,7 +71,8 @@ func (app *BaseApp) NewContextLegacy(isCheckTx bool, header cmtproto.Header) sdk
 	return sdk.NewContext(app.stateManager.GetState(execModeFinalize).MultiStore, header, false, app.logger)
 }
 
-// NewContext returns a new sdk.Context with a empty header
+// NewContext returns a new sdk.Context with an empty header.
+// A check context reads the last committed version and is not pinned: do not use it across a Commit.
 func (app *BaseApp) NewContext(isCheckTx bool) sdk.Context {
 	return app.NewContextLegacy(isCheckTx, cmtproto.Header{})
 }
@@ -95,9 +97,11 @@ func (app *BaseApp) NewUncachedContext(isCheckTx bool, header cmtproto.Header) s
 }
 
 func (app *BaseApp) GetContextForFinalizeBlock(txBytes []byte) sdk.Context {
-	return app.getContextForTx(execModeFinalize, txBytes, -1)
+	return app.getContextForTx(app.stateManager.GetState(execModeFinalize), execModeFinalize, txBytes, -1)
 }
 
+// GetContextForCheckTx returns a check context for txBytes.
+// A check context reads the last committed version and is not pinned: do not use it across a Commit.
 func (app *BaseApp) GetContextForCheckTx(txBytes []byte) sdk.Context {
-	return app.getContextForTx(execModeCheck, txBytes, -1)
+	return app.getContextForTx(app.stateManager.GetState(execModeCheck), execModeCheck, txBytes, -1)
 }

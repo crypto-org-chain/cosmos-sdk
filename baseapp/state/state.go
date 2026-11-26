@@ -2,6 +2,7 @@ package state
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -16,12 +17,25 @@ type State struct {
 	ctx sdk.Context
 
 	span trace.Span
+
+	// release frees what MultiStore holds once pins, the Manager's reference
+	// plus in-flight readers, drops to zero. Nil when there is nothing to free.
+	release func()
+	pins    atomic.Int64
 }
 
 func NewState(ctx sdk.Context, ms storetypes.CacheMultiStore) *State {
-	return &State{
+	st := &State{
 		MultiStore: ms,
 		ctx:        ctx,
+	}
+	st.pins.Store(1)
+	return st
+}
+
+func (st *State) unpin() {
+	if st.pins.Add(-1) == 0 && st.release != nil {
+		st.release()
 	}
 }
 
