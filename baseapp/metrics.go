@@ -46,6 +46,7 @@ type instrument struct {
 	PreBlockTime            metric.Int64Histogram
 	BeginBlockTime          metric.Int64Histogram
 	EndBlockTime            metric.Int64Histogram
+	CheckStateLiveFallback  metric.Int64Counter
 }
 
 func (i *instrument) Name() string { return InstrumentName }
@@ -167,6 +168,13 @@ func (i *instrument) Start(cfg map[string]any) error {
 		"end_block.time",
 		metric.WithDescription("Time spent executing endBlock"),
 		metric.WithUnit(TimingUnit),
+	)
+	if err != nil {
+		return err
+	}
+	i.CheckStateLiveFallback, err = i.Meter.Int64Counter(
+		"check_state.live_fallback.count",
+		metric.WithDescription("Times check state could not branch the last committed version and read the live stores instead"),
 	)
 	if err != nil {
 		return err

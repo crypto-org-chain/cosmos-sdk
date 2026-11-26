@@ -38,7 +38,8 @@ const (
 
 // branchCommitted branches the last committed version of cms; release is nil
 // when the branch holds nothing to free. While the store has no committed version,
-// or when it cannot branch that version, it branches the live stores instead.
+// or when it cannot branch that version, it branches the live stores instead;
+// the error says why, and the returned store is usable either way.
 //
 // Limits set by the store, not here:
 //   - Reads are isolated from the block in progress only if the store answers
@@ -49,23 +50,23 @@ const (
 //     can hit a pruned node; the store panics, and RunTx turns that into an
 //     error once its context is built.
 //   - Memory stores are not versioned and stay live.
-func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storetypes.CacheMultiStore, func()) {
+func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storetypes.CacheMultiStore, func(), error) {
 	version := cms.LatestVersion()
 	if version == 0 {
-		return cms.CacheMultiStore(), nil
+		return cms.CacheMultiStore(), nil, nil
 	}
 
 	snapshot, err := cms.CacheMultiStoreWithVersion(version)
 	if err != nil {
 		// Not a panic: check state is node-local and the next commit retries.
 		logger.Error("check state cannot branch the committed version and reads the live stores until the next commit", "version", version, "err", err)
-		return cms.CacheMultiStore(), nil
+		return cms.CacheMultiStore(), nil, err
 	}
 
 	store := &committedStore{snapshot: snapshot}
 	closer, ok := snapshot.(io.Closer)
 	if !ok {
-		return store, nil
+		return store, nil, nil
 	}
 
 	return store, func() {
@@ -73,7 +74,7 @@ func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storet
 		if err := closer.Close(); err != nil {
 			logger.Error("failed to close the committed store branch", "version", version, "err", err)
 		}
-	}
+	}, nil
 }
 
 // GetStore tells the stores that reset on commit apart by key type: a branch

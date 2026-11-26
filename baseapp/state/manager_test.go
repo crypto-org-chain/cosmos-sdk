@@ -148,14 +148,16 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 
 			s.setCheckState()
 			s.Require().Len(s.cms.ClosedCounts(), tc.expBranches)
+			unpinned := s.mgr.GetState(sdk.ExecModeCheck)
 			if tc.expLog == "" {
 				s.Require().Empty(s.logs.String())
+				s.Require().NoError(unpinned.BranchErr())
 			} else {
 				s.Require().Contains(s.logs.String(), tc.expLog)
 				s.Require().Contains(s.logs.String(), s.cms.BranchErr.Error())
+				s.Require().ErrorIs(unpinned.BranchErr(), s.cms.BranchErr)
 			}
 
-			unpinned := s.mgr.GetState(sdk.ExecModeCheck)
 			unpins := make([]func(), tc.readers)
 			for i := range unpins {
 				var st *State

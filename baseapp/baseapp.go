@@ -2,6 +2,7 @@ package baseapp
 
 // need to import telemetry before anything else for side effects
 import (
+	"context"
 	"fmt"
 	"maps"
 	"math"
@@ -56,6 +57,8 @@ const (
 	execModeVerifyVoteExtension = sdk.ExecModeVerifyVoteExtension // Verify a vote extension
 	execModeFinalize            = sdk.ExecModeFinalize            // Finalize a block proposal
 )
+
+const appClosedMsg = "app is closed: no check state"
 
 var _ servertypes.ABCI = (*BaseApp)(nil)
 
@@ -437,7 +440,7 @@ func (app *BaseApp) Init() error {
 	emptyHeader := cmtproto.Header{ChainID: app.chainID}
 
 	// needed for the export command which inits from store but never calls initchain
-	app.stateManager.SetState(execModeCheck, app.cms, emptyHeader, app.logger, app.streamingManager)
+	app.setCheckState(emptyHeader)
 	app.Seal()
 
 	return app.cms.GetPruning().Validate()
@@ -611,6 +614,44 @@ func (app *BaseApp) getBlockGasMeter(ctx sdk.Context) storetypes.GasMeter {
 	}
 
 	return storetypes.NewInfiniteGasMeter()
+}
+
+// A check state that fell back to the live stores is counted: it is not isolated until the next Commit.
+func (app *BaseApp) setCheckState(header cmtproto.Header) {
+	app.stateManager.SetState(execModeCheck, app.cms, header, app.logger, app.streamingManager)
+
+	if inst == nil {
+		return
+	}
+	if checkState := app.stateManager.GetState(execModeCheck); checkState != nil && checkState.BranchErr() != nil {
+		inst.CheckStateLiveFallback.Add(context.Background(), 1)
+	}
+}
+
+// withCheckState runs fn with check state pinned, so the store it reads stays open until fn returns.
+// It returns false, without running fn, when Close has dropped check state.
+func (app *BaseApp) withCheckState(fn func(*state.State)) bool {
+	checkState, unpin := app.stateManager.PinState(execModeCheck)
+	defer unpin()
+
+	if checkState == nil {
+		return false
+	}
+	fn(checkState)
+	return true
+}
+
+// WithCheckContext runs fn with a check context for txBytes. Unlike GetContextForCheckTx, the
+// committed version it reads stays open until fn returns, even if a Commit or Close runs meanwhile.
+// Do not keep the context, or a store taken from it, after fn returns.
+func (app *BaseApp) WithCheckContext(txBytes []byte, fn func(sdk.Context)) error {
+	ran := app.withCheckState(func(checkState *state.State) {
+		fn(app.getContextForTx(checkState, execModeCheck, txBytes, -1))
+	})
+	if !ran {
+		return errorsmod.Wrap(sdkerrors.ErrLogic, appClosedMsg)
+	}
+	return nil
 }
 
 func (app *BaseApp) getContextForTx(modeState *state.State, mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {
@@ -789,7 +830,7 @@ func (app *BaseApp) RunTx(mode sdk.ExecMode, txBytes []byte, tx sdk.Tx, txIndex 
 	// Close clears check state: a tx that arrives after it is refused, not a panic.
 	// A block mode without its state is a bug and still panics.
 	if modeState == nil && (mode == execModeCheck || mode == execModeReCheck || mode == execModeSimulate) {
-		return gInfo, nil, nil, errorsmod.Wrapf(sdkerrors.ErrLogic, "app is closed: no check state for mode %v", mode)
+		return gInfo, nil, nil, errorsmod.Wrapf(sdkerrors.ErrLogic, "%s for mode %v", appClosedMsg, mode)
 	}
 
 	ctx := app.getContextForTx(modeState, mode, txBytes, txIndex)

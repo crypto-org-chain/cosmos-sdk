@@ -108,11 +108,12 @@ func (mgr *Manager) SetState(
 	streamingManager storetypes.StreamingManager,
 ) {
 	var (
-		ms      storetypes.CacheMultiStore
-		release func()
+		ms        storetypes.CacheMultiStore
+		release   func()
+		branchErr error
 	)
 	if mode == sdk.ExecModeCheck {
-		ms, release = branchCommitted(unbranchedStore, logger)
+		ms, release, branchErr = branchCommitted(unbranchedStore, logger)
 	} else {
 		ms = unbranchedStore.CacheMultiStore()
 	}
@@ -129,6 +130,7 @@ func (mgr *Manager) SetState(
 		ms,
 	)
 	baseState.release = release
+	baseState.branchErr = branchErr
 
 	if mode == sdk.ExecModeCheck {
 		baseState.SetContext(baseState.Context().WithIsCheckTx(true).WithMinGasPrices(mgr.gasConfig.MinGasPrices))

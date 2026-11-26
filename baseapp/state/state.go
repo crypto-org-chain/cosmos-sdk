@@ -22,6 +22,8 @@ type State struct {
 	// plus in-flight readers, drops to zero. Nil when there is nothing to free.
 	release func()
 	pins    atomic.Int64
+
+	branchErr error
 }
 
 func NewState(ctx sdk.Context, ms storetypes.CacheMultiStore) *State {
@@ -37,6 +39,12 @@ func (st *State) unpin() {
 	if st.pins.Add(-1) == 0 && st.release != nil {
 		st.release()
 	}
+}
+
+// BranchErr is why check state reads the live stores, with no isolation from the
+// block in progress; nil when it reads the last committed version or there is none yet.
+func (st *State) BranchErr() error {
+	return st.branchErr
 }
 
 // CacheMultiStore calls and returns a CacheMultiStore on the state's underlying

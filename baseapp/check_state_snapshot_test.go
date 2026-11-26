@@ -2,6 +2,7 @@ package baseapp_test
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -34,6 +35,8 @@ type CheckStateSnapshotSuite struct {
 
 	// antePanic, when set, is what the ante handler panics with.
 	antePanic any
+	// prepareCheckState, when set, runs as the app's PrepareCheckStater.
+	prepareCheckState func(sdk.Context)
 
 	// commitStarted is the highest block whose Commit has begun; a check-state
 	// read of anything newer saw uncommitted state.
@@ -59,8 +62,14 @@ func (s *CheckStateSnapshotSuite) setup(unclosableBranches bool) {
 	s.reads.Store(0)
 	s.violations = nil
 	s.antePanic = nil
+	s.prepareCheckState = nil
 
 	bas := NewBaseAppSuite(s.T(), func(app *baseapp.BaseApp) {
+		app.SetPrepareCheckStater(func(ctx sdk.Context) {
+			if s.prepareCheckState != nil {
+				s.prepareCheckState(ctx)
+			}
+		})
 		s.cms = &baseapptestutil.ClosableCommitMultiStore{CommitMultiStore: app.CommitMultiStore(), UnclosableBranches: unclosableBranches}
 		app.SetCMS(s.cms)
 		app.MountStores(snapshotTransientKey, snapshotObjectKey)
@@ -202,6 +211,7 @@ func (s *CheckStateSnapshotSuite) TestReadsDuringFinalizeAndCommit() {
 			read:     func() { s.observe(s.app.NewContext(true)) },
 			unpinned: true,
 		},
+		{name: "pinned check context", read: func() { s.NoError(s.app.WithCheckContext(s.txBytes, s.observe)) }},
 	}
 
 	for _, tc := range testCases {
@@ -306,6 +316,63 @@ func (s *CheckStateSnapshotSuite) TestCheckStateBranchIsReleased() {
 	}
 }
 
+func (s *CheckStateSnapshotSuite) TestPrepareCheckStaterKeepsItsBranchOpen() {
+	testCases := []struct {
+		name        string
+		closeInHook bool
+		// expClosed is the close count of each check state branch once Commit returned, oldest first.
+		expClosed []int32
+	}{
+		{name: "app stays open", expClosed: []int32{1, 0}},
+		{name: "app closes during the hook", closeInHook: true, expClosed: []int32{1, 1}},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+
+			var closedInHook []int32
+			s.prepareCheckState = func(ctx sdk.Context) {
+				if tc.closeInHook {
+					s.closeApp()
+				}
+				s.observe(ctx)
+				closedInHook = s.cms.ClosedCounts()
+			}
+
+			s.commitBlock(2)
+
+			s.Require().Equal([]int32{1, 0}, closedInHook)
+			s.Require().Empty(s.violations)
+			s.Require().Equal(tc.expClosed, s.cms.ClosedCounts())
+		})
+	}
+}
+
+func (s *CheckStateSnapshotSuite) TestLiveFallbackIsCounted() {
+	testCases := []struct {
+		name      string
+		branchErr error
+		expCount  int64
+	}{
+		{name: "committed version branches"},
+		{name: "branch error on every commit", branchErr: errors.New("version pruned"), expCount: 2},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			count := baseapp.CountCheckStateLiveFallbacks(s.T())
+			s.cms.BranchErr = tc.branchErr
+
+			s.commitBlock(2)
+			s.commitBlock(3)
+
+			s.Require().Equal(tc.expCount, count())
+		})
+	}
+}
+
 func (s *CheckStateSnapshotSuite) TestTxAfterClose() {
 	runTx := func(mode sdk.ExecMode) func() string {
 		return func() string {
@@ -317,16 +384,34 @@ func (s *CheckStateSnapshotSuite) TestTxAfterClose() {
 	nilState := func(mode sdk.ExecMode) string {
 		return fmt.Sprintf("state is nil for mode %v", mode)
 	}
+	const appClosed = "app is closed: no check state"
 
 	testCases := []struct {
 		name string
 		run  func() string
-		// expPanic is set for the block modes: they have no state between blocks.
+		// expPanic is set where there is no error to return: the block modes, which have
+		// no state between blocks, and the unpinned context helpers.
 		expPanic string
 	}{
 		{name: "check tx", run: s.checkTx(abci.CheckTxType_New)},
 		{name: "recheck tx", run: s.checkTx(abci.CheckTxType_Recheck)},
 		{name: "simulate", run: s.simulate},
+		{
+			name: "pinned check context",
+			run: func() string {
+				return s.app.WithCheckContext(s.txBytes, func(sdk.Context) { s.Fail("ran on a closed app") }).Error()
+			},
+		},
+		{
+			name:     "new check context",
+			run:      func() string { s.app.NewContext(true); return "" },
+			expPanic: appClosed,
+		},
+		{
+			name:     "check context for tx",
+			run:      func() string { s.app.GetContextForCheckTx(s.txBytes); return "" },
+			expPanic: appClosed,
+		},
 		{name: "finalize", run: runTx(sdk.ExecModeFinalize), expPanic: nilState(sdk.ExecModeFinalize)},
 		{name: "prepare proposal", run: runTx(sdk.ExecModePrepareProposal), expPanic: nilState(sdk.ExecModePrepareProposal)},
 		{name: "process proposal", run: runTx(sdk.ExecModeProcessProposal), expPanic: nilState(sdk.ExecModeProcessProposal)},
