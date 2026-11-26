@@ -15,6 +15,8 @@ import (
 	"cosmossdk.io/log/v2"
 
 	"github.com/cosmos/cosmos-sdk/baseapp/config"
+	baseapptestutil "github.com/cosmos/cosmos-sdk/baseapp/testutil"
+	"github.com/cosmos/cosmos-sdk/store/v2/cache"
 	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -35,61 +37,11 @@ var (
 	testKey = []byte("key")
 )
 
-type closableBranch struct {
-	storetypes.MultiStore
-	closed atomic.Int32
-}
-
-func (b *closableBranch) Write() {}
-
-func (b *closableBranch) Close() error {
-	b.closed.Add(1)
-	return nil
-}
-
-// closableCommitMultiStore makes the versioned branches of a real store
-// closable, like a store that serves them from snapshots it must release.
-type closableCommitMultiStore struct {
-	storetypes.CommitMultiStore
-
-	// plain hands out the store's own branch, which has nothing to close.
-	plain     bool
-	branchErr error
-
-	mu       sync.Mutex
-	branches []*closableBranch
-}
-
-func (c *closableCommitMultiStore) CacheMultiStoreWithVersion(version int64) (storetypes.CacheMultiStore, error) {
-	if c.branchErr != nil {
-		return nil, c.branchErr
-	}
-	snapshot, err := c.CommitMultiStore.CacheMultiStoreWithVersion(version)
-	if err != nil || c.plain {
-		return snapshot, err
-	}
-	branch := &closableBranch{MultiStore: snapshot}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.branches = append(c.branches, branch)
-	return branch, nil
-}
-
-func (c *closableCommitMultiStore) closedCounts() []int32 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	counts := make([]int32, len(c.branches))
-	for i, branch := range c.branches {
-		counts[i] = branch.closed.Load()
-	}
-	return counts
-}
-
 type ManagerSuite struct {
 	suite.Suite
 
 	mgr  *Manager
-	cms  *closableCommitMultiStore
+	cms  *baseapptestutil.ClosableCommitMultiStore
 	logs bytes.Buffer
 }
 
@@ -114,7 +66,7 @@ func (s *ManagerSuite) openStore() {
 	cms.MountStoreWithDB(objectKey, storetypes.StoreTypeObject, nil)
 	cms.MountStoreWithDB(memoryKey, storetypes.StoreTypeMemory, nil)
 	s.Require().NoError(cms.LoadLatestVersion())
-	s.cms = &closableCommitMultiStore{CommitMultiStore: cms}
+	s.cms = &baseapptestutil.ClosableCommitMultiStore{CommitMultiStore: cms}
 }
 
 func (s *ManagerSuite) writeLive() {
@@ -134,8 +86,8 @@ func readKV(ms storetypes.MultiStore, key storetypes.StoreKey) string {
 }
 
 func (s *ManagerSuite) TestCheckStateBranchLifetime() {
-	replace := func() { s.setCheckState() }
-	clear := func() { s.mgr.ClearState(sdk.ExecModeCheck) }
+	replaceState := func() { s.setCheckState() }
+	clearState := func() { s.mgr.ClearState(sdk.ExecModeCheck) }
 
 	testCases := []struct {
 		name     string
@@ -147,15 +99,15 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 		expRead     string
 		expLog      string
 	}{
-		{name: "replaced with no reader", retire: replace, expBranches: 1, expRead: committedValue},
-		{name: "replaced under one reader", readers: 1, retire: replace, expBranches: 1, expRead: committedValue},
-		{name: "replaced under two readers", readers: 2, retire: replace, expBranches: 1, expRead: committedValue},
-		{name: "cleared under a reader", readers: 1, retire: clear, expBranches: 1, expRead: committedValue},
+		{name: "replaced with no reader", retire: replaceState, expBranches: 1, expRead: committedValue},
+		{name: "replaced under one reader", readers: 1, retire: replaceState, expBranches: 1, expRead: committedValue},
+		{name: "replaced under two readers", readers: 2, retire: replaceState, expBranches: 1, expRead: committedValue},
+		{name: "cleared under a reader", readers: 1, retire: clearState, expBranches: 1, expRead: committedValue},
 		{
 			name:     "branch with nothing to close stays readable",
-			malleate: func() { s.cms.plain = true },
+			malleate: func() { s.cms.Plain = true },
 			readers:  1,
-			retire:   replace,
+			retire:   replaceState,
 			expRead:  committedValue,
 		},
 		{
@@ -165,14 +117,14 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 				s.writeLive()
 			},
 			readers: 1,
-			retire:  clear,
+			retire:  clearState,
 			expRead: liveValue,
 		},
 		{
 			name:     "branch error falls back to the live stores",
-			malleate: func() { s.cms.branchErr = errors.New("version pruned") },
+			malleate: func() { s.cms.BranchErr = errors.New("version pruned") },
 			readers:  1,
-			retire:   replace,
+			retire:   replaceState,
 			expRead:  liveValue,
 			expLog:   "check state cannot branch the committed version and reads the live stores until the next commit",
 		},
@@ -186,12 +138,12 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 			}
 
 			s.setCheckState()
-			s.Require().Len(s.cms.branches, tc.expBranches)
+			s.Require().Len(s.cms.ClosedCounts(), tc.expBranches)
 			if tc.expLog == "" {
 				s.Require().Empty(s.logs.String())
 			} else {
 				s.Require().Contains(s.logs.String(), tc.expLog)
-				s.Require().Contains(s.logs.String(), s.cms.branchErr.Error())
+				s.Require().Contains(s.logs.String(), s.cms.BranchErr.Error())
 			}
 
 			unpinned := s.mgr.GetState(sdk.ExecModeCheck)
@@ -206,7 +158,7 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 
 			for i, unpin := range unpins {
 				if tc.expBranches > 0 {
-					s.Require().Zero(s.cms.branches[0].closed.Load(), "closed with %d readers left", len(unpins)-i)
+					s.Require().Zero(s.cms.ClosedCounts()[0], "closed with %d readers left", len(unpins)-i)
 				}
 				s.Require().Equal(tc.expRead, readKV(unpinned.MultiStore, kvKey), "read with %d readers left", len(unpins)-i)
 				unpin()
@@ -216,10 +168,72 @@ func (s *ManagerSuite) TestCheckStateBranchLifetime() {
 				s.Require().Equal(tc.expRead, readKV(unpinned.MultiStore, kvKey))
 				return
 			}
-			s.Require().Equal(int32(1), s.cms.branches[0].closed.Load())
+			s.Require().Equal(int32(1), s.cms.ClosedCounts()[0])
 			s.Require().PanicsWithValue(errReleased, func() { readKV(unpinned.MultiStore, kvKey) })
 		})
 	}
+}
+
+func (s *ManagerSuite) TestCheckStateReleaseGuard() {
+	testCases := []struct {
+		name string
+		// open returns a read that runs after the check state is released.
+		open     func(ms storetypes.MultiStore) func() string
+		expPanic bool
+	}{
+		{
+			name: "new store lookup panics",
+			open: func(ms storetypes.MultiStore) func() string {
+				return func() string { return readKV(ms, kvKey) }
+			},
+			expPanic: true,
+		},
+		{
+			name: "branch panics on a store it had not opened",
+			open: func(ms storetypes.MultiStore) func() string {
+				branch := ms.CacheMultiStore()
+				return func() string { return readKV(branch, kvKey) }
+			},
+			expPanic: true,
+		},
+		{
+			name: "store looked up before release is not guarded",
+			open: func(ms storetypes.MultiStore) func() string {
+				store := ms.GetKVStore(kvKey)
+				return func() string { return string(store.Get(testKey)) }
+			},
+		},
+		{
+			name: "branch store opened before release is not guarded",
+			open: func(ms storetypes.MultiStore) func() string {
+				branch := ms.CacheMultiStore()
+				branch.GetKVStore(kvKey)
+				return func() string { return readKV(branch, kvKey) }
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.setCheckState()
+			read := tc.open(s.mgr.GetState(sdk.ExecModeCheck).MultiStore)
+
+			s.mgr.ClearState(sdk.ExecModeCheck)
+
+			if tc.expPanic {
+				s.Require().PanicsWithValue(errReleased, func() { read() })
+				return
+			}
+			s.Require().Equal(committedValue, read())
+		})
+	}
+}
+
+func (s *ManagerSuite) TestCheckStateWritePanics() {
+	s.setCheckState()
+
+	s.Require().PanicsWithValue(errWrite, s.mgr.GetState(sdk.ExecModeCheck).MultiStore.Write)
 }
 
 func (s *ManagerSuite) TestCheckStateStores() {
@@ -336,7 +350,7 @@ func (s *ManagerSuite) TestCheckStateBranchStaysOpenForConcurrentReaders() {
 				}
 				st, unpin := s.mgr.PinState(sdk.ExecModeCheck)
 				readsStarted.Add(1)
-				if st.MultiStore.(*committedStore).snapshot.(*closableBranch).closed.Load() != 0 {
+				if st.MultiStore.(*committedStore).snapshot.(*baseapptestutil.ClosableBranch).Closed() != 0 {
 					readClosed.Add(1)
 				}
 				if readKV(st.MultiStore, kvKey) != committedValue {
@@ -357,20 +371,18 @@ func (s *ManagerSuite) TestCheckStateBranchStaysOpenForConcurrentReaders() {
 	s.Require().NotZero(readsStarted.Load())
 	s.Require().Zero(readClosed.Load(), "a pinned reader saw a closed branch")
 	s.Require().Zero(misreads.Load(), "a pinned reader did not read the committed version")
-	for i, closed := range s.cms.closedCounts() {
+	for i, closed := range s.cms.ClosedCounts() {
 		s.Require().Equal(int32(1), closed, "branch %d", i)
 	}
 }
 
-func BenchmarkSetState(b *testing.B) {
-	const (
-		iavlStores      = 30
-		transientStores = 1
-		objectStores    = 2
-		keysPerStore    = 1000
-	)
+const (
+	benchIAVLStores   = 30
+	benchKeysPerStore = 1000
+)
 
-	backends := []struct {
+var (
+	benchBackends = []struct {
 		name string
 		open func(b *testing.B) dbm.DB
 	}{
@@ -390,49 +402,104 @@ func BenchmarkSetState(b *testing.B) {
 	}
 	// Check state branches the committed version; every other mode still
 	// branches the live stores, which is what check state did before.
-	modes := []struct {
+	benchModes = []struct {
 		name string
 		mode sdk.ExecMode
 	}{
 		{name: "live", mode: sdk.ExecModePrepareProposal},
 		{name: "committed", mode: sdk.ExecModeCheck},
 	}
+)
 
-	for _, backend := range backends {
-		cms := rootmulti.NewStore(backend.open(b), log.NewNopLogger())
-		var kvKeys []storetypes.StoreKey
-		for i := range iavlStores {
-			key := storetypes.NewKVStoreKey(fmt.Sprintf("kv%d", i))
-			kvKeys = append(kvKeys, key)
-			cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
-		}
-		for i := range transientStores {
-			cms.MountStoreWithDB(storetypes.NewTransientStoreKey(fmt.Sprintf("transient%d", i)), storetypes.StoreTypeTransient, nil)
-		}
-		for i := range objectStores {
-			cms.MountStoreWithDB(storetypes.NewObjectStoreKey(fmt.Sprintf("object%d", i)), storetypes.StoreTypeObject, nil)
-		}
-		if err := cms.LoadLatestVersion(); err != nil {
-			b.Fatal(err)
-		}
-		for version := range 2 {
-			for _, key := range kvKeys {
-				store := cms.GetKVStore(key)
-				for i := range keysPerStore {
-					store.Set(fmt.Appendf(nil, "key-%d", i), fmt.Appendf(nil, "value-%d-%d", version, i))
-				}
+func benchKey(i int) []byte {
+	return fmt.Appendf(nil, "key-%d", i)
+}
+
+// benchStore commits two versions of benchKeysPerStore keys to each IAVL store.
+func benchStore(b *testing.B, db dbm.DB, interBlockCache bool) (storetypes.CommitMultiStore, []storetypes.StoreKey) {
+	b.Helper()
+	const (
+		transientStores = 1
+		objectStores    = 2
+	)
+
+	cms := rootmulti.NewStore(db, log.NewNopLogger())
+	if interBlockCache {
+		cms.SetInterBlockCache(cache.NewCommitKVStoreCacheManager(cache.DefaultCommitKVStoreCacheSize))
+	}
+	var kvKeys []storetypes.StoreKey
+	for i := range benchIAVLStores {
+		key := storetypes.NewKVStoreKey(fmt.Sprintf("kv%d", i))
+		kvKeys = append(kvKeys, key)
+		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
+	}
+	for i := range transientStores {
+		cms.MountStoreWithDB(storetypes.NewTransientStoreKey(fmt.Sprintf("transient%d", i)), storetypes.StoreTypeTransient, nil)
+	}
+	for i := range objectStores {
+		cms.MountStoreWithDB(storetypes.NewObjectStoreKey(fmt.Sprintf("object%d", i)), storetypes.StoreTypeObject, nil)
+	}
+	if err := cms.LoadLatestVersion(); err != nil {
+		b.Fatal(err)
+	}
+	for version := range 2 {
+		for _, key := range kvKeys {
+			store := cms.GetKVStore(key)
+			for i := range benchKeysPerStore {
+				store.Set(benchKey(i), fmt.Appendf(nil, "value-%d-%d", version, i))
 			}
-			cms.Commit()
 		}
+		cms.Commit()
+	}
+	return cms, kvKeys
+}
 
+func BenchmarkSetState(b *testing.B) {
+	for _, backend := range benchBackends {
+		cms, _ := benchStore(b, backend.open(b), false)
 		mgr := NewManager(config.GasConfig{})
-		for _, mode := range modes {
+		for _, mode := range benchModes {
 			b.Run(backend.name+"/"+mode.name, func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
 					mgr.SetState(mode.mode, cms, cmtproto.Header{}, log.NewNopLogger(), storetypes.StreamingManager{})
 				}
 			})
+		}
+	}
+}
+
+// A state caches what it reads, so only the first read of a key in each block
+// reaches the store, and the committed version is read without the inter-block cache.
+func BenchmarkStateFirstRead(b *testing.B) {
+	const readsPerBlock = 100
+
+	keys := make([][]byte, readsPerBlock)
+	for i := range keys {
+		keys[i] = benchKey(i * benchKeysPerStore / readsPerBlock)
+	}
+
+	for _, backend := range benchBackends {
+		for _, interBlockCache := range []bool{false, true} {
+			cms, kvKeys := benchStore(b, backend.open(b), interBlockCache)
+			mgr := NewManager(config.GasConfig{})
+			for _, mode := range benchModes {
+				b.Run(fmt.Sprintf("%s/inter-block-cache=%t/%s", backend.name, interBlockCache, mode.name), func(b *testing.B) {
+					for b.Loop() {
+						b.StopTimer()
+						mgr.SetState(mode.mode, cms, cmtproto.Header{}, log.NewNopLogger(), storetypes.StreamingManager{})
+						store := mgr.GetState(mode.mode).MultiStore.GetKVStore(kvKeys[0])
+						b.StartTimer()
+
+						for _, key := range keys {
+							if store.Get(key) == nil {
+								b.Fatal("missing key")
+							}
+						}
+					}
+					b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*readsPerBlock), "ns/read")
+				})
+			}
 		}
 	}
 }

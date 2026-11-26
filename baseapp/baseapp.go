@@ -607,11 +607,7 @@ func (app *BaseApp) getBlockGasMeter(ctx sdk.Context) storetypes.GasMeter {
 	return storetypes.NewInfiniteGasMeter()
 }
 
-func (app *BaseApp) getContextForTx(mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {
-	return app.contextForTx(app.stateManager.GetState(mode), mode, txBytes, txIndex)
-}
-
-func (app *BaseApp) contextForTx(modeState *state.State, mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {
+func (app *BaseApp) getContextForTx(modeState *state.State, mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 
@@ -784,7 +780,12 @@ func (app *BaseApp) RunTx(mode sdk.ExecMode, txBytes []byte, tx sdk.Tx, txIndex 
 	modeState, unpin := app.stateManager.PinState(mode)
 	defer unpin()
 
-	ctx := app.contextForTx(modeState, mode, txBytes, txIndex)
+	// Close clears check state: a tx that arrives after it is refused, not a panic.
+	if modeState == nil {
+		return gInfo, nil, nil, errorsmod.Wrapf(sdkerrors.ErrLogic, "state is nil for mode %v", mode)
+	}
+
+	ctx := app.getContextForTx(modeState, mode, txBytes, txIndex)
 	ctx, span := ctx.StartSpan(tracer, "runTx")
 	defer span.End()
 

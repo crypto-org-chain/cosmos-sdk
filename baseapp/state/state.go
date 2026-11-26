@@ -39,6 +39,14 @@ func (st *State) unpin() {
 	}
 }
 
+// unpinRetired must be deferred before the state lock is taken, so it runs
+// after the unlock: closing a store must not block readers.
+func unpinRetired(retired **State) {
+	if *retired != nil {
+		(*retired).unpin()
+	}
+}
+
 // CacheMultiStore calls and returns a CacheMultiStore on the state's underlying
 // CacheMultiStore.
 func (st *State) CacheMultiStore() storetypes.CacheMultiStore {

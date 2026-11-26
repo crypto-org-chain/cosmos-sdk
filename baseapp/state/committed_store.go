@@ -23,14 +23,18 @@ type committedStore struct {
 	// Filled lazily, by readers that may run concurrently.
 	resetOnCommit sync.Map
 
-	// Set before the snapshot is closed, so a reader that did not pin the state
-	// panics on its next store lookup instead of reading a closed snapshot.
+	// Set before the snapshot is closed. Best effort for a reader that did not
+	// pin the state: its next store lookup panics, but a store it already looked
+	// up, directly or through a branch, still reads the closed snapshot.
 	released atomic.Bool
 }
 
 var _ storetypes.CacheMultiStore = (*committedStore)(nil)
 
-const errReleased = "check state store used after it was replaced: pin the state, or read it again after Commit"
+const (
+	errReleased = "check state store used after it was replaced: pin the state, or read it again after Commit"
+	errWrite    = "check state is never written to the stores it branches"
+)
 
 // branchCommitted branches the last committed version of cms; release is nil
 // when the branch holds nothing to free. Before the first commit, or when the
@@ -42,7 +46,8 @@ const errReleased = "check state store used after it was replaced: pin the state
 //     with its live stores gets no isolation.
 //   - A pin keeps the branch open, not unpruned. On IAVL a reader that is still
 //     running pruning-keep-recent+1 commits later (3 with pruning "everything")
-//     can hit a pruned node; the store panics and RunTx returns an error.
+//     can hit a pruned node; the store panics, and RunTx turns that into an
+//     error once its context is built.
 //   - Memory stores are not versioned and stay live.
 func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storetypes.CacheMultiStore, func()) {
 	version := cms.LatestVersion()
@@ -135,10 +140,7 @@ func (s *committedStore) CacheMultiStoreWithVersion(version int64) (storetypes.C
 	return s.snapshot.CacheMultiStoreWithVersion(version)
 }
 
+// Write panics: the snapshot is immutable, and check state is dropped at Commit.
 func (s *committedStore) Write() {
-	s.snapshot.Write()
-	s.resetOnCommit.Range(func(_, store any) bool {
-		store.(storetypes.CacheWrap).Write()
-		return true
-	})
+	panic(errWrite)
 }

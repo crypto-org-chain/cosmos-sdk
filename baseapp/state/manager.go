@@ -61,9 +61,9 @@ func (mgr *Manager) GetState(mode sdk.ExecMode) *State {
 	return mgr.stateFor(mode)
 }
 
-// PinState returns the state for mode and a func the caller must call once it
-// is done reading; the state's store stays open until then, even if the state
-// is replaced in between.
+// PinState returns the state for mode and a func the caller must call exactly
+// once when it is done reading; the state's store stays open until then, even
+// if the state is replaced in between.
 func (mgr *Manager) PinState(mode sdk.ExecMode) (*State, func()) {
 	mgr.stateMut.RLock()
 	defer mgr.stateMut.RUnlock()
@@ -130,13 +130,8 @@ func (mgr *Manager) SetState(
 	)
 	baseState.release = release
 
-	// Unpinned after the lock is released: closing a store must not block readers.
 	var retired *State
-	defer func() {
-		if retired != nil {
-			retired.unpin()
-		}
-	}()
+	defer unpinRetired(&retired)
 
 	mgr.stateMut.Lock()
 	defer mgr.stateMut.Unlock()
@@ -169,13 +164,8 @@ func (mgr *Manager) SetState(
 }
 
 func (mgr *Manager) ClearState(mode sdk.ExecMode) {
-	// Unpinned after the lock is released: closing a store must not block readers.
 	var retired *State
-	defer func() {
-		if retired != nil {
-			retired.unpin()
-		}
-	}()
+	defer unpinRetired(&retired)
 
 	mgr.stateMut.Lock()
 	defer mgr.stateMut.Unlock()

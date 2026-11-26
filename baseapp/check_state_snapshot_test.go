@@ -29,7 +29,11 @@ type CheckStateSnapshotSuite struct {
 	suite.Suite
 
 	app     *baseapp.BaseApp
+	cms     *baseapptestutil.ClosableCommitMultiStore
 	txBytes []byte
+
+	// antePanic, when set, is what the ante handler panics with.
+	antePanic any
 
 	// commitStarted is the highest block whose Commit has begun; a check-state
 	// read of anything newer saw uncommitted state.
@@ -45,17 +49,29 @@ func TestCheckStateSnapshotSuite(t *testing.T) {
 }
 
 func (s *CheckStateSnapshotSuite) SetupTest() {
+	s.setup(false)
+}
+
+// setup leaves the app at block 1; plainBranches gives check state a branch
+// with nothing to close, which is all an unpinned reader can use across a Commit.
+func (s *CheckStateSnapshotSuite) setup(plainBranches bool) {
 	s.commitStarted.Store(0)
 	s.reads.Store(0)
 	s.violations = nil
+	s.antePanic = nil
 
 	bas := NewBaseAppSuite(s.T(), func(app *baseapp.BaseApp) {
+		s.cms = &baseapptestutil.ClosableCommitMultiStore{CommitMultiStore: app.CommitMultiStore(), Plain: plainBranches}
+		app.SetCMS(s.cms)
 		app.MountStores(snapshotTransientKey, snapshotObjectKey)
 		app.SetBeginBlocker(func(ctx sdk.Context) (sdk.BeginBlock, error) {
 			writeBlockHeight(ctx)
 			return sdk.BeginBlock{}, nil
 		})
 		app.SetAnteHandler(func(ctx sdk.Context, _ sdk.Tx, _ bool) (sdk.Context, error) {
+			if s.antePanic != nil {
+				panic(s.antePanic)
+			}
 			s.observe(ctx)
 			return ctx, nil
 		})
@@ -146,37 +162,51 @@ func (s *CheckStateSnapshotSuite) commitBlock(height int64) {
 	s.Require().NoError(err)
 }
 
-func (s *CheckStateSnapshotSuite) TestReadsDuringFinalizeAndCommit() {
-	checkTx := func(typ abci.CheckTxType) func() {
-		return func() {
-			res, err := s.app.CheckTx(&abci.RequestCheckTx{Tx: s.txBytes, Type: typ})
-			s.NoError(err)
-			s.True(res.IsOK(), res.Log)
+// checkTx returns the error text of the response, empty when the tx passed.
+func (s *CheckStateSnapshotSuite) checkTx(typ abci.CheckTxType) func() string {
+	return func() string {
+		res, err := s.app.CheckTx(&abci.RequestCheckTx{Tx: s.txBytes, Type: typ})
+		s.NoError(err)
+		if res.IsOK() {
+			return ""
 		}
+		return res.Log
 	}
+}
+
+func (s *CheckStateSnapshotSuite) simulate() string {
+	if _, _, err := s.app.Simulate(s.txBytes); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+func (s *CheckStateSnapshotSuite) closeApp() {
+	s.Require().NoError(s.app.Close())
+}
+
+func (s *CheckStateSnapshotSuite) TestReadsDuringFinalizeAndCommit() {
+	const lastHeight = 20
 
 	testCases := []struct {
 		name string
 		read func()
+		// unpinned readers do not go through RunTx.
+		unpinned bool
 	}{
+		{name: "simulate", read: func() { s.Empty(s.simulate()) }},
+		{name: "check tx", read: func() { s.Empty(s.checkTx(abci.CheckTxType_New)()) }},
+		{name: "recheck tx", read: func() { s.Empty(s.checkTx(abci.CheckTxType_Recheck)()) }},
 		{
-			name: "simulate",
-			read: func() {
-				_, _, err := s.app.Simulate(s.txBytes)
-				s.NoError(err)
-			},
-		},
-		{name: "check tx", read: checkTx(abci.CheckTxType_New)},
-		{name: "recheck tx", read: checkTx(abci.CheckTxType_Recheck)},
-		{
-			name: "check state context",
-			read: func() { s.observe(s.app.NewContext(true)) },
+			name:     "check state context",
+			read:     func() { s.observe(s.app.NewContext(true)) },
+			unpinned: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			s.SetupTest()
+			s.setup(tc.unpinned)
 
 			stop := make(chan struct{})
 			var wg sync.WaitGroup
@@ -191,7 +221,7 @@ func (s *CheckStateSnapshotSuite) TestReadsDuringFinalizeAndCommit() {
 				}
 			})
 
-			for height := int64(2); height <= 20; height++ {
+			for height := int64(2); height <= lastHeight; height++ {
 				s.finalizeBlock(height)
 				// Consensus leaves a gap between FinalizeBlock and Commit; make sure
 				// the reader runs inside it.
@@ -204,6 +234,89 @@ func (s *CheckStateSnapshotSuite) TestReadsDuringFinalizeAndCommit() {
 			close(stop)
 			wg.Wait()
 			s.Require().Empty(s.violations)
+
+			s.closeApp()
+			closed := s.cms.ClosedCounts()
+			if !tc.unpinned {
+				s.Require().Len(closed, lastHeight)
+			}
+			for i, count := range closed {
+				s.Require().Equal(int32(1), count, "branch %d", i)
+			}
+		})
+	}
+}
+
+func (s *CheckStateSnapshotSuite) TestCheckStateBranchIsReleased() {
+	commit := func() { s.commitBlock(2) }
+
+	testCases := []struct {
+		name      string
+		antePanic any
+		run       func() string
+		expErr    string
+		retire    func()
+		// expClosed is the close count of each check state branch, oldest first.
+		expClosed []int32
+	}{
+		{name: "check tx, then commit", run: s.checkTx(abci.CheckTxType_New), retire: commit, expClosed: []int32{1, 0}},
+		{name: "recheck tx, then commit", run: s.checkTx(abci.CheckTxType_Recheck), retire: commit, expClosed: []int32{1, 0}},
+		{name: "simulate, then commit", run: s.simulate, retire: commit, expClosed: []int32{1, 0}},
+		{
+			name:      "ante handler panics, then commit",
+			antePanic: "ante handler failed",
+			run:       s.checkTx(abci.CheckTxType_New),
+			expErr:    "ante handler failed",
+			retire:    commit,
+			expClosed: []int32{1, 0},
+		},
+		{
+			name:      "ante handler runs out of gas, then commit",
+			antePanic: storetypes.ErrorOutOfGas{Descriptor: "ante handler"},
+			run:       s.simulate,
+			expErr:    "out of gas",
+			retire:    commit,
+			expClosed: []int32{1, 0},
+		},
+		{name: "check tx, then close", run: s.checkTx(abci.CheckTxType_New), retire: s.closeApp, expClosed: []int32{1}},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.antePanic = tc.antePanic
+
+			errText := tc.run()
+			if tc.expErr == "" {
+				s.Require().Empty(errText)
+			} else {
+				s.Require().Contains(errText, tc.expErr)
+			}
+			s.Require().Equal([]int32{0}, s.cms.ClosedCounts())
+
+			tc.retire()
+
+			s.Require().Equal(tc.expClosed, s.cms.ClosedCounts())
+		})
+	}
+}
+
+func (s *CheckStateSnapshotSuite) TestTxAfterCloseIsRefused() {
+	testCases := []struct {
+		name string
+		run  func() string
+	}{
+		{name: "check tx", run: s.checkTx(abci.CheckTxType_New)},
+		{name: "recheck tx", run: s.checkTx(abci.CheckTxType_Recheck)},
+		{name: "simulate", run: s.simulate},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.closeApp()
+
+			s.Require().Contains(tc.run(), "state is nil for mode")
 		})
 	}
 }
