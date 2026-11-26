@@ -628,30 +628,15 @@ func (app *BaseApp) setCheckState(header cmtproto.Header) {
 	}
 }
 
-// withCheckState runs fn with check state pinned, so the store it reads stays open until fn returns.
-// It returns false, without running fn, when Close has dropped check state.
-func (app *BaseApp) withCheckState(fn func(*state.State)) bool {
+// The hook runs with check state pinned, so a concurrent Close cannot release the store under it.
+// It is skipped once Close has dropped check state.
+func (app *BaseApp) prepareCheckState() {
 	checkState, unpin := app.stateManager.PinState(execModeCheck)
 	defer unpin()
 
-	if checkState == nil {
-		return false
+	if checkState != nil {
+		app.abciHandlers.PrepareCheckStater(checkState.Context())
 	}
-	fn(checkState)
-	return true
-}
-
-// WithCheckContext runs fn with a check context for txBytes. Unlike GetContextForCheckTx, the
-// committed version it reads stays open until fn returns, even if a Commit or Close runs meanwhile.
-// Do not keep the context, or a store taken from it, after fn returns.
-func (app *BaseApp) WithCheckContext(txBytes []byte, fn func(sdk.Context)) error {
-	ran := app.withCheckState(func(checkState *state.State) {
-		fn(app.getContextForTx(checkState, execModeCheck, txBytes, -1))
-	})
-	if !ran {
-		return errorsmod.Wrap(sdkerrors.ErrLogic, appClosedMsg)
-	}
-	return nil
 }
 
 func (app *BaseApp) getContextForTx(modeState *state.State, mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {

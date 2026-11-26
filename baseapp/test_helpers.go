@@ -71,7 +71,7 @@ func (app *BaseApp) mustCheckState() *state.State {
 }
 
 // NewContextLegacy returns a new sdk.Context with the provided header.
-// A check context reads the last committed version and is not pinned: do not use it across a Commit; WithCheckContext pins.
+// A check context reads the last committed version and is not pinned: do not use it across a Commit.
 func (app *BaseApp) NewContextLegacy(isCheckTx bool, header cmtproto.Header) sdk.Context {
 	if isCheckTx {
 		return sdk.NewContext(app.mustCheckState().MultiStore, header, true, app.logger).
@@ -82,7 +82,7 @@ func (app *BaseApp) NewContextLegacy(isCheckTx bool, header cmtproto.Header) sdk
 }
 
 // NewContext returns a new sdk.Context with an empty header.
-// A check context reads the last committed version and is not pinned: do not use it across a Commit; WithCheckContext pins.
+// A check context reads the last committed version and is not pinned: do not use it across a Commit.
 func (app *BaseApp) NewContext(isCheckTx bool) sdk.Context {
 	return app.NewContextLegacy(isCheckTx, cmtproto.Header{})
 }
@@ -111,7 +111,7 @@ func (app *BaseApp) GetContextForFinalizeBlock(txBytes []byte) sdk.Context {
 }
 
 // GetContextForCheckTx returns a check context for txBytes.
-// A check context reads the last committed version and is not pinned: do not use it across a Commit; WithCheckContext pins.
+// A check context reads the last committed version and is not pinned: do not use it across a Commit.
 func (app *BaseApp) GetContextForCheckTx(txBytes []byte) sdk.Context {
 	return app.getContextForTx(app.mustCheckState(), execModeCheck, txBytes, -1)
 }

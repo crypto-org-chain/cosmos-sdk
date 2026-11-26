@@ -1120,10 +1120,7 @@ func (app *BaseApp) Commit() (*abci.ResponseCommit, error) {
 	app.stateManager.ClearState(execModeFinalize)
 
 	if app.abciHandlers.PrepareCheckStater != nil {
-		// Pinned so a concurrent Close cannot release the store under the hook; skipped if Close already ran.
-		app.withCheckState(func(checkState *state.State) {
-			app.abciHandlers.PrepareCheckStater(checkState.Context())
-		})
+		app.prepareCheckState()
 	}
 
 	// The SnapshotIfApplicable method will create the snapshot by starting the goroutine

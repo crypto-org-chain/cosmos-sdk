@@ -211,7 +211,6 @@ func (s *CheckStateSnapshotSuite) TestReadsDuringFinalizeAndCommit() {
 			read:     func() { s.observe(s.app.NewContext(true)) },
 			unpinned: true,
 		},
-		{name: "pinned check context", read: func() { s.NoError(s.app.WithCheckContext(s.txBytes, s.observe)) }},
 	}
 
 	for _, tc := range testCases {
@@ -320,11 +319,15 @@ func (s *CheckStateSnapshotSuite) TestPrepareCheckStaterKeepsItsBranchOpen() {
 	testCases := []struct {
 		name        string
 		closeInHook bool
-		// expClosed is the close count of each check state branch once Commit returned, oldest first.
+		// hookPanic, when set, is what the hook panics with after its read; the app then closes.
+		hookPanic any
+		// expClosed is the close count of each check state branch at the end, oldest first.
 		expClosed []int32
 	}{
 		{name: "app stays open", expClosed: []int32{1, 0}},
 		{name: "app closes during the hook", closeInHook: true, expClosed: []int32{1, 1}},
+		// Close frees the new branch only if the panicking hook dropped its pin.
+		{name: "hook panics, then app closes", hookPanic: "hook failed", expClosed: []int32{1, 1}},
 	}
 
 	for _, tc := range testCases {
@@ -338,15 +341,34 @@ func (s *CheckStateSnapshotSuite) TestPrepareCheckStaterKeepsItsBranchOpen() {
 				}
 				s.observe(ctx)
 				closedInHook = s.cms.ClosedCounts()
+				if tc.hookPanic != nil {
+					panic(tc.hookPanic)
+				}
 			}
 
-			s.commitBlock(2)
+			if tc.hookPanic == nil {
+				s.commitBlock(2)
+			} else {
+				s.Require().PanicsWithValue(tc.hookPanic, func() { s.commitBlock(2) })
+				s.closeApp()
+			}
 
 			s.Require().Equal([]int32{1, 0}, closedInHook)
 			s.Require().Empty(s.violations)
 			s.Require().Equal(tc.expClosed, s.cms.ClosedCounts())
 		})
 	}
+}
+
+func (s *CheckStateSnapshotSuite) TestCloseDuringInitChain() {
+	app := NewBaseAppSuite(s.T(), func(app *baseapp.BaseApp) {
+		app.SetInitChainer(func(sdk.Context, *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
+			return &abci.ResponseInitChain{}, app.Close()
+		})
+	}).baseApp
+
+	_, err := app.InitChain(&abci.RequestInitChain{ConsensusParams: &cmtproto.ConsensusParams{}})
+	s.Require().NoError(err)
 }
 
 func (s *CheckStateSnapshotSuite) TestLiveFallbackIsCounted() {
@@ -390,18 +412,12 @@ func (s *CheckStateSnapshotSuite) TestTxAfterClose() {
 		name string
 		run  func() string
 		// expPanic is set where there is no error to return: the block modes, which have
-		// no state between blocks, and the unpinned context helpers.
+		// no state between blocks, and the check context helpers.
 		expPanic string
 	}{
 		{name: "check tx", run: s.checkTx(abci.CheckTxType_New)},
 		{name: "recheck tx", run: s.checkTx(abci.CheckTxType_Recheck)},
 		{name: "simulate", run: s.simulate},
-		{
-			name: "pinned check context",
-			run: func() string {
-				return s.app.WithCheckContext(s.txBytes, func(sdk.Context) { s.Fail("ran on a closed app") }).Error()
-			},
-		},
 		{
 			name:     "new check context",
 			run:      func() string { s.app.NewContext(true); return "" },
