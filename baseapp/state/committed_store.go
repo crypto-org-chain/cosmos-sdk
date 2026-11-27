@@ -44,8 +44,11 @@ const (
 // Limits set by the store, not here:
 //   - Reads are isolated from the block in progress only if the store answers
 //     CacheMultiStoreWithVersion(latest) with a snapshot.
-//   - A pin keeps the branch open, not unpruned. A reader that hits a pruned node
-//     makes the store panic, and RunTx turns that into an error once its context is built.
+//   - A pin keeps the branch open, not unpruned: IAVL counts no reader for it. A reader
+//     that hits a pruned node makes the store panic, and RunTx turns that into an error
+//     once its context is built. With pruning "everything", a run that spans 3 commits can hit one.
+//   - IAVL fast nodes are not versioned: while the next version commits, a read can
+//     return its values (https://github.com/cosmos/iavl/issues/1171).
 //   - Memory stores are not versioned and stay live.
 func branchCommitted(cms storetypes.CommitMultiStore, logger log.Logger) (storetypes.CacheMultiStore, func(), error) {
 	version := cms.LatestVersion()
