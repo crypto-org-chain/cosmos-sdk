@@ -263,6 +263,8 @@ func TestBeginRedelegateAllSharesFromUnbondedSource(t *testing.T) {
 	)
 	height, ts = nextBlock(time.Second)
 	deliverAt(t, txConfig, app.BaseApp, height, ts, []sdk.Msg{beginRedelegateMsg}, []uint64{2}, []uint64{1}, priv3)
+	_, err = app.Commit()
+	require.NoError(t, err)
 
 	// This path should be complete-now: no redelegation entry, source validator removed.
 	ctx = app.NewContext(true)

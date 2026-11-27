@@ -88,7 +88,7 @@ func (app *BaseApp) InitChain(req *abci.RequestInitChain) (*abci.ResponseInitCha
 
 	// initialize states with a correct header
 	app.stateManager.SetState(execModeFinalize, app.cms, initHeader, app.logger, app.streamingManager)
-	app.stateManager.SetState(execModeCheck, app.cms, initHeader, app.logger, app.streamingManager)
+	app.setCheckState(initHeader)
 	finalizeState := app.stateManager.GetState(execModeFinalize)
 
 	// Store the consensus params in the BaseApp's param store. Note, this must be
@@ -107,13 +107,14 @@ func (app *BaseApp) InitChain(req *abci.RequestInitChain) (*abci.ResponseInitCha
 		// handler, the block height is zero by default. However, after Commit is called
 		// the height needs to reflect the true block height.
 		initHeader.Height = req.InitialHeight
-		checkState := app.stateManager.GetState(execModeCheck)
-		checkState.SetContext(checkState.Context().WithBlockHeader(initHeader).
-			WithHeaderInfo(coreheader.Info{
-				ChainID: req.ChainId,
-				Height:  req.InitialHeight,
-				Time:    req.Time,
-			}))
+		if checkState := app.stateManager.GetState(execModeCheck); checkState != nil {
+			checkState.SetContext(checkState.Context().WithBlockHeader(initHeader).
+				WithHeaderInfo(coreheader.Info{
+					ChainID: req.ChainId,
+					Height:  req.InitialHeight,
+					Time:    req.Time,
+				}))
+		}
 		finalizeState.SetContext(finalizeState.Context().WithBlockHeader(initHeader).
 			WithHeaderInfo(coreheader.Info{
 				ChainID: req.ChainId,
@@ -1114,13 +1115,11 @@ func (app *BaseApp) Commit() (*abci.ResponseCommit, error) {
 	//
 	// NOTE: This is safe because CometBFT holds a lock on the mempool for
 	// Commit. Use the header from this latest block.
-	app.stateManager.SetState(execModeCheck, app.cms, header, app.logger, app.streamingManager)
+	app.setCheckState(header)
 
 	app.stateManager.ClearState(execModeFinalize)
 
-	if app.abciHandlers.PrepareCheckStater != nil {
-		app.abciHandlers.PrepareCheckStater(app.stateManager.GetState(execModeCheck).Context())
-	}
+	app.prepareCheckState()
 
 	// The SnapshotIfApplicable method will create the snapshot by starting the goroutine
 	app.snapshotManager.SnapshotIfApplicable(header.Height)

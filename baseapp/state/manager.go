@@ -22,7 +22,8 @@ var tracer = otel.Tracer("cosmos-sdk/baseapp")
 type Manager struct {
 	// volatile states:
 	//
-	// - checkState is set on InitChain and reset on Commit
+	// - checkState is set on InitChain, reset on Commit and cleared on Close.
+	// It branches the last committed version.
 	// - finalizeBlockState is set on InitChain and FinalizeBlock and set to nil
 	// on Commit.
 	//
@@ -58,6 +59,27 @@ func (mgr *Manager) GetState(mode sdk.ExecMode) *State {
 	mgr.stateMut.RLock()
 	defer mgr.stateMut.RUnlock()
 
+	return mgr.stateFor(mode)
+}
+
+// PinState returns the state for mode and a func the caller must call exactly
+// once when it is done reading; the state's store stays open until then, even
+// if the state is replaced in between.
+func (mgr *Manager) PinState(mode sdk.ExecMode) (*State, func()) {
+	mgr.stateMut.RLock()
+	defer mgr.stateMut.RUnlock()
+
+	st := mgr.stateFor(mode)
+	if st == nil || st.release == nil {
+		return st, func() {}
+	}
+	// A state is detached under the write lock before the Manager drops its pin,
+	// so a state still reachable here has a pin count of at least 1.
+	st.pins.Add(1)
+	return st, st.unpin
+}
+
+func (mgr *Manager) stateFor(mode sdk.ExecMode) *State {
 	switch mode {
 	case sdk.ExecModeFinalize:
 		return mgr.finalizeBlockState
@@ -76,6 +98,9 @@ func (mgr *Manager) GetState(mode sdk.ExecMode) *State {
 // SetState sets the BaseApp's state for the corresponding mode with a branched
 // multi-store (i.e. a CacheMultiStore) and a new Context with the same
 // multi-store branch, and provided header.
+//
+// Check state branches the last committed version instead of the live stores:
+// it is read without a lock while FinalizeBlock writes the next block into them.
 func (mgr *Manager) SetState(
 	mode sdk.ExecMode,
 	unbranchedStore storetypes.CommitMultiStore,
@@ -83,7 +108,16 @@ func (mgr *Manager) SetState(
 	logger log.Logger,
 	streamingManager storetypes.StreamingManager,
 ) {
-	ms := unbranchedStore.CacheMultiStore()
+	var (
+		ms        storetypes.CacheMultiStore
+		release   func()
+		branchErr error
+	)
+	if mode == sdk.ExecModeCheck {
+		ms, release, branchErr = branchCommitted(unbranchedStore, logger)
+	} else {
+		ms = unbranchedStore.CacheMultiStore()
+	}
 	headerInfo := header.Info{
 		Height:  h.Height,
 		Time:    h.Time,
@@ -96,15 +130,19 @@ func (mgr *Manager) SetState(
 			WithHeaderInfo(headerInfo),
 		ms,
 	)
+	baseState.release = release
+	baseState.branchErr = branchErr
+
+	if mode == sdk.ExecModeCheck {
+		baseState.SetContext(baseState.Context().WithIsCheckTx(true).WithMinGasPrices(mgr.gasConfig.MinGasPrices))
+		mgr.replaceCheckState(baseState)
+		return
+	}
 
 	mgr.stateMut.Lock()
 	defer mgr.stateMut.Unlock()
 
 	switch mode {
-	case sdk.ExecModeCheck:
-		baseState.SetContext(baseState.Context().WithIsCheckTx(true).WithMinGasPrices(mgr.gasConfig.MinGasPrices))
-		mgr.checkState = baseState
-
 	case sdk.ExecModePrepareProposal:
 		mgr.prepareProposalState = baseState
 
@@ -126,14 +164,29 @@ func (mgr *Manager) SetState(
 	}
 }
 
+// replaceCheckState drops the Manager's pin on the old check state after the
+// unlock: closing a store must not block readers.
+func (mgr *Manager) replaceCheckState(st *State) {
+	mgr.stateMut.Lock()
+	retired := mgr.checkState
+	mgr.checkState = st
+	mgr.stateMut.Unlock()
+
+	if retired != nil {
+		retired.unpin()
+	}
+}
+
 func (mgr *Manager) ClearState(mode sdk.ExecMode) {
+	if mode == sdk.ExecModeCheck {
+		mgr.replaceCheckState(nil)
+		return
+	}
+
 	mgr.stateMut.Lock()
 	defer mgr.stateMut.Unlock()
 
 	switch mode {
-	case sdk.ExecModeCheck:
-		mgr.checkState = nil
-
 	case sdk.ExecModePrepareProposal:
 		mgr.prepareProposalState = nil
 

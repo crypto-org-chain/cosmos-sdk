@@ -2,6 +2,7 @@ package baseapp
 
 // need to import telemetry before anything else for side effects
 import (
+	"context"
 	"fmt"
 	"maps"
 	"math"
@@ -56,6 +57,8 @@ const (
 	execModeVerifyVoteExtension = sdk.ExecModeVerifyVoteExtension // Verify a vote extension
 	execModeFinalize            = sdk.ExecModeFinalize            // Finalize a block proposal
 )
+
+const appClosedMsg = "app is closed: no check state"
 
 var _ servertypes.ABCI = (*BaseApp)(nil)
 
@@ -437,7 +440,7 @@ func (app *BaseApp) Init() error {
 	emptyHeader := cmtproto.Header{ChainID: app.chainID}
 
 	// needed for the export command which inits from store but never calls initchain
-	app.stateManager.SetState(execModeCheck, app.cms, emptyHeader, app.logger, app.streamingManager)
+	app.setCheckState(emptyHeader)
 	app.Seal()
 
 	return app.cms.GetPruning().Validate()
@@ -613,11 +616,38 @@ func (app *BaseApp) getBlockGasMeter(ctx sdk.Context) storetypes.GasMeter {
 	return storetypes.NewInfiniteGasMeter()
 }
 
-func (app *BaseApp) getContextForTx(mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {
+// A check state that fell back to the live stores is counted: it is not isolated until the next Commit.
+func (app *BaseApp) setCheckState(header cmtproto.Header) {
+	app.stateManager.SetState(execModeCheck, app.cms, header, app.logger, app.streamingManager)
+
+	if inst == nil {
+		return
+	}
+	if checkState := app.stateManager.GetState(execModeCheck); checkState != nil && checkState.BranchErr() != nil {
+		inst.CheckStateLiveFallback.Add(context.Background(), 1)
+	}
+}
+
+// The hook runs with check state pinned, so a concurrent Close cannot release the store under it.
+// It is skipped once Close has dropped check state.
+func (app *BaseApp) prepareCheckState() {
+	hook := app.abciHandlers.PrepareCheckStater
+	if hook == nil {
+		return
+	}
+
+	checkState, unpin := app.stateManager.PinState(execModeCheck)
+	defer unpin()
+
+	if checkState != nil {
+		hook(checkState.Context())
+	}
+}
+
+func (app *BaseApp) getContextForTx(modeState *state.State, mode sdk.ExecMode, txBytes []byte, txIndex int) sdk.Context {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 
-	modeState := app.stateManager.GetState(mode)
 	if modeState == nil {
 		panic(fmt.Sprintf("state is nil for mode %v", mode))
 	}
@@ -782,7 +812,18 @@ func (app *BaseApp) endBlock() (sdk.EndBlock, error) {
 // both txbytes and the decoded tx are passed to runTx to avoid the state machine encoding the tx and decoding the transaction twice
 // passing the decoded tx to runTX is optional, it will be decoded if the tx is nil
 func (app *BaseApp) RunTx(mode sdk.ExecMode, txBytes []byte, tx sdk.Tx, txIndex int, txMultiStore storetypes.MultiStore, incarnationCache map[string]any) (gInfo sdk.GasInfo, result *sdk.Result, anteEvents []abci.Event, err error) {
-	ctx := app.getContextForTx(mode, txBytes, txIndex)
+	// Pinned for the whole run: Commit may replace check state while a lock-free
+	// CheckTx or Simulate is still reading it.
+	modeState, unpin := app.stateManager.PinState(mode)
+	defer unpin()
+
+	// Close clears check state: a tx that arrives after it is refused, not a panic.
+	// A block mode without its state is a bug and still panics.
+	if modeState == nil && (mode == execModeCheck || mode == execModeReCheck || mode == execModeSimulate) {
+		return gInfo, nil, nil, errorsmod.Wrapf(sdkerrors.ErrLogic, "%s for mode %v", appClosedMsg, mode)
+	}
+
+	ctx := app.getContextForTx(modeState, mode, txBytes, txIndex)
 	ctx, span := ctx.StartSpan(tracer, "runTx")
 	defer span.End()
 
@@ -1172,6 +1213,9 @@ func (app *BaseApp) StreamingManager() storetypes.StreamingManager {
 // Close is called in start cmd to gracefully cleanup resources.
 func (app *BaseApp) Close() error {
 	var errs []error
+
+	// Check state may hold a store branch: it is released once the last in-flight reader is done.
+	app.stateManager.ClearState(execModeCheck)
 
 	// Close app.db (opened by cosmos-sdk/server/start.go call to openDB)
 	if app.db != nil {
