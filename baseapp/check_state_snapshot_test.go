@@ -1,6 +1,7 @@
 package baseapp_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	baseapptestutil "github.com/cosmos/cosmos-sdk/baseapp/testutil"
+	"github.com/cosmos/cosmos-sdk/store/v2/cache"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
@@ -37,6 +39,8 @@ type CheckStateSnapshotSuite struct {
 	antePanic any
 	// prepareCheckState, when set, runs as the app's PrepareCheckStater.
 	prepareCheckState func(sdk.Context)
+	// checkRead, when set, replaces observe as what the ante handler reads.
+	checkRead func(sdk.Context)
 
 	// commitStarted is the highest block whose Commit has begun; a check-state
 	// read of anything newer saw uncommitted state.
@@ -57,14 +61,15 @@ func (s *CheckStateSnapshotSuite) SetupTest() {
 
 // setup leaves the app at block 1; unclosableBranches gives check state a branch
 // with nothing to close, which is all an unpinned reader can use across a Commit.
-func (s *CheckStateSnapshotSuite) setup(unclosableBranches bool) {
+func (s *CheckStateSnapshotSuite) setup(unclosableBranches bool, opts ...func(*baseapp.BaseApp)) {
 	s.commitStarted.Store(0)
 	s.reads.Store(0)
 	s.violations = nil
 	s.antePanic = nil
 	s.prepareCheckState = nil
+	s.checkRead = nil
 
-	bas := NewBaseAppSuite(s.T(), func(app *baseapp.BaseApp) {
+	wire := func(app *baseapp.BaseApp) {
 		app.SetPrepareCheckStater(func(ctx sdk.Context) {
 			if s.prepareCheckState != nil {
 				s.prepareCheckState(ctx)
@@ -75,16 +80,22 @@ func (s *CheckStateSnapshotSuite) setup(unclosableBranches bool) {
 		app.MountStores(snapshotTransientKey, snapshotObjectKey)
 		app.SetBeginBlocker(func(ctx sdk.Context) (sdk.BeginBlock, error) {
 			writeBlockHeight(ctx)
+			s.checkPreviousBlock(ctx)
 			return sdk.BeginBlock{}, nil
 		})
 		app.SetAnteHandler(func(ctx sdk.Context, _ sdk.Tx, _ bool) (sdk.Context, error) {
 			if s.antePanic != nil {
 				panic(s.antePanic)
 			}
-			s.observe(ctx)
+			if s.checkRead != nil {
+				s.checkRead(ctx)
+			} else {
+				s.observe(ctx)
+			}
 			return ctx, nil
 		})
-	})
+	}
+	bas := NewBaseAppSuite(s.T(), append([]func(*baseapp.BaseApp){wire}, opts...)...)
 	baseapptestutil.RegisterCounterServer(bas.baseApp.MsgServiceRouter(), NoopCounterServerImpl{})
 	s.app = bas.baseApp
 
@@ -105,6 +116,24 @@ func writeBlockHeight(ctx sdk.Context) {
 		ctx.KVStore(capKey1).Set(key, bz)
 		ctx.TransientStore(snapshotTransientKey).Set(key, bz)
 		ctx.ObjectStore(snapshotObjectKey).Set(key, height)
+	}
+}
+
+// blockKey is a key only block height writes, so its first read is a cache miss.
+func blockKey(height int64) []byte {
+	return fmt.Appendf(nil, "block-%d", height)
+}
+
+// checkPreviousBlock records a block that does not see the previous block's write,
+// which another node, without that read, would see: an app hash mismatch.
+func (s *CheckStateSnapshotSuite) checkPreviousBlock(ctx sdk.Context) {
+	height := ctx.BlockHeight()
+	ctx.KVStore(capKey2).Set(blockKey(height), binary.BigEndian.AppendUint64(nil, uint64(height)))
+	if height <= 1 {
+		return
+	}
+	if got := ctx.KVStore(capKey2).Get(blockKey(height - 1)); got == nil {
+		s.violate("block %d does not see block %d's write", height, height-1)
 	}
 }
 
@@ -217,30 +246,15 @@ func (s *CheckStateSnapshotSuite) TestReadsDuringFinalizeAndCommit() {
 		s.Run(tc.name, func() {
 			s.setup(tc.unpinned)
 
-			stop := make(chan struct{})
-			var wg sync.WaitGroup
+			stopReader := s.startReader(tc.read)
 			// Deferred too: a failed assertion must not leave the reader running past the test.
-			stopReader := sync.OnceFunc(func() {
-				close(stop)
-				wg.Wait()
-			})
 			defer stopReader()
-			wg.Go(func() {
-				for {
-					select {
-					case <-stop:
-						return
-					default:
-						tc.read()
-					}
-				}
-			})
 
 			for height := int64(2); height <= lastHeight; height++ {
 				s.finalizeBlock(height)
 				// Consensus leaves a gap between FinalizeBlock and Commit; make sure
 				// the reader runs inside it.
-				s.waitForReads(2)
+				s.waitForReads(2, nil)
 				s.commitStarted.Store(height)
 				_, err := s.app.Commit()
 				s.Require().NoError(err)
@@ -259,6 +273,123 @@ func (s *CheckStateSnapshotSuite) TestReadsDuringFinalizeAndCommit() {
 			}
 		})
 	}
+}
+
+// pausingKVStore holds the first read of the armed key, after it reads the old
+// value, until a write of that key lands: the inter-block cache's window between
+// a miss and filling the cache, widened so the test hits it every time.
+type pausingKVStore struct {
+	storetypes.CommitKVStore
+
+	mu        sync.Mutex
+	armed     []byte
+	paused    bool
+	written   chan struct{}
+	markWrite func()
+}
+
+func (p *pausingKVStore) arm(key []byte) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.armed, p.paused, p.written = key, false, make(chan struct{})
+	p.markWrite = sync.OnceFunc(func() { close(p.written) })
+}
+
+func (p *pausingKVStore) isPaused() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.paused
+}
+
+func (p *pausingKVStore) Get(key []byte) []byte {
+	value := p.CommitKVStore.Get(key)
+
+	p.mu.Lock()
+	if p.paused || !bytes.Equal(key, p.armed) {
+		p.mu.Unlock()
+		return value
+	}
+	p.paused = true
+	written := p.written
+	p.mu.Unlock()
+
+	// Bounded so a reader that is never released can't hang the test.
+	select {
+	case <-written:
+	case <-time.After(10 * time.Second):
+	}
+	return value
+}
+
+func (p *pausingKVStore) Set(key, value []byte) {
+	p.CommitKVStore.Set(key, value)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if bytes.Equal(key, p.armed) {
+		p.markWrite()
+	}
+}
+
+// pausingCacheManager puts a pausingKVStore under capKey2's inter-block cache.
+type pausingCacheManager struct {
+	*cache.CommitKVStoreCacheManager
+	store *pausingKVStore
+}
+
+func (m *pausingCacheManager) GetStoreCache(key storetypes.StoreKey, store storetypes.CommitKVStore) storetypes.CommitKVStore {
+	if key == capKey2 {
+		m.store.CommitKVStore = store
+		store = m.store
+	}
+	return m.CommitKVStoreCacheManager.GetStoreCache(key, store)
+}
+
+// Unwrap returns the IAVL store itself, as rootmulti type-asserts it.
+func (m *pausingCacheManager) Unwrap(key storetypes.StoreKey) storetypes.CommitKVStore {
+	store := m.CommitKVStoreCacheManager.Unwrap(key)
+	if paused, ok := store.(*pausingKVStore); ok {
+		return paused.CommitKVStore
+	}
+	return store
+}
+
+// TestInterBlockCacheKeepsFinalizedWrites races a check-state read of a key the next
+// block writes against that block: on a miss the cache reads the old value, FinalizeBlock
+// writes the new one through, then the reader fills the cache with the old one.
+func (s *CheckStateSnapshotSuite) TestInterBlockCacheKeepsFinalizedWrites() {
+	const lastHeight = 10
+
+	paused := &pausingKVStore{}
+	s.setup(false, baseapp.SetInterBlockCache(&pausingCacheManager{
+		CommitKVStoreCacheManager: cache.NewCommitKVStoreCacheManager(cache.DefaultCommitKVStoreCacheSize),
+		store:                     paused,
+	}))
+	s.Require().NotNil(paused.CommitKVStore, "pausing store is not under capKey2's cache")
+	// Set only after arming, so the reader's first read of the pending block's key is the miss.
+	var pending atomic.Int64
+	s.checkRead = func(ctx sdk.Context) {
+		ctx.KVStore(capKey2).Get(blockKey(pending.Load()))
+		s.reads.Add(1)
+	}
+
+	stopReader := s.startReader(func() { s.Empty(s.checkTx(abci.CheckTxType_New)()) })
+	defer stopReader()
+
+	for height := int64(2); height <= lastHeight; height++ {
+		paused.arm(blockKey(height))
+		pending.Store(height)
+		// Two reads, as one may have started before pending moved. A reader that goes
+		// through the cache is held in the window; one that bypasses it, as check state
+		// on a committed version does, finishes both reads.
+		s.waitForReads(2, paused.isPaused)
+		s.commitBlock(height)
+	}
+	// Block lastHeight+1 checks the last write.
+	stopReader()
+	s.commitBlock(lastHeight + 1)
+
+	s.Require().Empty(s.violations)
 }
 
 func (s *CheckStateSnapshotSuite) TestCheckStateBranchIsReleased() {
@@ -447,7 +578,30 @@ func (s *CheckStateSnapshotSuite) TestTxAfterClose() {
 	}
 }
 
-func (s *CheckStateSnapshotSuite) waitForReads(n int64) {
+// startReader calls read in a loop until the returned stop, which is safe to call twice.
+func (s *CheckStateSnapshotSuite) startReader(read func()) (stop func()) {
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				read()
+			}
+		}
+	})
+	return sync.OnceFunc(func() {
+		close(done)
+		wg.Wait()
+	})
+}
+
+// waitForReads waits for n more reads, or until held, if set, reports the reader parked.
+func (s *CheckStateSnapshotSuite) waitForReads(n int64, held func() bool) {
 	target := s.reads.Load() + n
-	s.Require().Eventually(func() bool { return s.reads.Load() >= target }, 10*time.Second, 50*time.Microsecond)
+	s.Require().Eventually(func() bool {
+		return s.reads.Load() >= target || (held != nil && held())
+	}, 10*time.Second, 50*time.Microsecond)
 }
